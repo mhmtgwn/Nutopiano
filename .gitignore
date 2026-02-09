@@ -1,0 +1,15 @@
+﻿node_modules/
+**/node_modules/
+
+.env
+.env.*
+!.env.example
+
+dist/
+.next/
+out/
+
+coverage/
+.DS_Store
+
+Nutopiano-main/

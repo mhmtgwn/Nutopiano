@@ -1,0 +1,271 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Business {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+
+  users         User[]
+  customers     Customer[]
+  products      Product[]
+  categories    Category[]
+  orders        Order[]
+  orderStatuses OrderStatus[]
+  orderItems    OrderItem[]
+  settings      Settings[]
+  payments      Payment[]
+  appointments  Appointment[]
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  name       String
+  phone      String   @unique
+  email      String?  @unique
+  passwordHash String?
+  resetPasswordTokenHash String?
+  resetPasswordExpiresAt DateTime?
+  role       Role
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  business         Business    @relation(fields: [businessId], references: [id])
+  createdCustomers Customer[]  @relation("CustomerCreatedBy")
+  createdProducts  Product[]   @relation("ProductCreatedBy")
+  createdCategories Category[] @relation("CategoryCreatedBy")
+  createdOrders    Order[]     @relation("OrderCreatedBy")
+  staffAppointments   Appointment[] @relation("StaffAppointments")
+  createdAppointments Appointment[] @relation("CreatedAppointments")
+}
+
+model Category {
+  id              Int      @id @default(autoincrement())
+  businessId      Int
+  createdByUserId Int
+  name            String
+  slug            String
+  isActive        Boolean  @default(true)
+  orderIndex      Int      @default(0)
+  archivedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id])
+  createdBy User     @relation("CategoryCreatedBy", fields: [createdByUserId], references: [id])
+  products  Product[]
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+  @@index([businessId, orderIndex])
+}
+
+model Customer {
+  id              Int      @id @default(autoincrement())
+  businessId      Int
+  createdByUserId Int
+  name            String
+  phone           String
+  balance         Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id])
+  createdBy User     @relation("CustomerCreatedBy", fields: [createdByUserId], references: [id])
+  orders    Order[]
+  appointments Appointment[]
+
+  @@unique([businessId, phone])
+  @@index([businessId])
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum ProductType {
+  PHYSICAL
+  SERVICE
+  WEIGHT
+  CUSTOM
+}
+
+model Product {
+  id              Int         @id @default(autoincrement())
+  businessId      Int
+  createdByUserId Int
+  categoryId      Int?
+  name            String
+  sku             String?
+  type            ProductType
+  priceCents      Int
+  description     String?
+  imageUrl        String?
+  stock           Int?
+  tags            String[]    @default([])
+  seoTitle        String?
+  seoDescription  String?
+  isActive        Boolean     @default(true)
+  archivedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  createdBy User    @relation("ProductCreatedBy", fields: [createdByUserId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
+  items     OrderItem[]
+
+  @@index([businessId])
+  @@index([businessId, categoryId])
+  // @@unique([businessId, sku]) // enable when SKU uniqueness per business is required
+}
+
+model OrderStatus {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  key        String
+  label      String
+  orderIndex Int
+  isFinal    Boolean  @default(false)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  orders   Order[]
+
+  @@unique([businessId, key])
+  @@index([businessId, orderIndex])
+}
+
+enum OrderSource {
+  POS
+  MOBILE
+  WEB
+  API
+}
+
+model Order {
+  id               Int      @id @default(autoincrement())
+  businessId       Int
+  customerId       Int
+  createdByUserId  Int
+  statusId         Int
+  totalAmountCents Int      @default(0)
+  source           OrderSource @default(POS)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  business  Business   @relation(fields: [businessId], references: [id])
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  createdBy User       @relation("OrderCreatedBy", fields: [createdByUserId], references: [id])
+  status   OrderStatus @relation(fields: [statusId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+
+  @@index([businessId])
+  @@index([businessId, customerId])
+}
+
+model OrderItem {
+  id               Int      @id @default(autoincrement())
+  businessId       Int
+  orderId          Int
+  productId        Int
+  quantity         Int
+  unitPriceCents   Int
+  totalAmountCents Int
+  createdAt        DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  order    Order    @relation(fields: [orderId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([businessId, orderId])
+  @@index([businessId, productId])
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  businessId  Int
+  orderId     Int
+  amountCents Int
+  method      PaymentMethod
+  reference   String?
+  createdAt   DateTime      @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  order    Order    @relation(fields: [orderId], references: [id])
+
+  @@index([businessId, orderId])
+}
+
+model Settings {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  key        String
+  value      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, key])
+  @@index([businessId])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model Appointment {
+  id              Int               @id @default(autoincrement())
+  businessId      Int
+  customerId      Int
+  staffUserId     Int?
+  startAt         DateTime
+  endAt           DateTime
+  status          AppointmentStatus
+  serviceName     String
+  notes           String?
+  createdByUserId Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  staffUser User?    @relation("StaffAppointments", fields: [staffUserId], references: [id])
+  createdBy User     @relation("CreatedAppointments", fields: [createdByUserId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, staffUserId])
+  @@index([businessId, customerId])
+  @@index([businessId, startAt])
+}
