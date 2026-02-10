@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag } from 'lucide-react';
+import { Eye, Heart, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
@@ -23,12 +23,14 @@ export interface ProductCardProps {
   };
   categoryId?: string;
   variant?: 'default' | 'compact';
+  showHoverActions?: boolean;
 }
 
 export default function ProductCard({
   product,
   categoryId,
   variant = 'default',
+  showHoverActions = false,
 }: ProductCardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -60,6 +62,14 @@ export default function ProductCard({
     toast.success('Ürün sepete eklendi');
   };
 
+  const handleWishlist = () => {
+    toast('Favoriler yakında.');
+  };
+
+  const handleQuickView = () => {
+    router.push(productHref);
+  };
+
   return (
     <article
       className={`group flex flex-col overflow-hidden rounded-3xl border border-[#E0D7C6] bg-[#FDFCF8] shadow-[0_15px_40px_rgba(26,60,52,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(26,60,52,0.12)] ${
@@ -80,6 +90,39 @@ export default function ProductCard({
             className="object-cover transition duration-500 group-hover:scale-105"
           />
         </Link>
+        {showHoverActions && variant !== 'compact' && (
+          <div className="pointer-events-none absolute inset-0">
+            <div className="pointer-events-auto absolute right-3 top-3 flex flex-col gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={handleWishlist}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#1A3C34] shadow-md hover:bg-white"
+                aria-label="Favorilere ekle"
+              >
+                <Heart className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickView}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#1A3C34] shadow-md hover:bg-white"
+                aria-label="Hızlı görüntüle"
+              >
+                <Eye className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="absolute inset-x-3 bottom-3 translate-y-2 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={isOutOfStock}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <ShoppingBag className="h-4 w-4" />
+                {isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
+              </button>
+            </div>
+          </div>
+        )}
         <div
           className={`absolute left-4 top-4 flex flex-wrap gap-2 font-semibold uppercase tracking-[0.2em] text-white ${
             variant === 'compact' ? 'text-[10px]' : 'text-[11px]'

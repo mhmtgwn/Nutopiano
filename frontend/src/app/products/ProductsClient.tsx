@@ -2,14 +2,19 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ChevronDown, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import {
+  ChevronDown,
+  Grid2X2,
+  Grid3X3,
+  SlidersHorizontal,
+  Star,
+} from 'lucide-react';
 
 import api from '@/services/api';
 import ProductCard from '@/components/ProductCard';
 import Spinner from '@/components/common/Spinner';
-import { useAppSelector } from '@/store';
+import Breadcrumbs from '@/components/common/Breadcrumbs';
 
 interface ApiProduct {
   id: number;
@@ -47,11 +52,9 @@ interface Category {
 }
 
 export default function ProductsClient() {
-  const router = useRouter();
-  const totalQuantity = useAppSelector((state) => state.cart.totalQuantity);
-
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [sort, setSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
+  const [gridColumns, setGridColumns] = useState<3 | 4>(4);
 
   const {
     data: categories,
@@ -120,80 +123,77 @@ export default function ProductsClient() {
     }
   };
 
-  return (
-    <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
-        <section className="rounded-[36px] border border-[#1A3C34]/10 bg-gradient-to-br from-[#FFF9E6] via-white to-[#F3FAF5] px-5 py-7 shadow-[0_40px_120px_rgba(26,60,52,0.12)] md:px-10 md:py-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                Nutopiano Shop
-              </p>
-              <h1 className="text-3xl font-serif text-[#1A3C34] md:text-4xl">
-                Mağaza
-              </h1>
-              <p className="text-sm text-[#5C5C5C] md:text-base">
-                Ürünleri keşfedin, filtreleyin ve sepete ekleyin.
-              </p>
-            </div>
+  const totalResults = sortedProducts.length;
+  const showingFrom = totalResults > 0 ? 1 : 0;
+  const showingTo = totalResults;
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
-                <SlidersHorizontal className="h-4 w-4" />
-                Sırala
-              </div>
+  return (
+    <div className="min-h-[calc(100vh-140px)] bg-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+        <section className="space-y-4">
+          <Breadcrumbs
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Shop' },
+            ]}
+          />
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#E5E5E0] pb-4">
+            <div className="space-y-1">
+              <h1 className="text-4xl font-serif text-[#1A3C34]">Shop</h1>
+              <p className="text-sm text-[#5C5C5C]">Ürünleri keşfedin.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <select
                   value={sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="h-10 appearance-none rounded-full border border-[#1A3C34]/20 bg-white/90 px-4 pr-10 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/30"
+                  className="h-10 appearance-none rounded-md border border-[#E5E5E0] bg-white px-3 pr-9 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34]"
                 >
-                  <option value="popular">Popüler</option>
-                  <option value="price-asc">Fiyat (Artan)</option>
-                  <option value="price-desc">Fiyat (Azalan)</option>
+                  <option value="popular">Sort by popularity</option>
+                  <option value="price-asc">Sort by price: low to high</option>
+                  <option value="price-desc">Sort by price: high to low</option>
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A3C34]/70" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A3C34]/60" />
               </div>
 
-              {totalQuantity > 0 && (
-                <button
-                  type="button"
-                  onClick={() => router.push('/cart')}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#1A3C34] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white shadow-sm hover:bg-[#3E2723]"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  Sepet ({totalQuantity})
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setGridColumns(3)}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-md border shadow-sm transition ${
+                  gridColumns === 3
+                    ? 'border-[#1A3C34] bg-[#1A3C34] text-white'
+                    : 'border-[#E5E5E0] bg-white text-[#1A3C34] hover:bg-[#1A3C34]/5'
+                }`}
+                aria-label="3 kolon"
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setGridColumns(4)}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-md border shadow-sm transition ${
+                  gridColumns === 4
+                    ? 'border-[#1A3C34] bg-[#1A3C34] text-white'
+                    : 'border-[#E5E5E0] bg-white text-[#1A3C34] hover:bg-[#1A3C34]/5'
+                }`}
+                aria-label="4 kolon"
+              >
+                <Grid2X2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70 sm:gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[#5C5C5C]">
+            <p>
+              Showing {showingFrom}–{showingTo} of {totalResults} results
+            </p>
             <button
               type="button"
-              onClick={() => handleCategorySelect(null)}
-              className={`rounded-full px-4 py-2 transition ${
-                selectedCategoryId === null
-                  ? 'bg-[#1A3C34] text-white'
-                  : 'border border-[#1A3C34]/20 bg-white/80 text-[#1A3C34] hover:bg-white'
-              }`}
+              className="inline-flex items-center gap-2 text-sm font-medium text-[#1A3C34]"
             >
-              Tüm ürünler
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters
             </button>
-            {(categories ?? []).map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => handleCategorySelect(category.id)}
-                className={`rounded-full px-4 py-2 transition ${
-                  selectedCategoryId === category.id
-                    ? 'bg-[#1A3C34] text-white'
-                    : 'border border-[#1A3C34]/20 bg-white/80 text-[#1A3C34] hover:bg-white'
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
           </div>
         </section>
 
@@ -210,24 +210,95 @@ export default function ProductsClient() {
         )}
 
         {!isLoading && !hasError && (
-          <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/80 p-5 shadow-[0_20px_70px_rgba(26,60,52,0.08)] md:p-6">
-            {sortedProducts.length > 0 ? (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {sortedProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
+          <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <aside className="space-y-6">
+              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
+                <p className="text-base font-semibold text-[#1A3C34]">Product categories</p>
+                <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
+                  <button
+                    type="button"
+                    onClick={() => handleCategorySelect(null)}
+                    className={`w-full text-left transition ${
+                      selectedCategoryId === null ? 'font-semibold' : 'text-[#1A3C34]/80 hover:text-[#1A3C34]'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {(categories ?? []).map((category) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => handleCategorySelect(category.id)}
+                      className={`w-full text-left transition ${
+                        selectedCategoryId === category.id
+                          ? 'font-semibold'
+                          : 'text-[#1A3C34]/80 hover:text-[#1A3C34]'
+                      }`}
+                    >
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-sm text-[#5C5C5C]">Ürün bulunamadı.</p>
-                <Link
-                  href="/"
-                  className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/70 hover:text-[#1A3C34]"
+
+              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
+                <p className="text-base font-semibold text-[#1A3C34]">Filter by price</p>
+                <div className="mt-4 h-1 w-full rounded-full bg-[#E5E5E0]">
+                  <div className="h-1 w-2/3 rounded-full bg-[#1A3C34]" />
+                </div>
+                <p className="mt-3 text-sm text-[#5C5C5C]">Price: ₺0 — ₺9999</p>
+              </div>
+
+              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
+                <p className="text-base font-semibold text-[#1A3C34]">Average rating</p>
+                <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
+                  {[5, 4, 3].map((rate) => (
+                    <button
+                      key={rate}
+                      type="button"
+                      className="flex w-full items-center justify-between text-left text-[#1A3C34]/80 hover:text-[#1A3C34]"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-4 w-4 ${i < rate ? 'fill-[#1A3C34] text-[#1A3C34]' : 'text-[#E5E5E0]'}`}
+                          />
+                        ))}
+                      </span>
+                      <span className="text-xs text-[#5C5C5C]">(0)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <div>
+              {sortedProducts.length > 0 ? (
+                <div
+                  className={`grid gap-6 ${
+                    gridColumns === 3
+                      ? 'grid-cols-2 md:grid-cols-3'
+                      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                  }`}
                 >
-                  Anasayfaya dön <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            )}
+                  {sortedProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      showHoverActions
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-[#E5E5E0] bg-white p-8 text-center">
+                  <p className="text-sm text-[#5C5C5C]">Ürün bulunamadı.</p>
+                  <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-[#1A3C34]">
+                    Anasayfaya dön
+                  </Link>
+                </div>
+              )}
+            </div>
           </section>
         )}
       </div>
