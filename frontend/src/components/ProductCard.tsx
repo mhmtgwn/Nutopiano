@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Star } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
@@ -49,8 +49,6 @@ export default function ProductCard({
 	const imageSrc =
 		product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
 	const isPlaceholderImage = !product.imageUrl;
-
-	const rating = 5;
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
@@ -101,17 +99,6 @@ export default function ProductCard({
       </div>
 
       <div className="border-t border-[#e5e5e5] px-5 py-4">
-        {variant !== 'compact' && (
-          <div className="mb-2 flex items-center gap-1 text-[#f7b500]">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star
-                key={i}
-                className={`h-4 w-4 ${i < rating ? 'fill-[#f7b500] text-[#f7b500]' : 'text-[#e5e5e5]'}`}
-              />
-            ))}
-          </div>
-        )}
-
         <Link
           href={productHref}
           className={`block font-semibold text-[#222222] hover:text-black ${
