@@ -42,6 +42,13 @@ export default function ProductDetailClient({
   const breadcrumbLabel = categoryId ? 'Kategori' : 'Shop';
   const breadcrumbHref = categoryId ? `/categories/${categoryId}` : '/products';
 
+  const placeholderSeed = Number.parseInt(String(product.id), 10);
+  const placeholderId = Number.isFinite(placeholderSeed)
+    ? Math.abs(placeholderSeed % 1000)
+    : 1;
+  const imageSrc =
+    product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/1000/1000`;
+
   const maxQuantity = useMemo(() => {
     if (typeof product.stock === 'number' && product.stock > 0) {
       return product.stock;
@@ -96,7 +103,7 @@ export default function ProductDetailClient({
           <div className="overflow-hidden rounded-[36px] border border-[#1A3C34]/10 bg-white shadow-[0_40px_120px_rgba(26,60,52,0.1)]">
             <div className="relative aspect-square w-full">
               <Image
-                src={product.imageUrl || '/nutopiano-logo.png'}
+                src={imageSrc}
                 alt={product.name}
                 fill
                 className="object-cover"

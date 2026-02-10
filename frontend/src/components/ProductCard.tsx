@@ -42,6 +42,13 @@ export default function ProductCard({
     ? `/categories/${categoryId}/products/${product.id}`
     : `/products/${product.id}`;
 
+	const placeholderSeed = Number.parseInt(String(product.id), 10);
+	const placeholderId = Number.isFinite(placeholderSeed)
+		? Math.abs(placeholderSeed % 1000)
+		: 1;
+	const imageSrc =
+		product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
+
   const handleAddToCart = () => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -84,7 +91,7 @@ export default function ProductCard({
           }`}
         >
           <Image
-            src={product.imageUrl || '/nutopiano-logo.png'}
+            src={imageSrc}
             alt={product.name}
             fill
             className="object-cover transition duration-500 group-hover:scale-105"
