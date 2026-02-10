@@ -184,6 +184,60 @@ export class OrdersService {
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
+    if (currentUser.role === 'CUSTOMER') {
+      const phone = currentUser.phone?.trim();
+      if (!phone) {
+        return [];
+      }
+
+      const customer = await this.prisma.customer.findFirst({
+        where: {
+          businessId,
+          phone,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!customer) {
+        return [];
+      }
+
+      const orders = await this.prisma.order.findMany({
+        where: {
+          businessId,
+          customerId: customer.id,
+        },
+        select: {
+          id: true,
+          customerId: true,
+          totalAmountCents: true,
+          source: true,
+          createdByUserId: true,
+          createdAt: true,
+          status: {
+            select: {
+              key: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return orders.map((o) => ({
+        id: o.id,
+        customerId: o.customerId,
+        totalAmountCents: o.totalAmountCents,
+        statusKey: o.status.key,
+        source: o.source,
+        createdByUserId: o.createdByUserId,
+        createdAt: o.createdAt,
+      }));
+    }
+
     const where =
       currentUser.role === 'ADMIN'
         ? { businessId }

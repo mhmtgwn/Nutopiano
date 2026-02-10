@@ -29,7 +29,7 @@ export class OrdersController {
   }
 
   @Get()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'STAFF', 'CUSTOMER')
   @ApiOperation({
     summary: 'List orders',
     description:
