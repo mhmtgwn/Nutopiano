@@ -38,6 +38,11 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function ProductsPage() {
-  return <ProductsClient />;
+export default function ProductsPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  const q = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  return <ProductsClient query={q} />;
 }

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -35,11 +34,14 @@ interface Product {
   tags?: string[];
 }
 
-export default function ProductsClient() {
-  const searchParams = useSearchParams();
+export default function ProductsClient({
+  query,
+}: {
+  query?: string;
+}) {
   const [sort, setSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
 
-  const query = (searchParams?.get('q') ?? '').trim().toLowerCase();
+  const normalizedQuery = (query ?? '').trim().toLowerCase();
 
   const {
     data: products,
@@ -68,10 +70,10 @@ export default function ProductsClient() {
   const sortedProducts = useMemo(() => {
     const base = (products ?? []).slice();
 
-    const filtered = query
+    const filtered = normalizedQuery
       ? base.filter((p) => {
           const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase();
-          return haystack.includes(query);
+          return haystack.includes(normalizedQuery);
         })
       : base;
 
@@ -84,7 +86,7 @@ export default function ProductsClient() {
     }
 
     return next;
-  }, [products, sort, query]);
+  }, [products, sort, normalizedQuery]);
 
   const handleSortChange = (value: string) => {
     if (value === 'price-asc' || value === 'price-desc' || value === 'popular') {
