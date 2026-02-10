@@ -110,18 +110,57 @@ export default function HomeClient() {
 							Shop now <ArrowRight className="h-4 w-4" />
 						</Link>
 					</div>
-					<div className="space-y-4 rounded-[32px] border border-white/40 bg-white/70 p-6 text-sm text-[#1A3C34]">
-						<div className="flex items-start gap-3">
-							<Sparkles className="h-5 w-5 text-[#C5A059]" />
-							<p>Her gün taze ürün ve seçilmiş koleksiyonlar</p>
+					<div className="space-y-5 rounded-[32px] border border-white/40 bg-white/70 p-6 text-[#1A3C34]">
+						<div className="space-y-2">
+							<p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+								Hızlı erişim
+							</p>
+							<div className="grid gap-2">
+								<Link
+									href="/products"
+									className="inline-flex items-center justify-between rounded-2xl border border-[#1A3C34]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white"
+								>
+									Tüm ürünler <ArrowRight className="h-4 w-4" />
+								</Link>
+								<Link
+									href="/categories"
+									className="inline-flex items-center justify-between rounded-2xl border border-[#1A3C34]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white"
+								>
+									Kategoriler <ArrowRight className="h-4 w-4" />
+								</Link>
+								<Link
+									href="/checkout"
+									className="inline-flex items-center justify-between rounded-2xl border border-[#1A3C34]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white"
+								>
+									Kargo & ödeme <ArrowRight className="h-4 w-4" />
+								</Link>
+							</div>
 						</div>
-						<div className="flex items-start gap-3">
-							<ShieldCheck className="h-5 w-5 text-[#1A3C34]" />
-							<p>Güvenli ödeme + anlık sipariş bildirimi</p>
-						</div>
-						<div className="flex items-start gap-3">
-							<Truck className="h-5 w-5 text-[#1A3C34]" />
-							<p>Hızlı teslimat ve kapıya hizmet seçeneği</p>
+						<div className="grid gap-3 rounded-2xl border border-[#1A3C34]/10 bg-white/70 px-4 py-4 text-sm">
+							<div className="flex items-start gap-3">
+								<Truck className="mt-0.5 h-5 w-5 text-[#C5A059]" />
+								<p>
+									<span className="font-semibold">Hızlı teslimat</span>
+									<br />
+									Stoktan çıkış, takipli kargo.
+								</p>
+							</div>
+							<div className="flex items-start gap-3">
+								<ShieldCheck className="mt-0.5 h-5 w-5 text-[#C5A059]" />
+								<p>
+									<span className="font-semibold">Güvenli ödeme</span>
+									<br />
+									Ödeme adımlarında şeffaf fiyat.
+								</p>
+							</div>
+							<div className="flex items-start gap-3">
+								<MessageCircle className="mt-0.5 h-5 w-5 text-[#C5A059]" />
+								<p>
+									<span className="font-semibold">WhatsApp destek</span>
+									<br />
+									Sorularınız için hızlı dönüş.
+								</p>
+							</div>
 						</div>
 						<Link
 							href="/products"
@@ -168,7 +207,11 @@ export default function HomeClient() {
 						{products && products.length > 0 ? (
 							<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 								{products.map((product) => (
-									<ProductCard key={product.id} product={product} />
+									<ProductCard
+										key={product.id}
+										product={product}
+										variant="compact"
+									/>
 								))}
 							</div>
 						) : (

@@ -22,9 +22,14 @@ export interface ProductCardProps {
     tags?: string[];
   };
   categoryId?: string;
+  variant?: 'default' | 'compact';
 }
 
-export default function ProductCard({ product, categoryId }: ProductCardProps) {
+export default function ProductCard({
+  product,
+  categoryId,
+  variant = 'default',
+}: ProductCardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector((state) => state.user.status === 'authenticated');
@@ -56,9 +61,18 @@ export default function ProductCard({ product, categoryId }: ProductCardProps) {
   };
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-3xl border border-[#E0D7C6] bg-[#FDFCF8] shadow-[0_15px_40px_rgba(26,60,52,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(26,60,52,0.12)]">
+    <article
+      className={`group flex flex-col overflow-hidden rounded-3xl border border-[#E0D7C6] bg-[#FDFCF8] shadow-[0_15px_40px_rgba(26,60,52,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(26,60,52,0.12)] ${
+        variant === 'compact' ? 'rounded-2xl' : ''
+      }`}
+    >
       <div className="relative">
-        <Link href={productHref} className="relative block aspect-[4/3] w-full overflow-hidden">
+        <Link
+          href={productHref}
+          className={`relative block w-full overflow-hidden ${
+            variant === 'compact' ? 'aspect-[1/1]' : 'aspect-[4/3]'
+          }`}
+        >
           <Image
             src={product.imageUrl || '/nutopiano-logo.png'}
             alt={product.name}
@@ -66,7 +80,11 @@ export default function ProductCard({ product, categoryId }: ProductCardProps) {
             className="object-cover transition duration-500 group-hover:scale-105"
           />
         </Link>
-        <div className="absolute left-4 top-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white">
+        <div
+          className={`absolute left-4 top-4 flex flex-wrap gap-2 font-semibold uppercase tracking-[0.2em] text-white ${
+            variant === 'compact' ? 'text-[10px]' : 'text-[11px]'
+          }`}
+        >
           {product.tags?.slice(0, 2).map((tag) => (
             <span key={tag} className="rounded-full bg-black/40 px-3 py-1">
               {tag}
@@ -75,7 +93,9 @@ export default function ProductCard({ product, categoryId }: ProductCardProps) {
         </div>
         {typeof product.stock === 'number' && (
           <span
-            className={`absolute right-4 top-4 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+            className={`absolute right-4 top-4 rounded-full px-3 py-1 font-semibold uppercase tracking-[0.18em] ${
+              variant === 'compact' ? 'text-[10px]' : 'text-[11px]'
+            } ${
               isOutOfStock
                 ? 'bg-[#3E2723] text-white'
                 : lowStock
@@ -87,27 +107,43 @@ export default function ProductCard({ product, categoryId }: ProductCardProps) {
           </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-3 px-5 pb-5 pt-4">
+      <div
+        className={`flex flex-1 flex-col gap-3 ${
+          variant === 'compact' ? 'px-4 pb-4 pt-3' : 'px-5 pb-5 pt-4'
+        }`}
+      >
         <Link
           href={productHref}
-          className="text-lg font-serif text-[#1A3C34] transition hover:text-[#3E2723]"
+          className={`font-serif text-[#1A3C34] transition hover:text-[#3E2723] ${
+            variant === 'compact' ? 'text-base' : 'text-lg'
+          }`}
         >
           {truncate(product.name, 60)}
         </Link>
         {product.description && (
-          <p className="line-clamp-2 text-sm text-[#5C5C5C]">
+          <p
+            className={`line-clamp-2 text-[#5C5C5C] ${
+              variant === 'compact' ? 'text-xs' : 'text-sm'
+            }`}
+          >
             {truncate(product.description, 90)}
           </p>
         )}
         <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xl font-semibold text-[#1A3C34]">
+          <span
+            className={`font-semibold text-[#1A3C34] ${
+              variant === 'compact' ? 'text-lg' : 'text-xl'
+            }`}
+          >
             {formatPrice(product.price)}
           </span>
           <Button
             size="sm"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 sm:w-auto"
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 sm:w-auto ${
+              variant === 'compact' ? 'text-xs' : ''
+            }`}
           >
             <ShoppingBag className="h-4 w-4" />
             {isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
