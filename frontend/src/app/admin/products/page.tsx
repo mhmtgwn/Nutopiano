@@ -77,6 +77,7 @@ export default function AdminProductsPage() {
     type: 'PHYSICAL' as ProductType,
     priceCents: '',
     stock: '',
+    imageUrl: '',
   });
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -87,6 +88,27 @@ export default function AdminProductsPage() {
     type: 'PHYSICAL' as ProductType,
     priceCents: '',
     stock: '',
+    imageUrl: '',
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post<{ url: string }>(
+        '/uploads/product-image',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      );
+      return res.data;
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErrorMessage(error, 'Görsel yüklenemedi.'));
+    },
   });
 
   const {
@@ -151,6 +173,7 @@ export default function AdminProductsPage() {
         type: createForm.type,
         price: String(priceCents),
         stock: typeof stock === 'number' && !Number.isNaN(stock) ? stock : undefined,
+        imageUrl: createForm.imageUrl.trim() || undefined,
       });
     },
     onSuccess: async () => {
@@ -162,6 +185,7 @@ export default function AdminProductsPage() {
         type: 'PHYSICAL',
         priceCents: '',
         stock: '',
+        imageUrl: '',
       });
       await queryClient.invalidateQueries({ queryKey: ['admin-products'] });
     },
@@ -194,6 +218,7 @@ export default function AdminProductsPage() {
             : undefined,
         stock:
           typeof stock === 'number' && !Number.isNaN(stock) ? stock : undefined,
+        imageUrl: editForm.imageUrl.trim() || undefined,
       });
     },
     onSuccess: async () => {
@@ -231,6 +256,7 @@ export default function AdminProductsPage() {
       type: product.type,
       priceCents: String(product.priceCents ?? ''),
       stock: product.stock === null || product.stock === undefined ? '' : String(product.stock),
+      imageUrl: product.imageUrl ?? '',
     });
   };
 
@@ -243,6 +269,7 @@ export default function AdminProductsPage() {
       type: 'PHYSICAL',
       priceCents: '',
       stock: '',
+      imageUrl: '',
     });
   };
 
@@ -418,6 +445,40 @@ export default function AdminProductsPage() {
                 />
               </div>
             </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                Ürün görseli
+              </label>
+              <div className="flex flex-col gap-2 rounded-2xl border border-[#E5E5E0] bg-white px-3 py-3">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const result = await uploadMutation.mutateAsync(file);
+                    setCreateForm((prev) => ({ ...prev, imageUrl: result.url }));
+                    toast.success('Görsel yüklendi.');
+                  }}
+                  disabled={uploadMutation.isPending}
+                  className="text-xs"
+                />
+                <input
+                  value={createForm.imageUrl}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, imageUrl: e.target.value }))
+                  }
+                  className="h-10 w-full rounded-xl border border-[#E5E5E0] bg-white px-3 text-xs text-[#1A3C34] outline-none"
+                  placeholder="https://api.../uploads/..."
+                />
+                {createForm.imageUrl.trim() && (
+                  <p className="text-[11px] text-[#5C5C5C]">
+                    Görsel kaydedilecek: {createForm.imageUrl.trim()}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           <Button
@@ -514,6 +575,32 @@ export default function AdminProductsPage() {
                               className="h-9 w-full rounded-xl border border-[#E5E5E0] bg-white px-3 text-xs outline-none"
                               placeholder="SKU"
                             />
+                            <div className="grid gap-2">
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const result = await uploadMutation.mutateAsync(file);
+                                  setEditForm((prev) => ({ ...prev, imageUrl: result.url }));
+                                  toast.success('Görsel yüklendi.');
+                                }}
+                                disabled={uploadMutation.isPending}
+                                className="text-[11px]"
+                              />
+                              <input
+                                value={editForm.imageUrl}
+                                onChange={(e) =>
+                                  setEditForm((prev) => ({
+                                    ...prev,
+                                    imageUrl: e.target.value,
+                                  }))
+                                }
+                                className="h-9 w-full rounded-xl border border-[#E5E5E0] bg-white px-3 text-xs outline-none"
+                                placeholder="imageUrl"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>

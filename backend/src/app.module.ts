@@ -12,6 +12,7 @@ import { OrderStatusModule } from './modules/order-status/order-status.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 
@@ -29,6 +30,7 @@ import { EmailModule } from './email/email.module';
     SettingsModule,
     OrdersModule,
     AppointmentsModule,
+    UploadsModule,
   ],
 
   controllers: [AppController, DevController],

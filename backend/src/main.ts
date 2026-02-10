@@ -1,6 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './core/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './core/filters/http-exception.filter';
@@ -8,6 +11,13 @@ import { HttpExceptionFilter } from './core/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+
+  const uploadsDir =
+    process.env.UPLOADS_DIR?.trim() && process.env.UPLOADS_DIR.trim().length > 0
+      ? process.env.UPLOADS_DIR.trim()
+      : path.join(process.cwd(), 'uploads');
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use('/uploads', express.static(uploadsDir));
 
   app.enableCors({
     // Dev ortamında, hem localhost hem de 192.168.x.x gibi yerel IP'lerden gelen
