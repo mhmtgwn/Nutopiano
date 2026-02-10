@@ -8,7 +8,6 @@ import {
   Grid2X2,
   Grid3X3,
   SlidersHorizontal,
-  Star,
 } from 'lucide-react';
 
 import api from '@/services/api';
@@ -210,95 +209,59 @@ export default function ProductsClient() {
         )}
 
         {!isLoading && !hasError && (
-          <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="space-y-6">
-              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
-                <p className="text-base font-semibold text-[#1A3C34]">Product categories</p>
-                <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
-                  <button
-                    type="button"
-                    onClick={() => handleCategorySelect(null)}
-                    className={`w-full text-left transition ${
-                      selectedCategoryId === null ? 'font-semibold' : 'text-[#1A3C34]/80 hover:text-[#1A3C34]'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {(categories ?? []).map((category) => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => handleCategorySelect(category.id)}
-                      className={`w-full text-left transition ${
-                        selectedCategoryId === category.id
-                          ? 'font-semibold'
-                          : 'text-[#1A3C34]/80 hover:text-[#1A3C34]'
-                      }`}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
-                <p className="text-base font-semibold text-[#1A3C34]">Filter by price</p>
-                <div className="mt-4 h-1 w-full rounded-full bg-[#E5E5E0]">
-                  <div className="h-1 w-2/3 rounded-full bg-[#1A3C34]" />
-                </div>
-                <p className="mt-3 text-sm text-[#5C5C5C]">Price: ₺0 — ₺9999</p>
-              </div>
-
-              <div className="rounded-md border border-[#E5E5E0] bg-white p-5">
-                <p className="text-base font-semibold text-[#1A3C34]">Average rating</p>
-                <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
-                  {[5, 4, 3].map((rate) => (
-                    <button
-                      key={rate}
-                      type="button"
-                      className="flex w-full items-center justify-between text-left text-[#1A3C34]/80 hover:text-[#1A3C34]"
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-4 w-4 ${i < rate ? 'fill-[#1A3C34] text-[#1A3C34]' : 'text-[#E5E5E0]'}`}
-                          />
-                        ))}
-                      </span>
-                      <span className="text-xs text-[#5C5C5C]">(0)</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-
-            <div>
-              {sortedProducts.length > 0 ? (
-                <div
-                  className={`grid gap-6 ${
-                    gridColumns === 3
-                      ? 'grid-cols-2 md:grid-cols-3'
-                      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+          <section>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleCategorySelect(null)}
+                className={`rounded-md border px-3 py-2 text-sm transition ${
+                  selectedCategoryId === null
+                    ? 'border-[#1A3C34] bg-[#1A3C34] text-white'
+                    : 'border-[#E5E5E0] bg-white text-[#1A3C34] hover:bg-[#1A3C34]/5'
+                }`}
+              >
+                All
+              </button>
+              {(categories ?? []).map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => handleCategorySelect(category.id)}
+                  className={`rounded-md border px-3 py-2 text-sm transition ${
+                    selectedCategoryId === category.id
+                      ? 'border-[#1A3C34] bg-[#1A3C34] text-white'
+                      : 'border-[#E5E5E0] bg-white text-[#1A3C34] hover:bg-[#1A3C34]/5'
                   }`}
                 >
-                  {sortedProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      showHoverActions
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-md border border-[#E5E5E0] bg-white p-8 text-center">
-                  <p className="text-sm text-[#5C5C5C]">Ürün bulunamadı.</p>
-                  <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-[#1A3C34]">
-                    Anasayfaya dön
-                  </Link>
-                </div>
-              )}
+                  {category.name}
+                </button>
+              ))}
             </div>
+
+            {sortedProducts.length > 0 ? (
+              <div
+                className={`grid gap-6 ${
+                  gridColumns === 3
+                    ? 'grid-cols-2 md:grid-cols-3'
+                    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                }`}
+              >
+                {sortedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    showHoverActions
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border border-[#E5E5E0] bg-white p-8 text-center">
+                <p className="text-sm text-[#5C5C5C]">Ürün bulunamadı.</p>
+                <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-[#1A3C34]">
+                  Anasayfaya dön
+                </Link>
+              </div>
+            )}
           </section>
         )}
       </div>

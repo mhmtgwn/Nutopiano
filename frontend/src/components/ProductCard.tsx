@@ -115,7 +115,7 @@ export default function ProductCard({
                 type="button"
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#ff6a00] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg hover:bg-[#e45f00] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ShoppingBag className="h-4 w-4" />
                 {isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
