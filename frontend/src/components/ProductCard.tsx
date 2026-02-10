@@ -71,7 +71,7 @@ export default function ProductCard({
   };
 
   return (
-    <article className="group relative h-full border border-[#e5e5e5] bg-white">
+    <article className="group relative h-full bg-white">
       <div className="relative p-6">
         <Link href={productHref} className="block">
           <div className="relative mx-auto aspect-square w-full max-w-[220px]">
@@ -98,7 +98,7 @@ export default function ProductCard({
         )}
       </div>
 
-      <div className="border-t border-[#e5e5e5] px-5 py-4">
+      <div className="px-5 py-4">
         <Link
           href={productHref}
           className={`block font-semibold text-[#222222] hover:text-black ${
