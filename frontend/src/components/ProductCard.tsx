@@ -48,6 +48,7 @@ export default function ProductCard({
 		: 1;
 	const imageSrc =
 		product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
+	const isPlaceholderImage = !product.imageUrl;
 
 	const rating = 5;
 
@@ -81,7 +82,7 @@ export default function ProductCard({
 
   return (
     <article
-      className={`group flex flex-col overflow-hidden rounded-3xl border border-[#E0D7C6] bg-[#FDFCF8] shadow-[0_15px_40px_rgba(26,60,52,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(26,60,52,0.12)] ${
+      className={`group flex flex-col overflow-hidden rounded-3xl border border-[#e5e5e5] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(0,0,0,0.08)] ${
         variant === 'compact' ? 'rounded-2xl' : ''
       }`}
     >
@@ -96,6 +97,7 @@ export default function ProductCard({
             src={imageSrc}
             alt={product.name}
             fill
+            unoptimized={isPlaceholderImage}
             className="object-cover transition duration-500 group-hover:scale-105"
           />
         </Link>
@@ -121,7 +123,7 @@ export default function ProductCard({
               <button
                 type="button"
                 onClick={handleWishlist}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#1A3C34] shadow-md hover:bg-white"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#222222] shadow-md hover:bg-white"
                 aria-label="Favorilere ekle"
               >
                 <Heart className="h-4 w-4" />
@@ -129,7 +131,7 @@ export default function ProductCard({
               <button
                 type="button"
                 onClick={handleQuickView}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#1A3C34] shadow-md hover:bg-white"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#222222] shadow-md hover:bg-white"
                 aria-label="Hızlı görüntüle"
               >
                 <Eye className="h-4 w-4" />
@@ -167,8 +169,8 @@ export default function ProductCard({
               isOutOfStock
                 ? 'bg-[#3E2723] text-white'
                 : lowStock
-                ? 'bg-[#C5A059] text-[#3E2723]'
-                : 'bg-white/80 text-[#1A3C34]'
+                ? 'bg-[#fff2e6] text-[#222222]'
+                : 'bg-white/90 text-[#222222]'
             }`}
           >
             {isOutOfStock ? 'Stok yok' : lowStock ? `Son ${product.stock}` : 'Stokta'}
