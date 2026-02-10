@@ -40,8 +40,13 @@ export class AuthService {
   }
 
   async login(credentials: LoginDto) {
+    const identifier = credentials.phone.trim();
+    const isEmailLogin = identifier.includes('@');
+
     const user = await this.prisma.user.findUnique({
-      where: { phone: credentials.phone },
+      where: isEmailLogin
+        ? { email: identifier.toLowerCase() }
+        : { phone: identifier },
     });
 
     if (!user || !user.isActive) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
@@ -24,11 +24,10 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-export default function ResetPasswordClient() {
-  const searchParams = useSearchParams();
+export default function ResetPasswordClient({ token }: { token: string }) {
   const router = useRouter();
 
-  const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
+  const normalizedToken = useMemo(() => token.trim(), [token]);
 
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -38,7 +37,7 @@ export default function ResetPasswordClient() {
     event.preventDefault();
 
     const trimmedPassword = password.trim();
-    if (!token) {
+    if (!normalizedToken) {
       toast.error('Token bulunamadı.');
       return;
     }
@@ -55,7 +54,7 @@ export default function ResetPasswordClient() {
 
     try {
       setIsSubmitting(true);
-      await api.post('/auth/reset-password', { token, password: trimmedPassword });
+      await api.post('/auth/reset-password', { token: normalizedToken, password: trimmedPassword });
       toast.success('Şifre güncellendi. Lütfen giriş yapın.');
       router.push('/login');
     } catch (error: unknown) {
