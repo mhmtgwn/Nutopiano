@@ -18,14 +18,14 @@ export default function FooterBar() {
             </p>
             <div className="flex flex-wrap gap-3 text-xs">
               <span className="inline-flex items-center gap-1 rounded-full border border-[#E5E5E5] bg-white px-3 py-1 text-[#222222]">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#ff6a00]" /> Üretim garantisi
+                <ShieldCheck className="h-3.5 w-3.5 text-[#00a651]" /> Üretim garantisi
               </span>
               <Link
                 href="https://maps.app.goo.gl/"
                 target="_blank"
                 className="inline-flex items-center gap-1 rounded-full border border-[#E5E5E5] bg-white px-3 py-1 text-[#222222] hover:-translate-y-0.5"
               >
-                <MapPin className="h-3.5 w-3.5 text-[#ff6a00]" /> Google Maps
+                <MapPin className="h-3.5 w-3.5 text-[#00a651]" /> Google Maps
               </Link>
             </div>
           </div>

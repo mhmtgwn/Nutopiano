@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, Heart, ShoppingBag } from 'lucide-react';
+import { Eye, Heart, ShoppingBag, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
@@ -48,6 +48,8 @@ export default function ProductCard({
 		: 1;
 	const imageSrc =
 		product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
+
+	const rating = 5;
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
@@ -97,6 +99,22 @@ export default function ProductCard({
             className="object-cover transition duration-500 group-hover:scale-105"
           />
         </Link>
+        {variant !== 'compact' && (
+          <div className="absolute left-3 top-3 rounded-sm bg-[#e53935] px-2 py-1 text-[11px] font-semibold text-white">
+            -10%
+          </div>
+        )}
+        {variant !== 'compact' && (
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={isOutOfStock}
+            className="absolute bottom-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#00a651] text-white shadow-md hover:bg-[#008a44] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Sepete ekle"
+          >
+            <ShoppingBag className="h-5 w-5" />
+          </button>
+        )}
         {showHoverActions && variant !== 'compact' && (
           <div className="pointer-events-none absolute inset-0">
             <div className="pointer-events-auto absolute right-3 top-3 flex flex-col gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
@@ -122,7 +140,7 @@ export default function ProductCard({
                 type="button"
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#ff6a00] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg hover:bg-[#e45f00] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#00a651] px-4 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg hover:bg-[#008a44] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ShoppingBag className="h-4 w-4" />
                 {isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
@@ -162,9 +180,19 @@ export default function ProductCard({
           variant === 'compact' ? 'px-4 pb-4 pt-3' : 'px-5 pb-5 pt-4'
         }`}
       >
+        {variant !== 'compact' && (
+          <div className="flex items-center gap-1 text-[#f7b500]">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={`h-4 w-4 ${i < rating ? 'fill-[#f7b500] text-[#f7b500]' : 'text-[#e5e5e5]'}`}
+              />
+            ))}
+          </div>
+        )}
         <Link
           href={productHref}
-          className={`font-serif text-[#1A3C34] transition hover:text-[#3E2723] ${
+          className={`font-serif text-[#222222] transition hover:text-black ${
             variant === 'compact' ? 'text-base' : 'text-lg'
           }`}
         >
@@ -172,7 +200,7 @@ export default function ProductCard({
         </Link>
         {product.description && (
           <p
-            className={`line-clamp-2 text-[#5C5C5C] ${
+            className={`line-clamp-2 text-[#777777] ${
               variant === 'compact' ? 'text-xs' : 'text-sm'
             }`}
           >
@@ -181,7 +209,7 @@ export default function ProductCard({
         )}
         <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span
-            className={`font-semibold text-[#1A3C34] ${
+            className={`font-semibold text-[#222222] ${
               variant === 'compact' ? 'text-lg' : 'text-xl'
             }`}
           >
