@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
-  Grid2X2,
-  List,
 } from 'lucide-react';
 
 import api from '@/services/api';
@@ -38,7 +36,6 @@ interface Product {
 
 export default function ProductsClient() {
   const [sort, setSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const {
     data: products,
@@ -98,39 +95,7 @@ export default function ProductsClient() {
           />
           <h1 className="text-3xl font-serif text-[#222222]">Shop</h1>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5e5e5] pb-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('grid');
-                }}
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-sm border transition ${
-                  viewMode === 'grid'
-                    ? 'border-[#00a651] bg-[#00a651] text-white'
-                    : 'border-[#e5e5e5] bg-white text-[#777777] hover:bg-[#f5f5f5]'
-                }`}
-                aria-label="Grid"
-              >
-                <Grid2X2 className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-sm border transition ${
-                  viewMode === 'list'
-                    ? 'border-[#00a651] bg-[#00a651] text-white'
-                    : 'border-[#e5e5e5] bg-white text-[#777777] hover:bg-[#f5f5f5]'
-                }`}
-                aria-label="List"
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <p className="ml-4 text-sm text-[#777777]">
-                Showing {showingFrom}–{showingTo} of {totalResults} results
-              </p>
-            </div>
-
-            <div className="relative">
+            <div className="relative ml-auto">
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
@@ -161,15 +126,11 @@ export default function ProductsClient() {
           <section>
             {sortedProducts.length > 0 ? (
               <div
-                className={`grid gap-0 border-l border-t border-[#e5e5e5] ${
-                  viewMode === 'list'
-                    ? 'grid-cols-1'
-                    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                }`}
+                className="grid grid-cols-2 gap-0 border-l border-t border-[#e5e5e5] md:grid-cols-3 lg:grid-cols-4"
               >
                 {sortedProducts.map((product) => (
                   <div key={product.id} className="border-b border-r border-[#e5e5e5] p-4">
-                    <ProductCard product={product} showHoverActions={viewMode === 'grid'} />
+                    <ProductCard product={product} />
                   </div>
                 ))}
               </div>

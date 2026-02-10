@@ -88,12 +88,6 @@ export default function ProductCard({
         </Link>
 
         {variant !== 'compact' && (
-          <div className="absolute left-4 top-4 rounded-sm bg-[#e53935] px-2 py-1 text-xs font-semibold text-white">
-            -10%
-          </div>
-        )}
-
-        {variant !== 'compact' && (
           <button
             type="button"
             onClick={handleAddToCart}
