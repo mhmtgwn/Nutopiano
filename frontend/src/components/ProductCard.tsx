@@ -142,11 +142,11 @@ export default function ProductCard({
             onClick={handleAddToCart}
             disabled={isOutOfStock}
             className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 sm:w-auto ${
-              variant === 'compact' ? 'text-xs' : ''
+              variant === 'compact' ? 'w-10 px-0' : ''
             }`}
           >
             <ShoppingBag className="h-4 w-4" />
-            {isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
+            {variant === 'compact' ? null : isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
           </Button>
         </div>
       </div>
