@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -35,7 +36,10 @@ interface Product {
 }
 
 export default function ProductsClient() {
+  const searchParams = useSearchParams();
   const [sort, setSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
+
+  const query = (searchParams?.get('q') ?? '').trim().toLowerCase();
 
   const {
     data: products,
@@ -62,7 +66,16 @@ export default function ProductsClient() {
   const hasError = productsError;
 
   const sortedProducts = useMemo(() => {
-    const next = (products ?? []).slice();
+    const base = (products ?? []).slice();
+
+    const filtered = query
+      ? base.filter((p) => {
+          const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase();
+          return haystack.includes(query);
+        })
+      : base;
+
+    const next = filtered.slice();
 
     if (sort === 'price-asc') {
       next.sort((a, b) => a.price - b.price);
@@ -71,17 +84,13 @@ export default function ProductsClient() {
     }
 
     return next;
-  }, [products, sort]);
+  }, [products, sort, query]);
 
   const handleSortChange = (value: string) => {
     if (value === 'price-asc' || value === 'price-desc' || value === 'popular') {
       setSort(value);
     }
   };
-
-  const totalResults = sortedProducts.length;
-  const showingFrom = totalResults > 0 ? 1 : 0;
-  const showingTo = totalResults;
 
   return (
     <div className="min-h-[calc(100vh-140px)] bg-white">
