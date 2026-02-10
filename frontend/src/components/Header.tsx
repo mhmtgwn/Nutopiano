@@ -15,6 +15,7 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
 
@@ -31,6 +32,19 @@ export default function Header() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSearchOpen]);
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = searchWrapRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isSearchOpen]);
 
   const submitSearch = () => {
@@ -54,14 +68,35 @@ export default function Header() {
         </Link>
 
         <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => setIsSearchOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#222222]"
-            aria-label="Ara"
+          <div
+            ref={searchWrapRef}
+            className={`relative flex h-10 items-center overflow-hidden rounded-full border border-[#e5e5e5] bg-white text-[#222222] transition-[width] duration-200 ease-out ${
+              isSearchOpen ? 'w-[240px] md:w-[340px]' : 'w-10'
+            }`}
           >
-            <Search className="h-5 w-5" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center"
+              aria-label="Ara"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <input
+              ref={inputRef}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitSearch();
+              }}
+              className={`h-10 w-full bg-transparent pr-3 text-sm text-[#222222] outline-none transition-opacity duration-150 ${
+                isSearchOpen ? 'opacity-100' : 'opacity-0'
+              }`}
+              placeholder="Ürün ara..."
+              aria-label="Ürün ara"
+              tabIndex={isSearchOpen ? 0 : -1}
+            />
+          </div>
           <Link
             href="/products"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#222222]"
@@ -88,41 +123,6 @@ export default function Header() {
           </Link>
         </div>
       </div>
-
-      {isSearchOpen && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="Kapat"
-            onClick={() => setIsSearchOpen(false)}
-          />
-          <div className="relative mx-auto mt-20 w-[min(92vw,640px)] rounded-md bg-white p-4 shadow-xl">
-            <div className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-[#777777]" />
-              <input
-                ref={inputRef}
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitSearch();
-                }}
-                className="h-11 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm text-[#222222] outline-none"
-                placeholder="Ürün ara..."
-                aria-label="Ürün ara"
-              />
-              <button
-                type="button"
-                onClick={submitSearch}
-                disabled={!trimmedQuery}
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-sm bg-[#00a651] px-4 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                Ara
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
