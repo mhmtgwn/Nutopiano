@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import Header from "@/components/Header";
 import FooterBar from "@/components/layout/FooterBar";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 
 const playfairDisplay = Playfair_Display({
   variable: "--font-playfair",
@@ -35,8 +36,9 @@ export default function RootLayout({
         <Providers>
           <div className="flex min-h-screen flex-col bg-background text-foreground">
             <Header />
-            <main className="flex-1">{children}</main>
+            <main className="flex-1 pb-20 md:pb-0">{children}</main>
             <FooterBar />
+            <MobileBottomNav />
           </div>
         </Providers>
       </body>

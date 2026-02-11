@@ -158,44 +158,44 @@ export default function CheckoutPage() {
 
   if (orderSuccess) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Nutopiano Shop
             </p>
-            <h1 className="text-4xl font-serif text-[#1A3C34] md:text-5xl">
+            <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">
               Siparişiniz onaylandı
             </h1>
-            <p className="text-sm text-[#5C5C5C] md:text-base">
+            <p className="text-sm text-[var(--neutral-600)] md:text-base">
               Siparişiniz hazırlanıyor. Detayları aşağıda bulabilirsiniz.
             </p>
           </header>
 
           <CheckoutStepper currentStep={3} />
 
-          <section className="space-y-5 rounded-[36px] border border-[#D9CEBD] bg-white/90 px-6 py-7 shadow-[0_30px_90px_rgba(26,60,52,0.12)] md:px-8">
+          <section className="space-y-5 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/90 px-6 py-7 shadow-[var(--shadow-2xl)] md:px-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <CheckCircle2 className="mt-1 h-6 w-6 text-[#C5A059]" />
+                <CheckCircle2 className="mt-1 h-6 w-6 text-[var(--accent-600)]" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                     Durum
                   </p>
-                  <h2 className="text-2xl font-serif text-[#1A3C34]">
+                  <h2 className="text-2xl font-serif text-[var(--primary-800)]">
                     Siparişiniz alındı
                   </h2>
-                  <p className="text-sm text-[#5C5C5C] md:text-base">
+                  <p className="text-sm text-[var(--neutral-600)] md:text-base">
                     Ekibimiz siparişinizi hazırlıyor, teslimat bilgisini paylaşacağız.
                   </p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-[#E5DACB] bg-white px-4 py-3 text-sm text-[#1A3C34]">
+              <div className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 py-3 text-sm text-[var(--primary-800)]">
                 {orderSuccess.orderId && (
                   <p className="font-semibold">Sipariş No: #{orderSuccess.orderId}</p>
                 )}
                 {typeof orderSuccess.total === 'number' && (
-                  <p className="text-xs text-[#5C5C5C]">
+                  <p className="text-xs text-[var(--neutral-600)]">
                     Toplam: {formatPrice(orderSuccess.total)}
                   </p>
                 )}
@@ -207,7 +207,7 @@ export default function CheckoutPage() {
               </Link>
               <Link
                 href="/products"
-                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/70 hover:text-[#1A3C34]"
+                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 hover:text-[var(--primary-800)]"
               >
                 Alışverişe devam et <ArrowRight className="h-4 w-4" />
               </Link>
@@ -220,29 +220,29 @@ export default function CheckoutPage() {
 
   if (!hasItems) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
         <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Checkout
             </p>
-            <h1 className="text-4xl font-serif text-[#1A3C34] md:text-5xl">
+            <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">
               Ödeme adımı
             </h1>
-            <p className="text-sm text-[#5C5C5C] md:text-base">
+            <p className="text-sm text-[var(--neutral-600)] md:text-base">
               Sepetiniz boş görünüyor. Ödeme akışına geçmek için ürün ekleyin.
             </p>
           </header>
 
           <CheckoutStepper currentStep={0} />
 
-          <section className="space-y-4 rounded-[32px] border border-[#E0D7C6] bg-white/95 px-6 py-7 shadow-md backdrop-blur">
+          <section className="space-y-4 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/95 px-6 py-7 shadow-[var(--shadow-md)] backdrop-blur">
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Sepet durumu
               </p>
-              <h2 className="text-2xl font-serif text-[#1A3C34]">Sepetiniz boş</h2>
-              <p className="text-sm text-[#5C5C5C] md:text-base">
+              <h2 className="text-2xl font-serif text-[var(--primary-800)]">Sepetiniz boş</h2>
+              <p className="text-sm text-[var(--neutral-600)] md:text-base">
                 Ödeme akışına geçmek için önce sepetinize ürün ekleyin.
               </p>
             </div>
@@ -252,7 +252,7 @@ export default function CheckoutPage() {
               </Link>
               <Link
                 href="/cart"
-                className="text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/70 hover:text-[#1A3C34]"
+                className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 hover:text-[var(--primary-800)]"
               >
                 Sepete git
               </Link>
@@ -264,67 +264,67 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+    <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-14">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Nutopiano Shop
             </p>
-            <h1 className="text-4xl font-serif text-[#1A3C34] md:text-5xl">Checkout</h1>
-            <p className="text-sm text-[#5C5C5C] md:text-base">
+            <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">Checkout</h1>
+            <p className="text-sm text-[var(--neutral-600)] md:text-base">
               Teslimat ve ödeme bilgilerini girin, ardından siparişi oluşturun.
             </p>
           </div>
-          <div className="rounded-full border border-[#1A3C34]/15 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm">
+          <div className="rounded-full border border-[var(--primary-800)]/15 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] shadow-sm">
             Sepet: {totalQuantity} ürün
           </div>
         </header>
 
-        <section className="rounded-[40px] border border-[#1A3C34]/10 bg-gradient-to-br from-[#FFF9E6] via-white to-[#F3FAF5] px-6 py-8 shadow-[0_40px_120px_rgba(26,60,52,0.12)] md:px-10">
+        <section className="rounded-[var(--radius-3xl)] border border-[var(--primary-800)]/10 bg-gradient-to-br from-[var(--accent-100)] via-white to-[var(--success-100)] px-6 py-8 shadow-[var(--shadow-2xl)] md:px-10">
           <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] md:items-center">
             <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Teslimat planı
               </p>
-              <h2 className="text-2xl font-serif text-[#1A3C34] md:text-3xl">
+              <h2 className="text-2xl font-serif text-[var(--primary-800)] md:text-3xl">
                 Adım adım güvenli ödeme
               </h2>
-              <p className="text-sm text-[#5C5C5C] md:text-base">
+              <p className="text-sm text-[var(--neutral-600)] md:text-base">
                 Sepet → Müşteri → Ödeme → Onay akışıyla hızlıca ilerleyin.
               </p>
-              <div className="flex flex-wrap gap-3 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/80">
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/15 bg-white px-4 py-2">
+              <div className="flex flex-wrap gap-3 text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)]/80">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/15 bg-white px-4 py-2">
                   <ShieldCheck className="h-4 w-4" /> Güvenli ödeme
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/15 bg-white px-4 py-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/15 bg-white px-4 py-2">
                   <Truck className="h-4 w-4" /> Hızlı teslimat
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/15 bg-white px-4 py-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/15 bg-white px-4 py-2">
                   <Sparkles className="h-4 w-4" /> Kişisel destek
                 </span>
               </div>
             </div>
-            <div className="rounded-[28px] border border-white/60 bg-white/80 px-5 py-5">
-              <div className="space-y-3 text-sm text-[#5C5C5C]">
+            <div className="rounded-[var(--radius-2xl)] border border-white/60 bg-white/80 px-5 py-5">
+              <div className="space-y-3 text-sm text-[var(--neutral-600)]">
                 <div className="flex items-center justify-between">
                   <span>Ürün sayısı</span>
-                  <span className="font-semibold text-[#1A3C34]">{totalQuantity}</span>
+                  <span className="font-semibold text-[var(--primary-800)]">{totalQuantity}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Ara toplam</span>
-                  <span className="font-semibold text-[#1A3C34]">
+                  <span className="font-semibold text-[var(--primary-800)]">
                     {formatPrice(totalPrice)}
                   </span>
                 </div>
               </div>
-              <div className="mt-4 flex items-center justify-between border-t border-[#E4DAC9] pt-4 text-lg font-semibold text-[#1A3C34]">
+              <div className="mt-4 flex items-center justify-between border-t border-[var(--neutral-200)] pt-4 text-lg font-semibold text-[var(--primary-800)]">
                 <span>Toplam</span>
                 <span>{formatPrice(totalPrice)}</span>
               </div>
               <Link
                 href="/cart"
-                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/70 hover:text-[#1A3C34]"
+                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 hover:text-[var(--primary-800)]"
               >
                 Sepeti güncelle <ArrowRight className="h-4 w-4" />
               </Link>
@@ -337,19 +337,19 @@ export default function CheckoutPage() {
         <section className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <form
             onSubmit={handleSubmit}
-            className="space-y-6 rounded-[36px] border border-[#E0D7C6] bg-white/95 px-6 py-6 shadow-[0_30px_90px_rgba(26,60,52,0.12)]"
+            className="space-y-6 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/95 px-6 py-6 shadow-[var(--shadow-2xl)]"
           >
             {formError && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              <div className="rounded-[var(--radius-md)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-3 text-xs text-[var(--error-600)]">
                 {formError}
               </div>
             )}
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Müşteri bilgileri
               </p>
-              <h2 className="text-2xl font-serif text-[#1A3C34]">
+              <h2 className="text-2xl font-serif text-[var(--primary-800)]">
                 Teslimat detayları
               </h2>
             </div>
@@ -358,7 +358,7 @@ export default function CheckoutPage() {
               <div className="space-y-1">
                 <label
                   htmlFor="customerId"
-                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]"
+                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]"
                 >
                   Müşteri ID
                 </label>
@@ -373,20 +373,20 @@ export default function CheckoutPage() {
                       setFieldErrors((prev) => ({ ...prev, customerId: undefined }));
                     }
                   }}
-                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.customerId
-                      ? 'border-red-300 focus-visible:border-red-400 focus-visible:ring-red-200'
-                      : 'border-[#E5E5E0] focus-visible:border-[#1A3C34] focus-visible:ring-[#C4E5D0]'
+                  className={`h-11 w-full rounded-[var(--radius-md)] border bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.customerId
+                      ? 'border-[var(--error-600)]/30 focus-visible:border-[var(--error-600)] focus-visible:ring-[var(--error-100)]'
+                      : 'border-[var(--neutral-200)] focus-visible:border-[var(--primary-800)] focus-visible:ring-[var(--primary-200)]'
                     }`}
                   placeholder="Örn: 1"
                   required
                   aria-invalid={!!fieldErrors.customerId}
                 />
                 {fieldErrors.customerId ? (
-                  <p className="text-[11px] text-red-600 md:text-xs">
+                  <p className="text-[11px] text-[var(--error-600)] md:text-xs">
                     {fieldErrors.customerId}
                   </p>
                 ) : (
-                  <p className="text-[11px] text-[#8A8A8A] md:text-xs">
+                  <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
                     Backend tarafında kayıtlı bir müşteri kimliği olmalıdır. Gerekirse test için
                     1 değerini kullanabilirsiniz.
                   </p>
@@ -396,7 +396,7 @@ export default function CheckoutPage() {
               <div className="space-y-1">
                 <label
                   htmlFor="phone"
-                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]"
+                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]"
                 >
                   Müşteri telefonu
                 </label>
@@ -411,18 +411,18 @@ export default function CheckoutPage() {
                       setFieldErrors((prev) => ({ ...prev, phone: undefined }));
                     }
                   }}
-                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.phone
-                      ? 'border-red-300 focus-visible:border-red-400 focus-visible:ring-red-200'
-                      : 'border-[#E5E5E0] focus-visible:border-[#1A3C34] focus-visible:ring-[#C4E5D0]'
+                  className={`h-11 w-full rounded-[var(--radius-md)] border bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.phone
+                      ? 'border-[var(--error-600)]/30 focus-visible:border-[var(--error-600)] focus-visible:ring-[var(--error-100)]'
+                      : 'border-[var(--neutral-200)] focus-visible:border-[var(--primary-800)] focus-visible:ring-[var(--primary-200)]'
                     }`}
                   placeholder="5XXXXXXXXX"
                   required
                   aria-invalid={!!fieldErrors.phone}
                 />
                 {fieldErrors.phone ? (
-                  <p className="text-[11px] text-red-600 md:text-xs">{fieldErrors.phone}</p>
+                  <p className="text-[11px] text-[var(--error-600)] md:text-xs">{fieldErrors.phone}</p>
                 ) : (
-                  <p className="text-[11px] text-[#8A8A8A] md:text-xs">
+                  <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
                     Telefon numarası satış sonrası iletişim için kullanılır.
                   </p>
                 )}
@@ -432,7 +432,7 @@ export default function CheckoutPage() {
             <div className="space-y-1">
               <label
                 htmlFor="notes"
-                className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]"
+                className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]"
               >
                 Notlar (isteğe bağlı)
               </label>
@@ -441,12 +441,12 @@ export default function CheckoutPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={4}
-                className="w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C4E5D0]"
+                className="w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 py-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-2 focus-visible:ring-[var(--primary-200)]"
                 placeholder="Teslimat veya sipariş ile ilgili notlarınızı ekleyin."
               />
             </div>
 
-            <div className="rounded-2xl border border-[#F1E7D8] bg-[#FFFBF5] px-4 py-3 text-[11px] text-[#7C6A48]">
+            <div className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3 text-[11px] text-[var(--neutral-700)]">
               Sipariş oluşturulduktan sonra destek ekibimiz ödeme ve teslimat detaylarını
               sizinle kesinleştirir.
             </div>
@@ -463,43 +463,43 @@ export default function CheckoutPage() {
             </div>
           </form>
 
-          <aside className="space-y-5 rounded-[36px] border border-[#CAB89A] bg-gradient-to-b from-white to-[#F8F4ED] px-6 py-6 shadow-[0_30px_90px_rgba(26,60,52,0.12)]">
+          <aside className="space-y-5 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-gradient-to-b from-white to-[var(--neutral-100)] px-6 py-6 shadow-[var(--shadow-2xl)]">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Sipariş özeti
               </p>
-              <h2 className="text-2xl font-serif text-[#1A3C34]">Kontrol edin</h2>
+              <h2 className="text-2xl font-serif text-[var(--primary-800)]">Kontrol edin</h2>
             </div>
-            <div className="space-y-3 text-sm text-[#5C5C5C]">
+            <div className="space-y-3 text-sm text-[var(--neutral-600)]">
               {items.map((item) => (
                 <div
                   key={item.productId}
-                  className="flex items-center justify-between gap-2 rounded-2xl bg-[#F7F2EA] px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-[var(--neutral-100)] px-3 py-2"
                 >
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-[#1A3C34] md:text-sm">
+                    <span className="text-xs font-semibold text-[var(--primary-800)] md:text-sm">
                       {item.name}
                     </span>
                     <span className="text-[11px] md:text-xs">
                       {item.quantity} x {formatPrice(item.price)}
                     </span>
                   </div>
-                  <span className="text-xs font-semibold text-[#1A3C34] md:text-sm">
+                  <span className="text-xs font-semibold text-[var(--primary-800)] md:text-sm">
                     {formatPrice(item.price * item.quantity)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="rounded-2xl border border-[#E4DAC9] bg-white px-4 py-3 text-sm text-[#5C5C5C]">
+            <div className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 py-3 text-sm text-[var(--neutral-600)]">
               Kargo ve vergiler son adımda eklenir. Sipariş özeti sadece ürün tutarını gösterir.
             </div>
-            <div className="border-t border-[#E4DAC9] pt-4 text-lg font-semibold text-[#1A3C34]">
+            <div className="border-t border-[var(--neutral-200)] pt-4 text-lg font-semibold text-[var(--primary-800)]">
               <div className="flex items-center justify-between">
                 <span>Toplam</span>
                 <span>{formatPrice(totalPrice)}</span>
               </div>
             </div>
-            <p className="text-[11px] text-[#8A8A8A] md:text-xs">
+            <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
               Ödeme işlemi backend tarafındaki sipariş ve ödeme akışına göre yönetilecektir.
               Bu adım siparişi oluşturur ve toplam tutarı kaydeder.
             </p>

@@ -110,11 +110,11 @@ export default function ProfilePage() {
   if (!hasToken && !user) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 md:px-6 md:py-10">
-        <h1 className="text-2xl font-semibold text-[#1A3C34] md:text-3xl">
+        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
           Profil
         </h1>
-        <section className="space-y-3 rounded-2xl border border-[#E5E5E0] bg-white px-4 py-6 md:px-6">
-          <p className="text-sm text-[#5C5C5C] md:text-base">
+        <section className="space-y-3 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-6 shadow-[var(--shadow-md)] md:px-6">
+          <p className="text-sm text-[var(--neutral-600)] md:text-base">
             Profil bilgilerinizi görüntülemek için önce giriş yapmanız gerekir.
           </p>
           <Button
@@ -132,11 +132,11 @@ export default function ProfilePage() {
   if (isLoading && !user) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 md:px-6 md:py-10">
-        <h1 className="text-2xl font-semibold text-[#1A3C34] md:text-3xl">
+        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
           Profil
         </h1>
-        <section className="space-y-2 rounded-2xl border border-[#E5E5E0] bg-white px-4 py-6 md:px-6">
-          <p className="text-sm text-[#5C5C5C] md:text-base">
+        <section className="space-y-2 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-6 shadow-[var(--shadow-md)] md:px-6">
+          <p className="text-sm text-[var(--neutral-600)] md:text-base">
             Profil bilgileriniz yükleniyor...
           </p>
         </section>
@@ -227,10 +227,10 @@ export default function ProfilePage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-10">
       <header className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
         <div>
-          <h1 className="text-2xl font-semibold text-[#1A3C34] md:text-3xl">
+          <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
             Profilim
           </h1>
-          <p className="text-xs text-[#5C5C5C] md:text-sm">
+          <p className="text-xs text-[var(--neutral-600)] md:text-sm">
             Hesap bilgilerinizi görüntüleyin ve oturumunuzu yönetin.
           </p>
         </div>
@@ -244,36 +244,36 @@ export default function ProfilePage() {
         </Button>
       </header>
 
-      <section className="space-y-4 rounded-2xl border border-[#E5E5E0] bg-white px-4 py-5 md:px-5 md:py-6">
-        <div className="space-y-1 text-sm text-[#1A3C34]">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#C5A059]">
+      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
+        <div className="space-y-1 text-sm text-[var(--primary-800)]">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
             Kullanıcı Bilgileri
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">Kullanıcı ID</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Kullanıcı ID</p>
               <p className="text-sm font-medium md:text-base">{user.id}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">Ad Soyad</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Ad Soyad</p>
               <p className="text-sm font-medium md:text-base">{user.name ?? '-'}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">Telefon</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Telefon</p>
               <p className="text-sm font-medium md:text-base">
                 {user.phone ?? '-'}
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">Email</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Email</p>
               <p className="text-sm font-medium md:text-base">{user.email ?? '-'}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">Rol</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Rol</p>
               <p className="text-sm font-medium md:text-base">{user.role}</p>
             </div>
             <div>
-              <p className="text-[11px] text-[#8A8A8A] md:text-xs">İşletme ID</p>
+              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">İşletme ID</p>
               <p className="text-sm font-medium md:text-base">
                 {user.businessId ?? '-'}
               </p>
@@ -282,46 +282,55 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-[#E5E5E0] bg-white px-4 py-5 md:px-5 md:py-6">
+      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#C5A059]">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
             Profil Düzenle
           </p>
-          <h2 className="mt-2 text-lg font-semibold text-[#1A3C34]">
+          <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
             Bilgilerim
           </h2>
-          <p className="mt-1 text-sm text-[#5C5C5C]">
+          <p className="mt-1 text-sm text-[var(--neutral-600)]">
             Ad soyad, telefon ve email bilgilerinizi güncelleyin.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-1">
-            <label htmlFor="profileName" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="profileName"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Ad Soyad
             </label>
             <input
               id="profileName"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="Ad Soyad"
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="profilePhone" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="profilePhone"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Telefon
             </label>
             <input
               id="profilePhone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="5XXXXXXXXX"
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="profileEmail" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="profileEmail"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Email
             </label>
             <input
@@ -329,7 +338,7 @@ export default function ProfilePage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="ornek@domain.com"
             />
           </div>
@@ -348,22 +357,25 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-[#E5E5E0] bg-white px-4 py-5 md:px-5 md:py-6">
+      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#C5A059]">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
             Güvenlik
           </p>
-          <h2 className="mt-2 text-lg font-semibold text-[#1A3C34]">
+          <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
             Şifre Değiştir
           </h2>
-          <p className="mt-1 text-sm text-[#5C5C5C]">
+          <p className="mt-1 text-sm text-[var(--neutral-600)]">
             Mevcut şifrenizle doğrulayın ve yeni şifrenizi belirleyin.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
-            <label htmlFor="currentPassword" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="currentPassword"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Mevcut Şifre
             </label>
             <input
@@ -371,12 +383,15 @@ export default function ProfilePage() {
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="••••••"
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="newPassword" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="newPassword"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Yeni Şifre
             </label>
             <input
@@ -384,7 +399,7 @@ export default function ProfilePage() {
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="••••••"
             />
           </div>
@@ -404,16 +419,16 @@ export default function ProfilePage() {
       </section>
 
       {isAdmin && (
-        <section className="rounded-2xl border border-[#E5E5E0] bg-white px-4 py-5 md:px-5 md:py-6">
+        <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#C5A059]">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
                 Yönetim
               </p>
-              <h2 className="mt-2 text-lg font-semibold text-[#1A3C34]">
+              <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
                 Admin paneli
               </h2>
-              <p className="mt-1 text-sm text-[#5C5C5C]">
+              <p className="mt-1 text-sm text-[var(--neutral-600)]">
                 Ürünleri, kategorileri ve siparişleri yönetmek için panele geçin.
               </p>
             </div>

@@ -53,18 +53,21 @@ export default function ForgotPasswordPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-10">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-[#1A3C34] md:text-3xl">
+        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
           Şifremi Unuttum
         </h1>
-        <p className="text-xs text-[#5C5C5C] md:text-sm">
+        <p className="text-xs text-[var(--neutral-600)] md:text-sm">
           Email adresinizi girin, size şifre sıfırlama bağlantısı gönderelim.
         </p>
       </header>
 
-      <section className="max-w-md rounded-2xl border border-[#E5E5E0] bg-white px-4 py-5 md:px-5 md:py-6">
+      <section className="max-w-md rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label htmlFor="email" className="text-xs font-medium text-[#1A3C34] md:text-sm">
+            <label
+              htmlFor="email"
+              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+            >
               Email
             </label>
             <input
@@ -72,7 +75,7 @@ export default function ForgotPasswordPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-10 w-full rounded-md border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-1 focus-visible:ring-[#1A3C34]"
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               placeholder="ornek@domain.com"
             />
           </div>
@@ -85,7 +88,7 @@ export default function ForgotPasswordPage() {
             <button
               type="button"
               onClick={() => router.push('/login')}
-              className="font-medium text-[#1A3C34] underline-offset-4 hover:underline"
+              className="font-medium text-[var(--primary-800)] underline-offset-4 hover:underline"
             >
               Giriş sayfasına dön
             </button>
