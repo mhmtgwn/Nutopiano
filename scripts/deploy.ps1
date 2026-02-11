@@ -1,8 +1,8 @@
 param(
   [string]$HostName = "185.255.93.94",
   [string]$UserName = "root",
-  [string]$RemoteScript = "/var/www/Nutopiano/scripts/deploy.sh",
-  [string]$AppDir = "/var/www/Nutopiano",
+  [string]$RemoteScript = "/var/www/nutopiano_app/scripts/deploy.sh",
+  [string]$AppDir = "/var/www/nutopiano_app",
   [string]$Branch = "main",
   [string]$BackendPm2Name = "nutopiano-api",
   [string]$FrontendPm2Name = "nutopiano-web"
@@ -23,7 +23,7 @@ if ($FrontendPm2Name -and $FrontendPm2Name.Trim().Length -gt 0) {
 $envPrefix = ($envs -join ' ')
 
 $sshTarget = "$UserName@$HostName"
-$remoteCmd = "bash -lc '$envPrefix $RemoteScript'"
+$remoteCmd = "bash -lc '$envPrefix bash $RemoteScript'"
 
 Write-Host "Deploying to $sshTarget ..."
 Write-Host "Remote: $remoteCmd"
