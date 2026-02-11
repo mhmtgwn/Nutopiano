@@ -54,7 +54,7 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#e5e5e5] bg-white">
+    <header className="sticky top-0 z-40 border-b border-[#E0D7C6] bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-6">
         <Link href="/" aria-label="Nutopiano anasayfa" className="flex items-center gap-3">
           <Image
@@ -70,9 +70,8 @@ export default function Header() {
         <div className="flex items-center justify-end gap-3">
           <div
             ref={searchWrapRef}
-            className={`relative flex h-10 items-center overflow-hidden rounded-full border border-[#e5e5e5] bg-white text-[#222222] transition-[width] duration-200 ease-out ${
-              isSearchOpen ? 'w-[240px] md:w-[340px]' : 'w-10'
-            }`}
+            className={`relative flex h-10 items-center overflow-hidden rounded-full border border-[#e5e5e5] bg-white text-[#1A3C34] transition-[width] duration-200 ease-out ${isSearchOpen ? 'w-[240px] md:w-[340px]' : 'w-10'
+              }`}
           >
             <button
               type="button"
@@ -89,9 +88,8 @@ export default function Header() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submitSearch();
               }}
-              className={`h-10 w-full bg-transparent pr-3 text-sm text-[#222222] outline-none transition-opacity duration-150 ${
-                isSearchOpen ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`h-10 w-full bg-transparent pr-3 text-sm text-[#1A3C34] outline-none transition-opacity duration-150 ${isSearchOpen ? 'opacity-100' : 'opacity-0'
+                }`}
               placeholder="Ürün ara..."
               aria-label="Ürün ara"
               tabIndex={isSearchOpen ? 0 : -1}
@@ -99,25 +97,25 @@ export default function Header() {
           </div>
           <Link
             href="/products"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#222222]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E0D7C6] bg-white text-[#1A3C34]"
             aria-label="Shop"
           >
             <Store className="h-5 w-5" />
           </Link>
           <Link
             href={user ? '/account/profile' : '/login'}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#222222]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E0D7C6] bg-white text-[#1A3C34]"
             aria-label="Hesap"
           >
             <UserCircle2 className="h-5 w-5" />
           </Link>
           <Link
             href="/cart"
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#222222]"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E0D7C6] bg-white text-[#1A3C34]"
             aria-label="Sepet"
           >
             <ShoppingBag className="h-5 w-5" />
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#e53935] px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#C5A059] px-1 text-[10px] font-semibold text-white">
               {totalQuantity}
             </span>
           </Link>

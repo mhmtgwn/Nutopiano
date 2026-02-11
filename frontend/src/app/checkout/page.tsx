@@ -373,11 +373,10 @@ export default function CheckoutPage() {
                       setFieldErrors((prev) => ({ ...prev, customerId: undefined }));
                     }
                   }}
-                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${
-                    fieldErrors.customerId
+                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.customerId
                       ? 'border-red-300 focus-visible:border-red-400 focus-visible:ring-red-200'
                       : 'border-[#E5E5E0] focus-visible:border-[#1A3C34] focus-visible:ring-[#C4E5D0]'
-                  }`}
+                    }`}
                   placeholder="Örn: 1"
                   required
                   aria-invalid={!!fieldErrors.customerId}
@@ -412,11 +411,10 @@ export default function CheckoutPage() {
                       setFieldErrors((prev) => ({ ...prev, phone: undefined }));
                     }
                   }}
-                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${
-                    fieldErrors.phone
+                  className={`h-11 w-full rounded-2xl border bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.phone
                       ? 'border-red-300 focus-visible:border-red-400 focus-visible:ring-red-200'
                       : 'border-[#E5E5E0] focus-visible:border-[#1A3C34] focus-visible:ring-[#C4E5D0]'
-                  }`}
+                    }`}
                   placeholder="5XXXXXXXXX"
                   required
                   aria-invalid={!!fieldErrors.phone}

@@ -18,7 +18,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
-  ) {}
+  ) { }
 
   private createResetToken() {
     const token = crypto.randomBytes(32).toString('hex');

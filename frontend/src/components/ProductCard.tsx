@@ -42,13 +42,13 @@ export default function ProductCard({
     ? `/categories/${categoryId}/products/${product.id}`
     : `/products/${product.id}`;
 
-	const placeholderSeed = Number.parseInt(String(product.id), 10);
-	const placeholderId = Number.isFinite(placeholderSeed)
-		? Math.abs(placeholderSeed % 1000)
-		: 1;
-	const imageSrc =
-		product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
-	const isPlaceholderImage = !product.imageUrl;
+  const placeholderSeed = Number.parseInt(String(product.id), 10);
+  const placeholderId = Number.isFinite(placeholderSeed)
+    ? Math.abs(placeholderSeed % 1000)
+    : 1;
+  const imageSrc =
+    product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
+  const isPlaceholderImage = !product.imageUrl;
 
   const handleAddToCart = () => {
     if (!isAuthenticated) {
@@ -90,7 +90,7 @@ export default function ProductCard({
             type="button"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#00a651] text-white shadow-md hover:bg-[#008a44] disabled:cursor-not-allowed disabled:opacity-60"
+            className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#1A3C34] text-white shadow-md hover:bg-[#2A4C44] disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Sepete ekle"
           >
             <ShoppingBag className="h-5 w-5" />
@@ -101,15 +101,14 @@ export default function ProductCard({
       <div className="px-5 py-4">
         <Link
           href={productHref}
-          className={`block font-semibold text-[#222222] hover:text-black ${
-            variant === 'compact' ? 'text-sm' : 'text-base'
-          }`}
+          className={`block font-semibold text-[#222222] hover:text-black ${variant === 'compact' ? 'text-sm' : 'text-base'
+            }`}
         >
           {truncate(product.name, variant === 'compact' ? 38 : 48)}
         </Link>
 
         <div className="mt-2 flex items-end justify-between gap-3">
-          <span className="text-base font-semibold text-[#e53935]">
+          <span className="text-base font-semibold text-[#1A3C34]">
             {formatPrice(product.price)}
           </span>
           {variant === 'compact' && (

@@ -2,12 +2,13 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #222222;
-  --muted: #777777;
-  --border: #e5e5e5;
-  --accent: #00a651;
-  --surface: #ffffff;
-  --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --foreground: #1A3C34;
+  --muted: #5C5C5C;
+  --border: #E0D7C6;
+  --accent: #C5A059;
+  --primary: #1A3C34;
+  --surface: #F7F4EF;
+  --shadow-soft: 0 8px 30px rgba(26, 60, 52, 0.08);
 }
 
 @theme inline {

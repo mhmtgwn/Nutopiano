@@ -43,7 +43,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
-  ) {}
+  ) { }
 
   async create(currentUser: JwtPayload, payload: CreateOrderDto): Promise<OrderDetail> {
     const businessId = Number(currentUser.businessId);

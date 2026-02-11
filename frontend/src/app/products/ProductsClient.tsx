@@ -72,9 +72,9 @@ export default function ProductsClient({
 
     const filtered = normalizedQuery
       ? base.filter((p) => {
-          const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase();
-          return haystack.includes(normalizedQuery);
-        })
+        const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
       : base;
 
     const next = filtered.slice();
