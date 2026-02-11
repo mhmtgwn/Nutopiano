@@ -19,7 +19,10 @@ interface ApiCategoryDetail {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === 'production'
+    ? 'https://api.nutopiano.com/api'
+    : 'http://localhost:3000/api');
 const OG_IMAGE_PATH = '/nutopiano-logo.png';
 const SITE_NAME = 'Nutopiano';
 

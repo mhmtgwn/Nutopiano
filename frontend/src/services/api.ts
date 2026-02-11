@@ -2,7 +2,10 @@ import axios from 'axios';
 import { getAuthToken } from '@/utils/helpers';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === 'production'
+    ? 'https://api.nutopiano.com/api'
+    : 'http://localhost:3000/api');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

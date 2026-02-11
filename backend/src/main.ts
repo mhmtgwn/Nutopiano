@@ -18,6 +18,7 @@ async function bootstrap() {
       : path.join(process.cwd(), 'uploads');
   fs.mkdirSync(uploadsDir, { recursive: true });
   app.use('/uploads', express.static(uploadsDir));
+  app.use('/api/uploads', express.static(uploadsDir));
 
   app.enableCors({
     // Dev ortamında, hem localhost hem de 192.168.x.x gibi yerel IP'lerden gelen
