@@ -1,17 +1,119 @@
 @import "tailwindcss";
 
 :root {
+  /* ============================================
+     ENHANCED COLOR SYSTEM - Improved Accessibility
+     ============================================ */
+  
+  /* Primary Palette - Dark Green */
+  --primary-950: #0A1510;
+  --primary-900: #0F2420;
+  --primary-800: #1A3C34;
+  --primary-700: #245244;
+  --primary-600: #2E6854;
+  --primary-500: #3B8268;
+  --primary-400: #4D9C7C;
+  --primary-300: #6BB896;
+  --primary-200: #96D1B5;
+  --primary-100: #C4E8D7;
+  
+  /* Accent Palette - Rich Gold */
+  --accent-900: #8C6A2F;
+  --accent-800: #A67F3D;
+  --accent-700: #B8914D;
+  --accent-600: #C5A059;
+  --accent-500: #D4B06F;
+  --accent-400: #E3C085;
+  --accent-300: #EBD09C;
+  --accent-200: #F2E0B9;
+  --accent-100: #F9F0D6;
+  
+  /* Neutral Palette - Warm Grays */
+  --neutral-950: #1A1614;
+  --neutral-900: #2C2420;
+  --neutral-800: #3E2723;
+  --neutral-700: #5C5248;
+  --neutral-600: #7C7166;
+  --neutral-500: #9C8F7A;
+  --neutral-400: #BCB5A4;
+  --neutral-300: #D4CDC1;
+  --neutral-200: #E8E4DB;
+  --neutral-100: #F4F1EB;
+  --neutral-50: #FAF8F5;
+  
+  /* Semantic Colors */
+  --error-600: #C84D4D;
+  --error-500: #DC6060;
+  --error-100: #FCE8E8;
+  
+  --success-600: #4D9C5C;
+  --success-500: #60B06D;
+  --success-100: #E8F8EA;
+  
+  --warning-600: #D4A440;
+  --warning-500: #E0B856;
+  --warning-100: #FDF5E0;
+  
+  --info-600: #4D8CC8;
+  --info-500: #60A0D8;
+  --info-100: #E8F2FC;
+  
+  /* Legacy Variables (for gradual migration) */
   --background: #ffffff;
-  --foreground: #1A3C34;
-  --muted: #5C5C5C;
-  --border: #E0D7C6;
-  --accent: #C5A059;
-  --primary: #1A3C34;
-  --surface: #F7F4EF;
-  --shadow-soft: 0 8px 30px rgba(26, 60, 52, 0.08);
+  --foreground: var(--primary-800);
+  --muted: var(--neutral-700);
+  --border: var(--neutral-300);
+  --accent: var(--accent-600);
+  --primary: var(--primary-800);
+  --surface: var(--neutral-50);
+  
+  /* ============================================
+     SPACING SYSTEM - 8px base unit
+     ============================================ */
+  --spacing-xs: 0.5rem;   /* 8px */
+  --spacing-sm: 0.75rem;  /* 12px */
+  --spacing-md: 1rem;     /* 16px */
+  --spacing-lg: 1.5rem;   /* 24px */
+  --spacing-xl: 2rem;     /* 32px */
+  --spacing-2xl: 3rem;    /* 48px */
+  --spacing-3xl: 4rem;    /* 64px */
+  --spacing-4xl: 6rem;    /* 96px */
+  
+  /* ============================================
+     BORDER RADIUS SCALE
+     ============================================ */
+  --radius-sm: 0.75rem;   /* 12px - buttons, inputs */
+  --radius-md: 1rem;      /* 16px - cards */
+  --radius-lg: 1.25rem;   /* 20px - medium cards */
+  --radius-xl: 1.5rem;    /* 24px - large sections */
+  --radius-2xl: 1.75rem;  /* 28px - hero sections */
+  --radius-3xl: 2rem;     /* 32px - extra large */
+  --radius-full: 9999px;  /* pills, badges */
+  
+  /* ============================================
+     ELEVATION SYSTEM (Shadows)
+     ============================================ */
+  --shadow-xs: 0 1px 4px rgba(26, 60, 52, 0.04);
+  --shadow-sm: 0 2px 8px rgba(26, 60, 52, 0.06);
+  --shadow-md: 0 4px 16px rgba(26, 60, 52, 0.08);
+  --shadow-lg: 0 8px 24px rgba(26, 60, 52, 0.10);
+  --shadow-xl: 0 16px 40px rgba(26, 60, 52, 0.12);
+  --shadow-2xl: 0 24px 60px rgba(26, 60, 52, 0.15);
+  
+  /* Legacy */
+  --shadow-soft: var(--shadow-md);
+  
+  /* ============================================
+     TRANSITIONS
+     ============================================ */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slower: 500ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @theme inline {
+  /* Map to Tailwind theme */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
@@ -20,10 +122,37 @@
   --color-surface: var(--surface);
   --font-sans: var(--font-source-sans);
   --font-serif: var(--font-playfair);
+  
+  /* Extended colors */
+  --color-primary-900: var(--primary-900);
+  --color-primary-800: var(--primary-800);
+  --color-primary-700: var(--primary-700);
+  --color-primary-600: var(--primary-600);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-50: var(--neutral-50);
+  --color-accent-700: var(--accent-700);
+  --color-accent-600: var(--accent-600);
+  --color-accent-500: var(--accent-500);
 }
 
-* {
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -32,15 +161,18 @@ body {
   font-family: var(--font-source-sans), "Source Sans 3", system-ui, sans-serif;
   letter-spacing: 0.01em;
   text-rendering: optimizeLegibility;
+  line-height: 1.6;
+  overflow-x: hidden;
 }
 
+/* Subtle texture overlay */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='1'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
-  opacity: 0.03;
+  opacity: 0.025;
   mix-blend-mode: multiply;
   z-index: 0;
 }
@@ -50,9 +182,160 @@ main {
   z-index: 1;
 }
 
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
 h1,
 h2,
 h3,
-h4 {
+h4,
+h5,
+h6 {
   font-family: var(--font-playfair), "Playfair Display", serif;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: clamp(2.25rem, 5vw, 3rem);
+}
+
+h2 {
+  font-size: clamp(1.875rem, 4vw, 2.25rem);
+}
+
+h3 {
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+}
+
+h4 {
+  font-size: 1.25rem;
+}
+
+p {
+  line-height: 1.7;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.transition-smooth {
+  transition: all var(--transition-base);
+}
+
+.hover-lift {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ============================================
+   FOCUS STATES - Accessibility
+   ============================================ */
+
+*:focus-visible {
+  outline: 2px solid var(--accent-600);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-600);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn var(--transition-slow) ease-out;
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--neutral-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--neutral-400);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neutral-500);
+}
+
+/* ============================================
+   SELECTION STYLING
+   ============================================ */
+
+::selection {
+  background: var(--accent-200);
+  color: var(--primary-900);
+}
+
+::-moz-selection {
+  background: var(--accent-200);
+  color: var(--primary-900);
 }

@@ -71,16 +71,16 @@ export default function ProductCard({
   };
 
   return (
-    <article className="group relative h-full bg-white">
+    <article className="group relative h-full bg-white border border-[var(--neutral-200)] rounded-[var(--radius-lg)] overflow-hidden transition-all duration-300 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-lg)] hover:-translate-y-1">
       <div className="relative p-6">
         <Link href={productHref} className="block">
-          <div className="relative mx-auto aspect-square w-full max-w-[220px]">
+          <div className="relative mx-auto aspect-square w-full max-w-[220px] overflow-hidden rounded-[var(--radius-md)]">
             <Image
               src={imageSrc}
               alt={product.name}
               fill
               unoptimized={isPlaceholderImage}
-              className="object-contain"
+              className="object-contain transition-transform duration-500 group-hover:scale-105"
             />
           </div>
         </Link>
@@ -90,25 +90,37 @@ export default function ProductCard({
             type="button"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#1A3C34] text-white shadow-md hover:bg-[#2A4C44] disabled:cursor-not-allowed disabled:opacity-60"
+            className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-800)] text-white shadow-[var(--shadow-md)] transition-all duration-200 hover:bg-[var(--primary-900)] hover:shadow-[var(--shadow-lg)] hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             aria-label="Sepete ekle"
           >
             <ShoppingBag className="h-5 w-5" />
           </button>
         )}
+
+        {lowStock && !isOutOfStock && (
+          <span className="absolute top-4 left-4 inline-flex items-center rounded-full bg-[var(--warning-100)] px-3 py-1 text-xs font-semibold text-[var(--warning-600)]">
+            {product.stock} adet kaldı
+          </span>
+        )}
+
+        {isOutOfStock && (
+          <span className="absolute top-4 left-4 inline-flex items-center rounded-full bg-[var(--error-100)] px-3 py-1 text-xs font-semibold text-[var(--error-600)]">
+            Stokta yok
+          </span>
+        )}
       </div>
 
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)]">
         <Link
           href={productHref}
-          className={`block font-semibold text-[#222222] hover:text-black ${variant === 'compact' ? 'text-sm' : 'text-base'
+          className={`block font-semibold text-[var(--neutral-900)] hover:text-[var(--primary-800)] transition-colors ${variant === 'compact' ? 'text-sm' : 'text-base'
             }`}
         >
           {truncate(product.name, variant === 'compact' ? 38 : 48)}
         </Link>
 
         <div className="mt-2 flex items-end justify-between gap-3">
-          <span className="text-base font-semibold text-[#1A3C34]">
+          <span className="text-lg font-semibold text-[var(--primary-800)]">
             {formatPrice(product.price)}
           </span>
           {variant === 'compact' && (
@@ -116,7 +128,7 @@ export default function ProductCard({
               size="sm"
               onClick={handleAddToCart}
               disabled={isOutOfStock}
-              className="h-9 w-9 rounded-full px-0"
+              className="h-9 w-9 rounded-full px-0 transition-all hover:scale-105 active:scale-95"
             >
               <ShoppingBag className="h-4 w-4" />
             </Button>

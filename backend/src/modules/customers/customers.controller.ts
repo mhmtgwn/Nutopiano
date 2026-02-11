@@ -12,7 +12,7 @@ import { CustomersService } from './customers.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) {}
+  constructor(private readonly customersService: CustomersService) { }
 
   @Post()
   @Roles('ADMIN', 'STAFF')
@@ -84,5 +84,17 @@ export class CustomersController {
   @ApiNotFoundResponse({ description: 'Customer with the given id does not exist in the current business.' })
   remove(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.customersService.remove(req.user, Number(id));
+  }
+
+  @Get('me')
+  @Roles('CUSTOMER', 'STAFF', 'ADMIN')
+  @ApiOperation({
+    summary: 'Get or create customer record for current user',
+    description:
+      'Returns the customer record linked to the authenticated user. If no customer record exists, creates one automatically. This is used for checkout flow where users need a customer record.',
+  })
+  @ApiOkResponse({ description: 'Customer record for the current user.' })
+  getMyCustomerRecord(@Req() req: { user: JwtPayload }) {
+    return this.customersService.findOrCreateForUser(req.user);
   }
 }

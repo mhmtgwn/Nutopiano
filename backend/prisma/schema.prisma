@@ -45,6 +45,7 @@ model User {
 
   business         Business    @relation(fields: [businessId], references: [id])
   createdCustomers Customer[]  @relation("CustomerCreatedBy")
+  customerRecord   Customer?   @relation("UserCustomer")
   createdProducts  Product[]   @relation("ProductCreatedBy")
   createdCategories Category[] @relation("CategoryCreatedBy")
   createdOrders    Order[]     @relation("OrderCreatedBy")
@@ -77,6 +78,7 @@ model Customer {
   id              Int      @id @default(autoincrement())
   businessId      Int
   createdByUserId Int
+  userId          Int?     @unique
   name            String
   phone           String
   balance         Int      @default(0)
@@ -85,11 +87,13 @@ model Customer {
 
   business  Business @relation(fields: [businessId], references: [id])
   createdBy User     @relation("CustomerCreatedBy", fields: [createdByUserId], references: [id])
+  user      User?    @relation("UserCustomer", fields: [userId], references: [id])
   orders    Order[]
   appointments Appointment[]
 
   @@unique([businessId, phone])
   @@index([businessId])
+  @@index([userId])
 }
 
 enum Role {

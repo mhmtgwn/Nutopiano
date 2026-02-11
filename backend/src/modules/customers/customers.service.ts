@@ -13,7 +13,7 @@ export interface CustomerSummary {
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(currentUser: JwtPayload, payload: CreateCustomerDto): Promise<CustomerSummary> {
     const businessId = Number(currentUser.businessId);
@@ -129,5 +129,54 @@ export class CustomersService {
     });
 
     return removed;
+  }
+
+  async findOrCreateForUser(currentUser: JwtPayload): Promise<CustomerSummary> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    // Check if user already has a linked customer record
+    let customer = await this.prisma.customer.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        balance: true,
+      },
+    });
+
+    if (customer) {
+      return customer;
+    }
+
+    // If not found, get user data and create customer record
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Create customer record linked to this user
+    customer = await this.prisma.customer.create({
+      data: {
+        businessId,
+        createdByUserId: userId, // User creates their own customer record
+        userId,
+        name: user.name,
+        phone: user.phone,
+        balance: 0,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        balance: true,
+      },
+    });
+
+    return customer;
   }
 }
