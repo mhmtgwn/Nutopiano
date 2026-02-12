@@ -109,14 +109,9 @@ export default function ProductsClient({
               <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Shop
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
-                  Ürünler
-                </h1>
-                <span className="inline-flex items-center rounded-full bg-[var(--accent-600)] px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-white shadow-[var(--shadow-md)]">
-                  UI-MARKER-123
-                </span>
-              </div>
+              <h1 className="mt-1 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
+                Ürünler
+              </h1>
             </div>
             <div className="relative">
               <select
