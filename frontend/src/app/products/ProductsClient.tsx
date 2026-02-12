@@ -95,7 +95,7 @@ export default function ProductsClient({
   };
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-white">
+    <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
         <section className="space-y-4">
           <Breadcrumbs
@@ -104,21 +104,34 @@ export default function ProductsClient({
               { label: 'Shop' },
             ]}
           />
-          <h1 className="text-3xl font-serif text-[#222222]">Shop</h1>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5e5e5] pb-4">
-            <div className="relative ml-auto">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                Shop
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
+                  Ürünler
+                </h1>
+                <span className="inline-flex items-center rounded-full bg-[var(--accent-600)] px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-white shadow-[var(--shadow-md)]">
+                  UI-MARKER-123
+                </span>
+              </div>
+            </div>
+            <div className="relative">
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="h-10 min-w-[220px] appearance-none rounded-sm border border-[#e5e5e5] bg-white px-3 pr-9 text-sm text-[#777777] shadow-sm outline-none"
+                className="h-11 min-w-[220px] appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 pr-10 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
               >
                 <option value="popular">Default sorting</option>
                 <option value="price-asc">Sort by price: low to high</option>
                 <option value="price-desc">Sort by price: high to low</option>
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#777777]" />
+              <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--neutral-500)]" />
             </div>
           </div>
+          <div className="border-b border-[var(--neutral-200)]" />
         </section>
 
         {isLoading && (
@@ -128,7 +141,7 @@ export default function ProductsClient({
         )}
 
         {hasError && !isLoading && (
-          <section className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-3 text-sm text-[var(--error-600)]">
             Ürünler yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.
           </section>
         )}
@@ -136,19 +149,20 @@ export default function ProductsClient({
         {!isLoading && !hasError && (
           <section>
             {sortedProducts.length > 0 ? (
-              <div
-                className="grid grid-cols-2 gap-0 border-l border-t border-[#e5e5e5] md:grid-cols-3 lg:grid-cols-4"
-              >
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
                 {sortedProducts.map((product) => (
-                  <div key={product.id} className="border-b border-r border-[#e5e5e5] p-4">
+                  <div key={product.id}>
                     <ProductCard product={product} />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="rounded-md border border-[#e5e5e5] bg-white p-8 text-center">
-                <p className="text-sm text-[#777777]">Ürün bulunamadı.</p>
-                <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-[#222222]">
+              <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-8 text-center shadow-[var(--shadow-md)]">
+                <p className="text-sm text-[var(--neutral-600)]">Ürün bulunamadı.</p>
+                <Link
+                  href="/"
+                  className="mt-4 inline-flex text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                >
                   Anasayfaya dön
                 </Link>
               </div>

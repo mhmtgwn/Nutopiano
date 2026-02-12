@@ -80,8 +80,8 @@ export default function HomeClient() {
 	const hasError = productsError || categoriesError;
 
 	return (
-		<div className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-10 md:px-6">
-			<section className="relative overflow-hidden rounded-[var(--radius-3xl)] border border-[var(--primary-800)]/10 bg-gradient-to-br from-[var(--neutral-50)] via-white to-[var(--neutral-100)] px-6 py-10 text-[var(--primary-800)] shadow-[var(--shadow-xl)] md:px-10">
+		<div className="mx-auto flex max-w-6xl flex-col gap-14 px-4 py-10 md:px-6 md:py-12">
+			<section className="relative overflow-hidden rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-gradient-to-br from-[var(--neutral-50)] via-white to-[var(--neutral-100)] px-6 py-10 text-[var(--primary-800)] shadow-[var(--shadow-lg)] md:px-10 md:py-12">
 				<div className="grid gap-10 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:items-center">
 					<div className="space-y-5">
 						<p className="text-xs font-semibold tracking-[0.3em] text-[var(--neutral-500)]">
@@ -95,22 +95,24 @@ export default function HomeClient() {
 							teslim seçenekleriyle alışverişinizi tamamlayın.
 						</p>
 						<div className="flex flex-wrap gap-3 text-[11px] font-semibold tracking-[0.25em] text-[var(--primary-800)]">
-							<span className="rounded-full bg-white px-4 py-2 shadow-sm">Güvenli ödeme</span>
-							<span className="rounded-full border border-[var(--primary-800)]/20 px-4 py-2">
+							<span className="rounded-full border border-[var(--neutral-200)] bg-white px-4 py-2 shadow-[var(--shadow-sm)]">
+								Güvenli ödeme
+							</span>
+							<span className="rounded-full border border-[var(--neutral-200)] bg-white/70 px-4 py-2">
 								Hızlı teslimat
 							</span>
-							<span className="rounded-full bg-[var(--primary-800)] px-4 py-2 text-white shadow-md">
+							<span className="rounded-full bg-[var(--primary-800)] px-4 py-2 text-white shadow-[var(--shadow-md)]">
 								Takipli sipariş
 							</span>
 						</div>
 						<Link
 							href="/products"
-							className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/80 hover:text-[var(--primary-800)] transition-colors"
+							className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/15 bg-white/70 px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/80 shadow-[var(--shadow-sm)] transition hover:bg-white hover:text-[var(--primary-800)] hover:shadow-[var(--shadow-md)]"
 						>
 							Shop now <ArrowRight className="h-4 w-4" />
 						</Link>
 					</div>
-					<div className="space-y-5 rounded-[var(--radius-2xl)] border border-white/60 bg-white/60 p-6 text-[var(--primary-800)] backdrop-blur-sm">
+					<div className="space-y-5 rounded-[var(--radius-2xl)] border border-white/60 bg-white/70 p-6 text-[var(--primary-800)] shadow-[var(--shadow-md)] backdrop-blur-sm">
 						<div className="space-y-2">
 							<p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
 								Hızlı erişim
@@ -118,25 +120,25 @@ export default function HomeClient() {
 							<div className="grid gap-2">
 								<Link
 									href="/products"
-									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--primary-800)]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white transition-colors hover:shadow-sm"
+									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white/70 px-4 py-3 text-sm font-semibold shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
 								>
 									Tüm ürünler <ArrowRight className="h-4 w-4" />
 								</Link>
 								<Link
 									href="/categories"
-									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--primary-800)]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white transition-colors hover:shadow-sm"
+									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white/70 px-4 py-3 text-sm font-semibold shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
 								>
 									Kategoriler <ArrowRight className="h-4 w-4" />
 								</Link>
 								<Link
 									href="/checkout"
-									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--primary-800)]/10 bg-white/70 px-4 py-3 text-sm font-semibold hover:bg-white transition-colors hover:shadow-sm"
+									className="inline-flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white/70 px-4 py-3 text-sm font-semibold shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
 								>
 									Kargo & ödeme <ArrowRight className="h-4 w-4" />
 								</Link>
 							</div>
 						</div>
-						<div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--primary-800)]/10 bg-white/70 px-4 py-4 text-sm">
+						<div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white/70 px-4 py-4 text-sm">
 							<div className="flex items-start gap-3">
 								<Truck className="mt-0.5 h-5 w-5 text-[var(--accent-600)]" />
 								<p>

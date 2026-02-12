@@ -71,7 +71,7 @@ export default function ProductCard({
   };
 
   return (
-    <article className="group relative h-full bg-white border border-[var(--neutral-200)] rounded-[var(--radius-lg)] overflow-hidden transition-all duration-300 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-lg)] hover:-translate-y-1">
+    <article className="group relative h-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-sm)] transition-[transform,shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
       <div className="relative p-6">
         <Link href={productHref} className="block">
           <div className="relative mx-auto aspect-square w-full max-w-[220px] overflow-hidden rounded-[var(--radius-md)]">
@@ -90,7 +90,11 @@ export default function ProductCard({
             type="button"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-800)] text-white shadow-[var(--shadow-md)] transition-all duration-200 hover:bg-[var(--primary-900)] hover:shadow-[var(--shadow-lg)] hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className={`absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-800)] text-white shadow-[var(--shadow-md)] transition-all duration-200 hover:bg-[var(--primary-900)] hover:shadow-[var(--shadow-lg)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 md:opacity-0 md:translate-y-2 md:scale-95 md:group-hover:opacity-100 md:group-hover:translate-y-0 md:group-hover:scale-100 ${
+              showHoverActions
+                ? 'opacity-100 translate-y-0 scale-100'
+                : ''
+            }`}
             aria-label="Sepete ekle"
           >
             <ShoppingBag className="h-5 w-5" />
@@ -128,7 +132,7 @@ export default function ProductCard({
               size="sm"
               onClick={handleAddToCart}
               disabled={isOutOfStock}
-              className="h-9 w-9 rounded-full px-0 transition-all hover:scale-105 active:scale-95"
+              className="h-9 w-9 rounded-full px-0 transition-all active:scale-95 md:opacity-0 md:translate-y-1 md:scale-95 md:group-hover:opacity-100 md:group-hover:translate-y-0 md:group-hover:scale-100"
             >
               <ShoppingBag className="h-4 w-4" />
             </Button>
