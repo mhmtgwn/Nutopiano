@@ -41,10 +41,12 @@ interface ProductRow {
   id: number;
   categoryId?: number | null;
   name: string;
+  subtitle?: string | null;
   sku?: string | null;
   type: ProductType;
   priceCents: number;
   description?: string | null;
+  features?: string[];
   imageUrl?: string | null;
   stock?: number | null;
   tags?: string[];
@@ -72,24 +74,36 @@ export default function AdminProductsPage() {
 
   const [createForm, setCreateForm] = useState({
     name: '',
+    subtitle: '',
     sku: '',
     categoryId: '',
     type: 'PHYSICAL' as ProductType,
     priceCents: '',
     stock: '',
     imageUrl: '',
+    description: '',
+    features: '',
   });
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     name: '',
+    subtitle: '',
     sku: '',
     categoryId: '',
     type: 'PHYSICAL' as ProductType,
     priceCents: '',
     stock: '',
     imageUrl: '',
+    description: '',
+    features: '',
   });
+
+  const parseFeatures = (value: string) =>
+    value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -168,10 +182,13 @@ export default function AdminProductsPage() {
 
       await api.post('/products', {
         name: createForm.name.trim(),
+        subtitle: createForm.subtitle.trim() || undefined,
         sku: createForm.sku.trim() || undefined,
         categoryId: parsedCategoryId ?? null,
         type: createForm.type,
         price: String(priceCents),
+        description: createForm.description.trim() || undefined,
+        features: parseFeatures(createForm.features),
         stock: typeof stock === 'number' && !Number.isNaN(stock) ? stock : undefined,
         imageUrl: createForm.imageUrl.trim() || undefined,
       });
@@ -180,12 +197,15 @@ export default function AdminProductsPage() {
       toast.success('Ürün oluşturuldu.');
       setCreateForm({
         name: '',
+        subtitle: '',
         sku: '',
         categoryId: '',
         type: 'PHYSICAL',
         priceCents: '',
         stock: '',
         imageUrl: '',
+        description: '',
+        features: '',
       });
       await queryClient.invalidateQueries({ queryKey: ['admin-products'] });
     },
@@ -209,6 +229,7 @@ export default function AdminProductsPage() {
 
       await api.patch(`/products/${productId}`, {
         name: editForm.name.trim() || undefined,
+        subtitle: editForm.subtitle.trim() || undefined,
         sku: editForm.sku.trim() || undefined,
         categoryId: parsedCategoryId ?? null,
         type: editForm.type,
@@ -216,6 +237,8 @@ export default function AdminProductsPage() {
           typeof priceCents === 'number' && !Number.isNaN(priceCents)
             ? String(priceCents)
             : undefined,
+        description: editForm.description.trim() || undefined,
+        features: parseFeatures(editForm.features),
         stock:
           typeof stock === 'number' && !Number.isNaN(stock) ? stock : undefined,
         imageUrl: editForm.imageUrl.trim() || undefined,
@@ -248,6 +271,7 @@ export default function AdminProductsPage() {
     setEditingId(product.id);
     setEditForm({
       name: product.name ?? '',
+      subtitle: product.subtitle ?? '',
       sku: product.sku ?? '',
       categoryId:
         product.categoryId === null || product.categoryId === undefined
@@ -257,6 +281,8 @@ export default function AdminProductsPage() {
       priceCents: String(product.priceCents ?? ''),
       stock: product.stock === null || product.stock === undefined ? '' : String(product.stock),
       imageUrl: product.imageUrl ?? '',
+      description: product.description ?? '',
+      features: (product.features ?? []).join('\n'),
     });
   };
 
@@ -264,12 +290,15 @@ export default function AdminProductsPage() {
     setEditingId(null);
     setEditForm({
       name: '',
+      subtitle: '',
       sku: '',
       categoryId: '',
       type: 'PHYSICAL',
       priceCents: '',
       stock: '',
       imageUrl: '',
+      description: '',
+      features: '',
     });
   };
 
@@ -333,6 +362,20 @@ export default function AdminProductsPage() {
               />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                Alt başlık
+              </label>
+              <input
+                value={createForm.subtitle}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, subtitle: e.target.value }))
+                }
+                className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
+                placeholder="Örn: Özel müşteri taleplerine göre kişiselleştirilen ürün"
+              />
+            </div>
+
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
@@ -367,6 +410,37 @@ export default function AdminProductsPage() {
                   <option value="CUSTOM">Özel</option>
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                Açıklama
+              </label>
+              <textarea
+                value={createForm.description}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+                className="min-h-[110px] w-full resize-y rounded-2xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
+                placeholder="Ürün açıklaması..."
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                Özellikler
+              </label>
+              <textarea
+                value={createForm.features}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({ ...prev, features: e.target.value }))
+                }
+                className="min-h-[110px] w-full resize-y rounded-2xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
+                placeholder={'Her satıra 1 özellik yaz.\nÖrn: El yapımı\nÖrn: 2 yıl garanti'}
+              />
+              <p className="text-[11px] text-[#8A8A8A] md:text-xs">
+                Her satır bir özellik olarak kaydedilir.
+              </p>
             </div>
 
             <div className="space-y-1">

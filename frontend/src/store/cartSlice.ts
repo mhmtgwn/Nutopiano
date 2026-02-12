@@ -1,8 +1,10 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface CartItem {
+  lineId: string;
   productId: string;
   name: string;
+  variant?: string;
   price: number;
   quantity: number;
   imageUrl?: string;
@@ -32,7 +34,7 @@ const cartSlice = createSlice({
       }>,
     ) {
       const { item, quantity = 1 } = action.payload;
-      const existing = state.items.find((i) => i.productId === item.productId);
+      const existing = state.items.find((i) => i.lineId === item.lineId);
 
       if (existing) {
         existing.quantity += quantity;
@@ -45,7 +47,7 @@ const cartSlice = createSlice({
     },
     removeItem(state, action: PayloadAction<string>) {
       const index = state.items.findIndex(
-        (i) => i.productId === action.payload,
+        (i) => i.lineId === action.payload,
       );
 
       if (index !== -1) {
@@ -57,17 +59,17 @@ const cartSlice = createSlice({
     },
     updateQuantity(
       state,
-      action: PayloadAction<{ productId: string; quantity: number }>,
+      action: PayloadAction<{ lineId: string; quantity: number }>,
     ) {
-      const { productId, quantity } = action.payload;
-      const item = state.items.find((i) => i.productId === productId);
+      const { lineId, quantity } = action.payload;
+      const item = state.items.find((i) => i.lineId === lineId);
 
       if (!item) return;
 
       if (quantity <= 0 || Number.isNaN(quantity)) {
         state.totalQuantity -= item.quantity;
         state.totalPrice -= item.price * item.quantity;
-        state.items = state.items.filter((i) => i.productId !== productId);
+        state.items = state.items.filter((i) => i.lineId !== lineId);
         return;
       }
 

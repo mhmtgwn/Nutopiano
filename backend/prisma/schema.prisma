@@ -115,11 +115,14 @@ model Product {
   createdByUserId Int
   categoryId      Int?
   name            String
+  subtitle        String?
   sku             String?
   type            ProductType
   priceCents      Int
   description     String?
+  features        String[]    @default([])
   imageUrl        String?
+  images          String[]    @default([])
   stock           Int?
   tags            String[]    @default([])
   seoTitle        String?

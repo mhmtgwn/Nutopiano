@@ -21,6 +21,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  subtitle?: string;
+
+  @IsOptional()
+  @IsString()
   sku?: string;
 
   @IsEnum(ProductType)
@@ -36,8 +40,18 @@ export class CreateProductDto {
   description?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  features?: string[];
+
+  @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 
   @IsOptional()
   @IsInt()

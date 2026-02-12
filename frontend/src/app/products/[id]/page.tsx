@@ -6,9 +6,12 @@ import { getSiteUrl } from '@/utils/site';
 interface ProductResponse {
   id: number;
   name: string;
+  subtitle?: string | null;
   description?: string | null;
+  features?: string[];
   priceCents: number;
   imageUrl?: string | null;
+  images?: string[];
   stock?: number | null;
   tags?: string[];
   seoTitle?: string | null;
@@ -18,9 +21,12 @@ interface ProductResponse {
 interface ProductDetail {
   id: string;
   name: string;
+  subtitle?: string | null;
   description?: string | null;
+  features?: string[];
   price: number;
   imageUrl?: string | null;
+  images?: string[];
   stock?: number | null;
   tags?: string[];
   seoTitle?: string | null;
@@ -49,9 +55,12 @@ const unwrapResponse = <T,>(payload: unknown): T | null => {
 const normalizeProduct = (product: ProductResponse): ProductDetail => ({
   id: String(product.id),
   name: product.name,
+  subtitle: product.subtitle ?? null,
   description: product.description ?? null,
+  features: product.features ?? [],
   price: (product.priceCents ?? 0) / 100,
   imageUrl: product.imageUrl ?? null,
+  images: product.images ?? [],
   stock: product.stock ?? null,
   tags: product.tags ?? [],
   seoTitle: product.seoTitle ?? null,

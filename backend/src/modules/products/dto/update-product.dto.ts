@@ -13,6 +13,10 @@ export class UpdateProductDto {
 
   @IsOptional()
   @IsString()
+  subtitle?: string;
+
+  @IsOptional()
+  @IsString()
   sku?: string;
 
   @IsOptional()
@@ -28,8 +32,18 @@ export class UpdateProductDto {
   description?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  features?: string[];
+
+  @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 
   @IsOptional()
   @IsInt()

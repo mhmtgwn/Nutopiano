@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 import api from '@/services/api';
@@ -16,6 +18,7 @@ interface ApiProduct {
   id: number;
   categoryId?: number | null;
   name: string;
+  subtitle?: string | null;
   description?: string | null;
   priceCents: number;
   imageUrl?: string | null;
@@ -27,6 +30,7 @@ interface Product {
   id: string;
   categoryId?: number | null;
   name: string;
+  subtitle?: string | null;
   description?: string;
   price: number;
   imageUrl?: string | null;
@@ -40,8 +44,39 @@ export default function ProductsClient({
   query?: string;
 }) {
   const [sort, setSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
+  const [qInput, setQInput] = useState(query ?? '');
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const normalizedQuery = (query ?? '').trim().toLowerCase();
+  const router = useRouter();
+  const pathname = usePathname();
+  const syncTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setQInput(query ?? '');
+  }, [query]);
+
+  useEffect(() => {
+    if (syncTimer.current) {
+      window.clearTimeout(syncTimer.current);
+    }
+
+    syncTimer.current = window.setTimeout(() => {
+      const nextQ = qInput.trim();
+      const nextUrl = nextQ ? `${pathname}?q=${encodeURIComponent(nextQ)}` : pathname;
+      router.replace(nextUrl, { scroll: false });
+    }, 300);
+
+    return () => {
+      if (syncTimer.current) {
+        window.clearTimeout(syncTimer.current);
+      }
+    };
+  }, [qInput, pathname, router]);
+
+  const normalizedQuery = qInput.trim().toLowerCase();
 
   const {
     data: products,
@@ -55,6 +90,7 @@ export default function ProductsClient({
         id: String(p.id),
         categoryId: p.categoryId ?? null,
         name: p.name,
+        subtitle: p.subtitle ?? null,
         description: p.description ?? undefined,
         price: (p.priceCents ?? 0) / 100,
         imageUrl: p.imageUrl ?? null,
@@ -77,7 +113,24 @@ export default function ProductsClient({
       })
       : base;
 
-    const next = filtered.slice();
+    const priceMinValue = minPrice.trim() ? Number(minPrice) : undefined;
+    const priceMaxValue = maxPrice.trim() ? Number(maxPrice) : undefined;
+
+    const filteredByMeta = filtered.filter((p) => {
+      if (inStockOnly && (p.stock ?? 0) <= 0) return false;
+
+      if (typeof priceMinValue === 'number' && !Number.isNaN(priceMinValue)) {
+        if (p.price < priceMinValue) return false;
+      }
+
+      if (typeof priceMaxValue === 'number' && !Number.isNaN(priceMaxValue)) {
+        if (p.price > priceMaxValue) return false;
+      }
+
+      return true;
+    });
+
+    const next = filteredByMeta.slice();
 
     if (sort === 'price-asc') {
       next.sort((a, b) => a.price - b.price);
@@ -86,7 +139,7 @@ export default function ProductsClient({
     }
 
     return next;
-  }, [products, sort, normalizedQuery]);
+  }, [products, sort, normalizedQuery, inStockOnly, minPrice, maxPrice]);
 
   const handleSortChange = (value: string) => {
     if (value === 'price-asc' || value === 'price-desc' || value === 'popular') {
@@ -94,8 +147,16 @@ export default function ProductsClient({
     }
   };
 
+  const handleClearFilters = () => {
+    setQInput('');
+    setSort('popular');
+    setInStockOnly(false);
+    setMinPrice('');
+    setMaxPrice('');
+  };
+
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+    <div className="min-h-[calc(100vh-140px)] bg-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
         <section className="space-y-4">
           <Breadcrumbs
@@ -104,15 +165,17 @@ export default function ProductsClient({
               { label: 'Shop' },
             ]}
           />
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Shop
-              </p>
-              <h1 className="mt-1 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
-                Ürünler
-              </h1>
-            </div>
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-3 shadow-[var(--shadow-sm)]">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/80 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtre
+            </button>
+
             <div className="relative">
               <select
                 value={sort}
@@ -126,7 +189,68 @@ export default function ProductsClient({
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--neutral-500)]" />
             </div>
           </div>
-          <div className="border-b border-[var(--neutral-200)]" />
+
+          {filtersOpen && (
+            <div className="mt-3 grid gap-3 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-4 shadow-[var(--shadow-sm)]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                    Ara
+                  </p>
+                  <input
+                    value={qInput}
+                    onChange={(e) => setQInput(e.target.value)}
+                    placeholder="Ürün ara..."
+                    className="mt-2 h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                    Fiyat
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <input
+                      value={minPrice}
+                      inputMode="decimal"
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      placeholder="Min ₺"
+                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    />
+                    <input
+                      value={maxPrice}
+                      inputMode="decimal"
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      placeholder="Max ₺"
+                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setInStockOnly((prev) => !prev)}
+                  className={`inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border px-4 text-xs font-semibold uppercase tracking-[0.3em] shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] ${
+                    inStockOnly
+                      ? 'border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                      : 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]/80'
+                  }`}
+                >
+                  Stokta
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--neutral-700)] shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
+                >
+                  Temizle
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {isLoading && (

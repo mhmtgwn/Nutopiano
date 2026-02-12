@@ -9,11 +9,14 @@ export interface ProductSummary {
   id: number;
   categoryId?: number | null;
   name: string;
+  subtitle?: string | null;
   sku?: string | null;
   type: string;
   priceCents: number;
   description?: string | null;
+  features?: string[];
   imageUrl?: string | null;
+  images?: string[];
   stock?: number | null;
   tags?: string[];
   seoTitle?: string | null;
@@ -51,17 +54,24 @@ export class ProductsService {
       await this.assertCategoryScoped(currentUser, payload.categoryId);
     }
 
+    const images = payload.images ?? undefined;
+    const imageUrl =
+      payload.imageUrl ?? (images && images.length > 0 ? images[0] : undefined);
+
     const product = await this.prisma.product.create({
       data: {
         businessId,
         createdByUserId,
         categoryId: payload.categoryId,
         name: payload.name,
+        subtitle: payload.subtitle,
         sku: payload.sku,
         type: payload.type,
         priceCents,
         description: payload.description,
-        imageUrl: payload.imageUrl,
+        features: payload.features,
+        imageUrl,
+        images,
         stock: payload.stock,
         tags: payload.tags,
         seoTitle: payload.seoTitle,
@@ -71,11 +81,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,
@@ -99,11 +112,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,
@@ -140,11 +156,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,
@@ -180,11 +199,14 @@ export class ProductsService {
       id: productId,
       categoryId,
       name,
+      subtitle,
       sku,
       type,
       priceCents,
       description,
+      features,
       imageUrl,
+      images,
       stock,
       tags,
       seoTitle,
@@ -195,11 +217,14 @@ export class ProductsService {
       id: productId,
       categoryId,
       name,
+      subtitle,
       sku,
       type,
       priceCents,
       description,
+      features,
       imageUrl,
+      images,
       stock,
       tags,
       seoTitle,
@@ -232,11 +257,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,
@@ -265,13 +293,21 @@ export class ProductsService {
       data.categoryId = payload.categoryId;
     }
     if (payload.name) data.name = payload.name;
+    if (payload.subtitle !== undefined) data.subtitle = payload.subtitle;
     if (payload.sku) data.sku = payload.sku;
     if (payload.type) data.type = payload.type;
     if (payload.price !== undefined) {
       data.priceCents = Number(payload.price);
     }
     if (payload.description !== undefined) data.description = payload.description;
+    if (payload.features !== undefined) data.features = payload.features;
     if (payload.imageUrl !== undefined) data.imageUrl = payload.imageUrl;
+    if (payload.images !== undefined) {
+      data.images = payload.images;
+      if (payload.imageUrl === undefined && payload.images && payload.images.length > 0) {
+        data.imageUrl = payload.images[0];
+      }
+    }
     if (payload.stock !== undefined) data.stock = payload.stock;
     if (payload.tags !== undefined) data.tags = payload.tags;
     if (payload.seoTitle !== undefined) data.seoTitle = payload.seoTitle;
@@ -286,11 +322,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,
@@ -314,11 +353,14 @@ export class ProductsService {
         id: true,
         categoryId: true,
         name: true,
+        subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
         description: true,
+        features: true,
         imageUrl: true,
+        images: true,
         stock: true,
         tags: true,
         seoTitle: true,

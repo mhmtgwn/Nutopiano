@@ -15,13 +15,13 @@ export default function CartPage() {
   );
   const dispatch = useAppDispatch();
 
-  const handleRemove = (productId: string) => {
-    dispatch(removeItem(productId));
+  const handleRemove = (lineId: string) => {
+    dispatch(removeItem(lineId));
     toast.success('Ürün sepetten kaldırıldı');
   };
 
-  const handleQuantityChange = (productId: string, quantity: number) => {
-    dispatch(updateQuantity({ productId, quantity }));
+  const handleQuantityChange = (lineId: string, quantity: number) => {
+    dispatch(updateQuantity({ lineId, quantity }));
   };
 
   const handleClear = () => {
@@ -140,7 +140,7 @@ export default function CartPage() {
             <div className="space-y-4">
               {items.map((item, index) => (
                 <div
-                  key={item.productId}
+                  key={item.lineId}
                   className="group flex flex-col gap-4 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/95 px-5 py-5 shadow-[var(--shadow-lg)] md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex flex-1 flex-col gap-1">
@@ -148,6 +148,11 @@ export default function CartPage() {
                       Ürün {index + 1}
                     </p>
                     <p className="text-xl font-serif text-[var(--primary-800)]">{item.name}</p>
+                    {item.variant && (
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
+                        {item.variant}
+                      </p>
+                    )}
                     <p className="text-xs text-[var(--neutral-600)] md:text-sm">
                       Birim fiyat: {formatPrice(item.price)}
                     </p>
@@ -166,7 +171,7 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          handleQuantityChange(item.productId, item.quantity - 1)
+                          handleQuantityChange(item.lineId, item.quantity - 1)
                         }
                         className="h-8 w-8 rounded-full bg-white text-sm font-semibold text-[var(--primary-800)] shadow-sm hover:bg-[var(--neutral-50)]"
                       >
@@ -177,14 +182,14 @@ export default function CartPage() {
                         min={0}
                         value={item.quantity}
                         onChange={(e) =>
-                          handleQuantityChange(item.productId, Number(e.target.value))
+                          handleQuantityChange(item.lineId, Number(e.target.value))
                         }
                         className="h-8 w-16 rounded-full border border-transparent bg-white px-3 text-sm font-medium text-[var(--primary-800)] text-center outline-none focus-visible:border-[var(--primary-800)]"
                       />
                       <button
                         type="button"
                         onClick={() =>
-                          handleQuantityChange(item.productId, item.quantity + 1)
+                          handleQuantityChange(item.lineId, item.quantity + 1)
                         }
                         className="h-8 w-8 rounded-full bg-white text-sm font-semibold text-[var(--primary-800)] shadow-sm hover:bg-[var(--neutral-50)]"
                       >
@@ -193,7 +198,7 @@ export default function CartPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemove(item.productId)}
+                      onClick={() => handleRemove(item.lineId)}
                       className="self-start text-xs font-semibold uppercase tracking-[0.2em] text-[var(--error-600)] hover:text-[var(--error-600)]/80"
                     >
                       Kaldır

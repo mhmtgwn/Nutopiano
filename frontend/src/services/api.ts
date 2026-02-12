@@ -5,7 +5,7 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   (process.env.NODE_ENV === 'production'
     ? 'https://api.nutopiano.com/api'
-    : 'http://localhost:3000/api');
+    : 'http://localhost:3001/api');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

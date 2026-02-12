@@ -12,6 +12,7 @@ import api from '@/services/api';
 interface Product {
   id: string;
   name: string;
+  subtitle?: string | null;
   description?: string;
   price: number;
   imageUrl?: string | null;
@@ -21,6 +22,7 @@ interface Product {
 interface ApiProduct {
   id: number;
   name: string;
+  subtitle?: string | null;
   description?: string | null;
   priceCents: number;
   imageUrl?: string | null;
@@ -100,6 +102,7 @@ export default function CategoryClient() {
     return list.map((p) => ({
       id: String(p.id),
       name: p.name,
+      subtitle: p.subtitle ?? null,
       description: p.description ?? undefined,
       price: (p.priceCents ?? 0) / 100,
       imageUrl: p.imageUrl ?? null,
