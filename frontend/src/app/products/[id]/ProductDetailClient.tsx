@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ShoppingBag, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, ShoppingBag, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '@/store';
@@ -46,6 +46,11 @@ export default function ProductDetailClient({
   const [quantity, setQuantity] = useState(1);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'features' | 'description' | 'reviews'>('features');
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingZoom, setIsDraggingZoom] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const variationOptions = useMemo(() => {
     const tags = product.tags ?? [];
@@ -91,6 +96,28 @@ export default function ProductDetailClient({
 
   const activeImageSrc = galleryImages[Math.min(activeImageIndex, galleryImages.length - 1)];
 
+  const canNavigateGallery = galleryImages.length > 1;
+  const goPrevImage = () => {
+    if (!canNavigateGallery) return;
+    setActiveImageIndex((i) => (i - 1 + galleryImages.length) % galleryImages.length);
+  };
+
+  const goNextImage = () => {
+    if (!canNavigateGallery) return;
+    setActiveImageIndex((i) => (i + 1) % galleryImages.length);
+  };
+
+  const openZoom = () => {
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+    setIsZoomOpen(true);
+  };
+
+  const closeZoom = () => {
+    setIsZoomOpen(false);
+    setIsDraggingZoom(false);
+  };
+
   const maxQuantity = useMemo(() => {
     if (typeof product.stock === 'number' && product.stock > 0) {
       return product.stock;
@@ -100,6 +127,16 @@ export default function ProductDetailClient({
 
   const lowStockWarning =
     typeof product.stock === 'number' && product.stock > 0 && product.stock <= 5;
+
+  const displayTags = useMemo(() => {
+    const tags = product.tags ?? [];
+    return tags
+      .map((t) => String(t))
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => !/^var\s*:/i.test(t) && !/^variant\s*:/i.test(t))
+      .slice(0, 8);
+  }, [product.tags]);
 
   const handleAddToCart = () => {
     if (isOutOfStock) {
@@ -136,7 +173,7 @@ export default function ProductDetailClient({
 
   return (
     <div className="min-h-[calc(100vh-140px)] bg-white">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 md:px-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 md:px-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
           <Link href="/" className="transition-colors hover:text-[var(--primary-800)]">
             Anasayfa
@@ -150,10 +187,10 @@ export default function ProductDetailClient({
         </div>
 
         <section className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-0">
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="overflow-hidden bg-white">
-              <div className="mx-auto w-full max-w-[560px]">
-                <div className="relative aspect-square w-full max-h-[70vh] overflow-hidden rounded-[var(--radius-2xl)]">
+              <div className="mx-auto w-full max-w-[480px]">
+                <div className="relative aspect-square w-full max-h-[56vh] overflow-hidden rounded-[var(--radius-2xl)]">
                   <Image
                     src={activeImageSrc}
                     alt={product.name}
@@ -161,11 +198,41 @@ export default function ProductDetailClient({
                     className="object-cover"
                     priority
                   />
+
+                  {canNavigateGallery && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={goPrevImage}
+                        className="absolute left-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/80 text-[var(--primary-800)] shadow-[var(--shadow-sm)] backdrop-blur transition hover:bg-white"
+                        aria-label="Önceki görsel"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goNextImage}
+                        className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 bg-white/80 text-[var(--primary-800)] shadow-[var(--shadow-sm)] backdrop-blur transition hover:bg-white"
+                        aria-label="Sonraki görsel"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={openZoom}
+                    className="absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/60 bg-white/80 text-[var(--primary-800)] shadow-[var(--shadow-sm)] backdrop-blur transition hover:bg-white"
+                    aria-label="Yakınlaştır"
+                  >
+                    <Search className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="mx-auto grid w-full max-w-[480px] grid-cols-4 gap-2">
               {galleryImages.slice(0, 4).map((src, index) => {
                 const active = index === activeImageIndex;
                 return (
@@ -188,37 +255,74 @@ export default function ProductDetailClient({
           </div>
 
           <div className="space-y-5 md:border-l md:border-[var(--neutral-200)] md:pl-10">
-            <div className="w-full max-w-[560px]">
+            <div className="w-full max-w-[480px]">
               <header className="space-y-1">
                 <h1 className="text-[28px] font-serif leading-tight text-[var(--primary-800)] md:text-[36px]">
                   {product.name}
                 </h1>
-                {product.subtitle && (
-                  <p className="text-sm font-medium text-[var(--neutral-700)] md:text-base">
-                    {product.subtitle}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 text-[var(--accent-600)]">
-                    <Star className="h-5 w-5 fill-current" />
-                    <span className="text-sm font-semibold text-[var(--neutral-700)]">0.0</span>
-                  </div>
-
-                  {lowStockWarning && (
-                    <span className="inline-flex items-center rounded-full border border-[var(--warning-600)]/20 bg-[var(--warning-100)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--warning-700)]">
-                      Kritik stok: {product.stock}
-                    </span>
-                  )}
-                </div>
               </header>
             </div>
 
-            <div className="w-full max-w-[560px] flex flex-col gap-6">
-              {variationOptions.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                    Varyasyon
-                  </p>
+            <div className="w-full max-w-[480px] flex flex-col gap-6">
+              <div className="min-h-[48px] py-3 text-center text-sm font-medium text-[var(--neutral-700)] md:text-base">
+                {product.subtitle ? (
+                  product.subtitle
+                ) : (
+                  <div className="h-6" aria-hidden="true" />
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {typeof product.stock === 'number' && (
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                        isOutOfStock
+                          ? 'border border-[var(--error-600)]/20 bg-[var(--error-100)] text-[var(--error-600)]'
+                          : 'border border-[var(--success-600)]/20 bg-[var(--success-100)] text-[var(--success-600)]'
+                      }`}
+                    >
+                      {isOutOfStock ? 'Stok yok' : 'Stokta'}
+                    </span>
+                  )}
+
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                      lowStockWarning
+                        ? 'border border-[var(--warning-600)]/20 bg-[var(--warning-100)] text-[var(--warning-700)]'
+                        : 'border border-transparent bg-transparent text-transparent'
+                    }`}
+                    aria-hidden={!lowStockWarning}
+                  >
+                    Kritik stok: {product.stock}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-[var(--accent-600)]">
+                  <Star className="h-5 w-5 fill-current" />
+                  <span className="text-sm font-semibold text-[var(--neutral-700)]">0.0</span>
+                </div>
+              </div>
+
+              <div className="min-h-[40px]">
+                {displayTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {displayTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center rounded-full border border-[var(--neutral-200)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--neutral-600)]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-10" aria-hidden="true" />
+                )}
+              </div>
+
+              <div className="min-h-[44px]">
+                {variationOptions.length > 0 ? (
                   <select
                     value={selectedVariation}
                     onChange={(e) => setSelectedVariation(e.target.value)}
@@ -231,8 +335,10 @@ export default function ProductDetailClient({
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                ) : (
+                  <div className="h-11 w-full" aria-hidden="true" />
+                )}
+              </div>
 
               <div className="grid gap-6 sm:grid-cols-2 sm:items-end">
                 <div className="space-y-1">
@@ -242,19 +348,6 @@ export default function ProductDetailClient({
                 </div>
 
                 <div className="space-y-2 sm:justify-self-end">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    {typeof product.stock === 'number' && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                          isOutOfStock
-                            ? 'border border-[var(--error-600)]/20 bg-[var(--error-100)] text-[var(--error-600)]'
-                            : 'border border-[var(--success-600)]/20 bg-[var(--success-100)] text-[var(--success-600)]'
-                        }`}
-                      >
-                        {isOutOfStock ? 'Stok yok' : 'Stokta'}
-                      </span>
-                    )}
-                  </div>
                   <div className="inline-flex w-fit items-center overflow-hidden rounded-full border border-[var(--neutral-200)] bg-white">
                     <button
                       type="button"
@@ -283,7 +376,7 @@ export default function ProductDetailClient({
                 type="button"
                 onClick={handleAddToCart}
                 disabled={isOutOfStock || (variationOptions.length > 0 && !selectedVariation)}
-                className="mt-10 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-2xl)] bg-[var(--primary-800)] px-6 text-sm font-semibold uppercase tracking-[0.22em] text-white shadow-[var(--shadow-md)] transition hover:bg-[var(--primary-700)] hover:shadow-[var(--shadow-lg)] active:bg-[var(--primary-900)] disabled:cursor-not-allowed disabled:bg-[var(--neutral-300)] disabled:text-[var(--neutral-700)]"
+                className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-2xl)] bg-[var(--primary-800)] px-6 text-sm font-semibold uppercase tracking-[0.22em] text-white shadow-[var(--shadow-md)] transition hover:bg-[var(--primary-700)] hover:shadow-[var(--shadow-lg)] active:bg-[var(--primary-900)] disabled:cursor-not-allowed disabled:bg-[var(--neutral-300)] disabled:text-[var(--neutral-700)]"
                 aria-label={isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
               >
                 <ShoppingBag className="h-5 w-5" aria-hidden="true" />
@@ -293,7 +386,64 @@ export default function ProductDetailClient({
           </div>
         </section>
 
-        <section className="mt-10">
+        {isZoomOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeZoom();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') closeZoom();
+            }}
+            tabIndex={-1}
+          >
+            <div className="relative w-full max-w-5xl overflow-hidden rounded-[var(--radius-2xl)] bg-black">
+              <div
+                className="relative aspect-square w-full"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const next = Math.min(3, Math.max(1, zoomScale + (e.deltaY > 0 ? -0.12 : 0.12)));
+                  setZoomScale(next);
+                  if (next === 1) setZoomOffset({ x: 0, y: 0 });
+                }}
+                onMouseDown={(e) => {
+                  setIsDraggingZoom(true);
+                  setDragStart({ x: e.clientX - zoomOffset.x, y: e.clientY - zoomOffset.y });
+                }}
+                onMouseMove={(e) => {
+                  if (!isDraggingZoom || zoomScale === 1) return;
+                  setZoomOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+                }}
+                onMouseUp={() => setIsDraggingZoom(false)}
+                onMouseLeave={() => setIsDraggingZoom(false)}
+              >
+                <Image
+                  src={activeImageSrc}
+                  alt={product.name}
+                  fill
+                  className="object-contain"
+                  style={{
+                    transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
+                    transformOrigin: 'center',
+                    cursor: zoomScale > 1 ? (isDraggingZoom ? 'grabbing' : 'grab') : 'zoom-in',
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={closeZoom}
+                  className="absolute right-3 top-3 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--primary-800)]"
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <section className="mt-1">
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--neutral-200)] pb-3">
             <button
               type="button"

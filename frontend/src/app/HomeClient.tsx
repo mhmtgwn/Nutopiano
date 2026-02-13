@@ -88,7 +88,7 @@ export default function HomeClient() {
 		const update = () => {
 			const width = window.innerWidth;
 			if (width < 640) {
-				setFeaturedPerView(1);
+				setFeaturedPerView(2);
 			} else if (width < 768) {
 				setFeaturedPerView(2);
 			} else if (width < 1024) {
@@ -149,16 +149,15 @@ export default function HomeClient() {
 	const hasError = productsError || categoriesError;
 
 	const featuredCount = products?.length ?? 0;
-	useEffect(() => {
-		if (featuredCount === 0) return;
-		setFeaturedStartIndex((prev) => prev % featuredCount);
-	}, [featuredCount]);
+	const safeFeaturedStartIndex = featuredCount
+		? featuredStartIndex % featuredCount
+		: 0;
 
 	return (
-		<div className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-10 md:px-6 md:py-12">
+		<div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 py-10 md:px-6 md:py-12">
 			<section className="relative">
 				<div
-					className="relative overflow-hidden rounded-[var(--radius-3xl)] bg-[var(--neutral-50)] py-12 md:py-16"
+					className="relative overflow-hidden rounded-[var(--radius-3xl)] bg-[var(--neutral-50)]"
 					style={{
 						backgroundImage: `url('${activeHero.imageUrl}')`,
 						backgroundSize: 'cover',
@@ -166,53 +165,64 @@ export default function HomeClient() {
 					}}
 				>
 					<div className="absolute inset-0 bg-black/25" />
-					<div className="relative mx-auto max-w-6xl px-4 md:px-6">
-						<div className="grid gap-8 md:items-center">
-							<div className="space-y-4">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
-									{activeHero.kicker}
-								</p>
-								<h1 className="text-4xl font-serif leading-[1.05] text-white md:text-6xl">
-									{activeHero.title}
-								</h1>
-								<p className="max-w-2xl text-sm text-white/80 md:text-lg">
-									{activeHero.description}
-								</p>
-								<div className="flex flex-wrap items-center gap-4">
-									<Link
-										href={activeHero.ctaHref}
-										className="inline-flex items-center gap-2 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] shadow-[var(--shadow-lg)] transition hover:bg-white/95"
-									>
-										{activeHero.ctaLabel} <ArrowRight className="h-4 w-4" />
-									</Link>
-									<div className="flex items-center gap-2">
-										{heroSlides.map((_, index) => {
-											const active = index === heroIndex;
-											return (
-												<button
-													type="button"
-													key={`hero-dot-${index}`}
-													onClick={() => setHeroIndex(index)}
-													className={`h-2.5 w-2.5 rounded-full transition-colors ${
-														active
-															? 'bg-white'
-															: 'bg-white/35 hover:bg-white/60'
-													}`}
-													aria-label={`Hero slide ${index + 1}`}
-												/>
-											);
-										})}
-									</div>
-								</div>
-							</div>
+					<div className="relative mx-auto flex min-h-[180px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:min-h-[220px] md:px-6 md:pb-14">
+						<button
+							type="button"
+							onClick={() =>
+								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)
+							}
+							className="absolute left-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							aria-label="Önceki"
+						>
+							<ChevronLeft className="h-8 w-8" />
+						</button>
+						<button
+							type="button"
+							onClick={() => setHeroIndex((prev) => (prev + 1) % heroSlides.length)}
+							className="absolute right-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							aria-label="Sonraki"
+						>
+							<ChevronRight className="h-8 w-8" />
+						</button>
+						<div className="space-y-3 pl-12 pr-20 md:pl-14 md:pr-28">
+							<h1 className="text-4xl font-serif leading-[1.05] text-white md:text-6xl">
+								{activeHero.title}
+							</h1>
+							<p className="max-w-2xl text-sm text-white/80 md:text-lg">
+								{activeHero.description}
+							</p>
 						</div>
 					</div>
+					<div className="absolute bottom-4 right-5 z-10">
+						<Link
+							href={activeHero.ctaHref}
+							className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] shadow-[var(--shadow-lg)] transition hover:bg-white/95"
+						>
+							{activeHero.ctaLabel} <ArrowRight className="h-4 w-4" />
+						</Link>
+					</div>
+					<div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+						{heroSlides.map((_, index) => {
+							const active = index === heroIndex;
+							return (
+								<button
+									type="button"
+									key={`hero-dot-${index}`}
+									onClick={() => setHeroIndex(index)}
+									className={`h-2.5 w-2.5 rounded-full transition-colors ${
+										active ? 'bg-white' : 'bg-white/35 hover:bg-white/60'
+									}`}
+									aria-label={`Hero slide ${index + 1}`}
+								/>
+							);
+						})}
+					</div>
 				</div>
-				<div className="mx-auto max-w-6xl px-4 pb-6 pt-6 md:px-6 md:pb-8">
-					<div className="grid gap-4 md:grid-cols-3">
+				<div className="mx-auto max-w-6xl px-4 pb-2 pt-4 md:px-6 md:pb-4">
+					<div className="grid grid-cols-3 gap-3 md:gap-4">
 						<div className="flex items-start gap-3">
 							<Truck className="mt-0.5 h-5 w-5 text-[var(--accent-600)]" />
-							<p className="text-sm text-[var(--neutral-700)]">
+							<p className="text-[11px] leading-snug text-[var(--neutral-700)] md:text-sm">
 								<span className="font-semibold text-[var(--primary-800)]">Hızlı teslimat</span>
 								<br />
 								Takipli kargo.
@@ -220,7 +230,7 @@ export default function HomeClient() {
 						</div>
 						<div className="flex items-start gap-3">
 							<ShieldCheck className="mt-0.5 h-5 w-5 text-[var(--accent-600)]" />
-							<p className="text-sm text-[var(--neutral-700)]">
+							<p className="text-[11px] leading-snug text-[var(--neutral-700)] md:text-sm">
 								<span className="font-semibold text-[var(--primary-800)]">Güvenli ödeme</span>
 								<br />
 								Şeffaf adımlar.
@@ -228,7 +238,7 @@ export default function HomeClient() {
 						</div>
 						<div className="flex items-start gap-3">
 							<MessageCircle className="mt-0.5 h-5 w-5 text-[var(--accent-600)]" />
-							<p className="text-sm text-[var(--neutral-700)]">
+							<p className="text-[11px] leading-snug text-[var(--neutral-700)] md:text-sm">
 								<span className="font-semibold text-[var(--primary-800)]">WhatsApp</span>
 								<br />
 								Hızlı dönüş.
@@ -253,56 +263,54 @@ export default function HomeClient() {
 
 			{!isLoading && !hasError && (
 				<>
-					<section className="space-y-4">
-						<div className="flex flex-wrap items-end justify-between gap-4">
+					<section className="space-y-0">
+						<div className="flex flex-wrap items-center justify-between gap-4">
 							<div>
-								<p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-									Shop
-								</p>
-								<h2 className="mt-1 text-2xl font-serif text-[var(--primary-800)] md:text-3xl">
+								<h2
+									data-testid="featured-heading"
+									className="!text-xs !font-semibold !uppercase !tracking-[0.12em] !leading-none !text-[var(--primary-800)]"
+								>
 									Öne çıkan ürünler
 								</h2>
 							</div>
 							<Link
 								href="/products"
-								className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 transition-colors hover:text-[var(--primary-800)]"
+								className="inline-flex items-center gap-2 !text-xs !font-semibold !uppercase !tracking-[0.12em] !leading-none !text-[var(--primary-800)] transition-colors hover:text-[var(--primary-800)]"
 							>
 								Tümünü gör <ArrowRight className="h-4 w-4" />
 							</Link>
 						</div>
 						{products && products.length > 0 ? (
 							<div className="relative">
-								<div className="flex items-center justify-end gap-2 pb-3">
-									<button
-										type="button"
-										onClick={() =>
-											setFeaturedStartIndex((prev) =>
-												featuredCount
+								<button
+									type="button"
+									onClick={() =>
+										setFeaturedStartIndex((prev) =>
+											featuredCount
 													? (prev - 1 + featuredCount) % featuredCount
 													: 0,
-											)
-										}
-										className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
-										aria-label="Önceki"
-									>
-										<ChevronLeft className="h-5 w-5" />
-									</button>
-									<button
-										type="button"
-										onClick={() =>
-											setFeaturedStartIndex((prev) =>
-												featuredCount ? (prev + 1) % featuredCount : 0,
-											)
-										}
-										className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
-										aria-label="Sonraki"
-									>
-										<ChevronRight className="h-5 w-5" />
-									</button>
-								</div>
+										)
+									}
+									className="absolute left-3 top-1/2 z-30 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 drop-shadow transition hover:text-white"
+									aria-label="Önceki"
+								>
+									<ChevronLeft className="h-9 w-9" />
+								</button>
+								<button
+									type="button"
+									onClick={() =>
+										setFeaturedStartIndex((prev) =>
+											featuredCount ? (prev + 1) % featuredCount : 0,
+										)
+									}
+									className="absolute right-3 top-1/2 z-30 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 drop-shadow transition hover:text-white"
+									aria-label="Sonraki"
+								>
+									<ChevronRight className="h-9 w-9" />
+								</button>
 								<div className="overflow-hidden">
 									<div
-										className={`grid gap-4 ${
+										className={`grid items-stretch gap-4 ${
 											featuredPerView === 1
 												? 'grid-cols-1'
 												: featuredPerView === 2
@@ -315,14 +323,12 @@ export default function HomeClient() {
 										{Array.from({ length: Math.min(featuredPerView, products.length) }).map(
 											(_, offset) => {
 												const index =
-													(featuredStartIndex + offset) % products.length;
+													(safeFeaturedStartIndex + offset) % products.length;
 												const product = products[index];
 												return (
-													<ProductCard
-														key={`${product.id}-${index}`}
-														product={product}
-														variant="compact"
-													/>
+													<div key={`${product.id}-${index}`} className="h-full">
+														<ProductCard product={product} variant="compact" />
+													</div>
 												);
 											},
 										)}

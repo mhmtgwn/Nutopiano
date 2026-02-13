@@ -59,6 +59,10 @@ export default function ProductsClient({
   }, [query]);
 
   useEffect(() => {
+    const initialQuery = (query ?? '').trim();
+    const currentQuery = qInput.trim();
+    if (currentQuery === initialQuery) return;
+
     if (syncTimer.current) {
       window.clearTimeout(syncTimer.current);
     }
@@ -74,9 +78,33 @@ export default function ProductsClient({
         window.clearTimeout(syncTimer.current);
       }
     };
-  }, [qInput, pathname, router]);
+  }, [qInput, pathname, router, query]);
 
-  const normalizedQuery = qInput.trim().toLowerCase();
+  const normalizeText = (value: string) =>
+    value
+      .toLocaleLowerCase('tr-TR')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/ı/g, 'i')
+      .replace(/İ/g, 'i')
+      .replace(/ş/g, 's')
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const normalizedQuery = normalizeText(qInput);
+  const queryTokens = useMemo(() => {
+    if (!normalizedQuery) return [] as string[];
+    return normalizedQuery
+      .split(' ')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => /^[0-9]+$/.test(t) || t.length >= 2)
+      .slice(0, 6);
+  }, [normalizedQuery]);
 
   const {
     data: products,
@@ -106,10 +134,13 @@ export default function ProductsClient({
   const sortedProducts = useMemo(() => {
     const base = (products ?? []).slice();
 
-    const filtered = normalizedQuery
+    const filtered = queryTokens.length > 0
       ? base.filter((p) => {
-        const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase();
-        return haystack.includes(normalizedQuery);
+        const tags = Array.isArray(p.tags) ? p.tags.join(' ') : '';
+        const haystack = normalizeText(
+          `${p.name} ${p.subtitle ?? ''} ${p.description ?? ''} ${tags}`,
+        );
+        return queryTokens.some((t) => haystack.includes(t));
       })
       : base;
 
@@ -139,7 +170,7 @@ export default function ProductsClient({
     }
 
     return next;
-  }, [products, sort, normalizedQuery, inStockOnly, minPrice, maxPrice]);
+  }, [products, sort, queryTokens, inStockOnly, minPrice, maxPrice]);
 
   const handleSortChange = (value: string) => {
     if (value === 'price-asc' || value === 'price-desc' || value === 'popular') {

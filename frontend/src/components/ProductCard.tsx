@@ -108,11 +108,13 @@ export default function ProductCard({
           <p className="text-sm font-semibold text-[var(--primary-800)]">
             {truncate(product.name, 44)}
           </p>
-          {product.subtitle && (
-            <p className="mt-1 text-xs text-[var(--neutral-600)]">
-              {truncate(product.subtitle, 54)}
-            </p>
-          )}
+          <p
+            className={`mt-1 text-xs text-[var(--neutral-600)] ${
+              product.subtitle ? '' : 'invisible'
+            }`}
+          >
+            {truncate(product.subtitle ?? ' ', 54)}
+          </p>
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 text-[var(--accent-600)]">
               <Star className="h-4 w-4 fill-current" />

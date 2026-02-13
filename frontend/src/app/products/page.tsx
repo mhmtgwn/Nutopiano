@@ -43,6 +43,7 @@ export default function ProductsPage({
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const q = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  const qRaw = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  const q = qRaw ? decodeURIComponent(qRaw) : undefined;
   return <ProductsClient query={q} />;
 }
