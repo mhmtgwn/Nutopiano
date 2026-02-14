@@ -165,7 +165,7 @@ export default function HomeClient() {
 					}}
 				>
 					<div className="absolute inset-0 bg-black/25" />
-					<div className="relative mx-auto flex min-h-[180px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:min-h-[220px] md:px-6 md:pb-14">
+					<div className="relative mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
 						<button
 							type="button"
 							onClick={() =>
@@ -185,10 +185,10 @@ export default function HomeClient() {
 							<ChevronRight className="h-8 w-8" />
 						</button>
 						<div className="space-y-3 pl-12 pr-20 md:pl-14 md:pr-28">
-							<h1 className="text-4xl font-serif leading-[1.05] text-white md:text-6xl">
+							<h1 className="max-h-[2.2em] overflow-hidden text-4xl font-serif leading-[1.05] text-white md:max-h-none md:text-6xl">
 								{activeHero.title}
 							</h1>
-							<p className="max-w-2xl text-sm text-white/80 md:text-lg">
+							<p className="max-h-[2.8em] max-w-2xl overflow-hidden text-sm leading-snug text-white/80 md:max-h-none md:text-lg md:leading-normal">
 								{activeHero.description}
 							</p>
 						</div>
