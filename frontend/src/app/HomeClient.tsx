@@ -169,39 +169,33 @@ export default function HomeClient() {
 						aria-label={activeHero.ctaLabel}
 						className="absolute inset-0 z-0"
 					/>
-					<div className="pointer-events-none absolute inset-0 z-0 bg-black/25" />
+					<div className="absolute inset-0 bg-black/25" />
 					<div className="relative z-10 mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
 						<button
 							type="button"
-							onClick={(e) => {
-								e.stopPropagation();
+							onClick={() => {
 								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
 							}}
-							onMouseDown={(e) => e.stopPropagation()}
-							onClickCapture={(e) => e.stopPropagation()}
-							className="absolute left-4 top-1/2 z-20 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							className="absolute left-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
 							aria-label="Önceki"
 						>
 							<ChevronLeft className="h-8 w-8" />
 						</button>
 						<button
 							type="button"
-							onClick={(e) => {
-								e.stopPropagation();
+							onClick={() => {
 								setHeroIndex((prev) => (prev + 1) % heroSlides.length);
 							}}
-							onMouseDown={(e) => e.stopPropagation()}
-							onClickCapture={(e) => e.stopPropagation()}
-							className="absolute right-4 top-1/2 z-20 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							className="absolute right-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
 							aria-label="Sonraki"
 						>
 							<ChevronRight className="h-8 w-8" />
 						</button>
 						<div className="space-y-3 pl-12 pr-20 md:pl-14 md:pr-28">
-							<h1 className="max-h-[2.2em] overflow-hidden text-2xl font-serif leading-[1.05] text-white md:max-h-none md:text-6xl">
+							<h1 className="max-h-[2.2em] overflow-hidden text-3xl font-serif leading-[1.05] text-white md:max-h-none md:text-6xl">
 								{activeHero.title}
 							</h1>
-							<p className="max-h-[2.8em] max-w-2xl overflow-hidden text-[11px] leading-snug text-white/80 md:max-h-none md:text-lg md:leading-normal">
+							<p className="max-h-[2.8em] max-w-2xl overflow-hidden text-xs leading-snug text-white/80 md:max-h-none md:text-lg md:leading-normal">
 								{activeHero.description}
 							</p>
 						</div>
@@ -215,9 +209,7 @@ export default function HomeClient() {
 						</Link>
 					</div>
 					<div
-						className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2"
-						onMouseDown={(e) => e.stopPropagation()}
-						onClickCapture={(e) => e.stopPropagation()}
+						className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2"
 					>
 						{heroSlides.map((_, index) => {
 							const active = index === heroIndex;
