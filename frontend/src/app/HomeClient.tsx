@@ -181,9 +181,10 @@ export default function HomeClient() {
 					<div className="relative mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
 						<button
 							type="button"
-							onClick={() =>
-								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)
-							}
+							onClick={(e) => {
+								e.stopPropagation();
+								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+							}}
 							onMouseDown={(e) => e.stopPropagation()}
 							onClickCapture={(e) => e.stopPropagation()}
 							className="absolute left-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
@@ -193,7 +194,10 @@ export default function HomeClient() {
 						</button>
 						<button
 							type="button"
-							onClick={() => setHeroIndex((prev) => (prev + 1) % heroSlides.length)}
+							onClick={(e) => {
+								e.stopPropagation();
+								setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+							}}
 							onMouseDown={(e) => e.stopPropagation()}
 							onClickCapture={(e) => e.stopPropagation()}
 							className="absolute right-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
