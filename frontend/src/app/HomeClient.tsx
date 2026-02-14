@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ChevronLeft, ChevronRight, MessageCircle, ShieldCheck, Sparkles, Truck } from 'lucide-react';
@@ -46,6 +47,7 @@ interface ApiCategory {
 
 
 export default function HomeClient() {
+	const router = useRouter();
 	const heroSlides = [
 		{
 			kicker: 'Nutopiano Shop',
@@ -165,30 +167,66 @@ export default function HomeClient() {
 					}}
 				>
 					<div className="absolute inset-0 bg-black/25" />
-					<div className="absolute inset-0 z-10 grid grid-cols-3">
+					<div className="absolute inset-0 z-[5] grid grid-cols-3">
 						<button
 							type="button"
-							onClick={() => {
+							aria-label="Önceki slide"
+							onPointerUp={(e) => {
+								e.preventDefault();
 								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
 							}}
-							className="h-full w-full cursor-pointer"
-							aria-label="Önceki"
-						/>
-						<Link
-							href={activeHero.ctaHref}
-							aria-label={activeHero.ctaLabel}
-							className="h-full w-full cursor-pointer"
+							onClick={(e) => {
+								e.preventDefault();
+								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+							}}
+							className="h-full w-full bg-transparent"
 						/>
 						<button
 							type="button"
-							onClick={() => {
+							aria-label="Sayfaya git"
+							onPointerUp={(e) => {
+								e.preventDefault();
+								router.push(activeHero.ctaHref);
+							}}
+							onClick={(e) => {
+								e.preventDefault();
+								router.push(activeHero.ctaHref);
+							}}
+							className="h-full w-full bg-transparent"
+						/>
+						<button
+							type="button"
+							aria-label="Sonraki slide"
+							onPointerUp={(e) => {
+								e.preventDefault();
 								setHeroIndex((prev) => (prev + 1) % heroSlides.length);
 							}}
-							className="h-full w-full cursor-pointer"
-							aria-label="Sonraki"
+							onClick={(e) => {
+								e.preventDefault();
+								setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+							}}
+							className="h-full w-full bg-transparent"
 						/>
 					</div>
-					<div className="relative z-20 mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
+					<div className="relative mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
+						<button
+							type="button"
+							onClick={() =>
+								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)
+							}
+							className="absolute left-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							aria-label="Önceki"
+						>
+							<ChevronLeft className="h-8 w-8" />
+						</button>
+						<button
+							type="button"
+							onClick={() => setHeroIndex((prev) => (prev + 1) % heroSlides.length)}
+							className="absolute right-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							aria-label="Sonraki"
+						>
+							<ChevronRight className="h-8 w-8" />
+						</button>
 						<div className="space-y-3 pl-12 pr-20 md:pl-14 md:pr-28">
 							<h1 className="max-h-[2.2em] overflow-hidden text-3xl font-serif leading-[1.05] text-white md:max-h-none md:text-6xl">
 								{activeHero.title}
@@ -198,17 +236,7 @@ export default function HomeClient() {
 							</p>
 						</div>
 					</div>
-					<div className="absolute bottom-4 right-5 z-30 hidden md:block">
-						<Link
-							href={activeHero.ctaHref}
-							className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] shadow-[var(--shadow-lg)] transition hover:bg-white/95"
-						>
-							{activeHero.ctaLabel} <ArrowRight className="h-4 w-4" />
-						</Link>
-					</div>
-					<div
-						className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2"
-					>
+					<div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
 						{heroSlides.map((_, index) => {
 							const active = index === heroIndex;
 							return (
