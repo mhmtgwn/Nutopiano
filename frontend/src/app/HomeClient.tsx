@@ -165,7 +165,9 @@ export default function HomeClient() {
 						backgroundSize: 'cover',
 						backgroundPosition: 'center',
 					}}
-					onClick={() => {
+					onClick={(e) => {
+						const target = e.target as HTMLElement | null;
+						if (target?.closest('button, a')) return;
 						router.push(activeHero.ctaHref);
 					}}
 					role="link"
