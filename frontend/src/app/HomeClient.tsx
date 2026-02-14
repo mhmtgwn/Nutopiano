@@ -193,7 +193,7 @@ export default function HomeClient() {
 							</p>
 						</div>
 					</div>
-					<div className="absolute bottom-4 right-5 z-10">
+					<div className="absolute bottom-4 right-5 z-10 hidden md:block">
 						<Link
 							href={activeHero.ctaHref}
 							className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] shadow-[var(--shadow-lg)] transition hover:bg-white/95"
