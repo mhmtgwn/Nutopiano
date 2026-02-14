@@ -164,33 +164,31 @@ export default function HomeClient() {
 						backgroundPosition: 'center',
 					}}
 				>
-					<Link
-						href={activeHero.ctaHref}
-						aria-label={activeHero.ctaLabel}
-						className="absolute inset-0 z-0"
-					/>
 					<div className="absolute inset-0 bg-black/25" />
-					<div className="relative z-10 mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
+					<div className="absolute inset-0 z-10 grid grid-cols-3">
 						<button
 							type="button"
 							onClick={() => {
 								setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
 							}}
-							className="absolute left-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							className="h-full w-full cursor-pointer"
 							aria-label="Önceki"
-						>
-							<ChevronLeft className="h-8 w-8" />
-						</button>
+						/>
+						<Link
+							href={activeHero.ctaHref}
+							aria-label={activeHero.ctaLabel}
+							className="h-full w-full cursor-pointer"
+						/>
 						<button
 							type="button"
 							onClick={() => {
 								setHeroIndex((prev) => (prev + 1) % heroSlides.length);
 							}}
-							className="absolute right-4 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center text-white/90 transition hover:text-white"
+							className="h-full w-full cursor-pointer"
 							aria-label="Sonraki"
-						>
-							<ChevronRight className="h-8 w-8" />
-						</button>
+						/>
+					</div>
+					<div className="relative z-20 mx-auto flex h-[220px] max-w-6xl flex-col justify-end px-4 pb-12 pt-8 md:h-auto md:min-h-[220px] md:px-6 md:pb-14">
 						<div className="space-y-3 pl-12 pr-20 md:pl-14 md:pr-28">
 							<h1 className="max-h-[2.2em] overflow-hidden text-3xl font-serif leading-[1.05] text-white md:max-h-none md:text-6xl">
 								{activeHero.title}
@@ -200,7 +198,7 @@ export default function HomeClient() {
 							</p>
 						</div>
 					</div>
-					<div className="absolute bottom-4 right-5 z-10 hidden md:block">
+					<div className="absolute bottom-4 right-5 z-30 hidden md:block">
 						<Link
 							href={activeHero.ctaHref}
 							className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] shadow-[var(--shadow-lg)] transition hover:bg-white/95"
@@ -209,7 +207,7 @@ export default function HomeClient() {
 						</Link>
 					</div>
 					<div
-						className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2"
+						className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2"
 					>
 						{heroSlides.map((_, index) => {
 							const active = index === heroIndex;
