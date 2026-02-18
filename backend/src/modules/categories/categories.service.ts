@@ -8,6 +8,7 @@ export interface CategorySummary {
   id: number;
   name: string;
   slug: string;
+  parentId?: number | null;
   isActive: boolean;
   orderIndex: number;
   createdAt: Date;
@@ -15,11 +16,20 @@ export interface CategorySummary {
   archivedAt?: Date | null;
 }
 
+export interface CategoryTree extends CategorySummary {
+  children?: CategoryTree[];
+}
+
 export interface PublicCategorySummary {
   id: number;
   name: string;
   slug: string;
+  parentId?: number | null;
   orderIndex: number;
+}
+
+export interface PublicCategoryTree extends PublicCategorySummary {
+  children?: PublicCategoryTree[];
 }
 
 export interface PublicCategoryDetail extends PublicCategorySummary {
@@ -79,12 +89,28 @@ export class CategoriesService {
       throw new BadRequestException('Bu slug zaten kullanılıyor. Lütfen farklı bir slug seçin.');
     }
 
+    // Validate parent category exists if parentId is provided
+    if (payload.parentId) {
+      const parent = await this.prisma.category.findFirst({
+        where: {
+          id: payload.parentId,
+          businessId,
+        },
+        select: { id: true },
+      });
+
+      if (!parent) {
+        throw new BadRequestException('Üst kategori bulunamadı.');
+      }
+    }
+
     return this.prisma.category.create({
       data: {
-        business: { connect: { id: businessId } },
-        createdBy: { connect: { id: createdByUserId } },
+        businessId,
+        createdByUserId: createdByUserId,
         name: payload.name,
         slug,
+        parentId: payload.parentId ?? undefined,
         isActive: payload.isActive ?? true,
         orderIndex: payload.orderIndex ?? 0,
       },
@@ -92,6 +118,7 @@ export class CategoriesService {
         id: true,
         name: true,
         slug: true,
+        parentId: true,
         isActive: true,
         orderIndex: true,
         createdAt: true,
@@ -113,6 +140,7 @@ export class CategoriesService {
         id: true,
         name: true,
         slug: true,
+        parentId: true,
         isActive: true,
         orderIndex: true,
         createdAt: true,
@@ -123,11 +151,50 @@ export class CategoriesService {
     });
   }
 
+  async getCategoryTree(currentUser: JwtPayload): Promise<CategoryTree[]> {
+    const businessId = Number(currentUser.businessId);
+
+    const categories = await this.prisma.category.findMany({
+      where: {
+        businessId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        parentId: true,
+        isActive: true,
+        orderIndex: true,
+        createdAt: true,
+        updatedAt: true,
+        archivedAt: true,
+      },
+      orderBy: [{ orderIndex: 'asc' }, { name: 'asc' }],
+    });
+
+    // Build tree structure
+    const buildTree = (items: any[], parentId: number | null = null): CategoryTree[] => {
+      return items
+        .filter((item) => item.parentId === parentId)
+        .map((item) => ({
+          ...item,
+          children: buildTree(items, item.id),
+        }));
+    };
+
+    return buildTree(categories);
+  }
+
   async findAllPublic(): Promise<PublicCategorySummary[]> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+    const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
       ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
+      : null;
+
+    const business = businessCandidate
+      ? businessCandidate
       : await this.prisma.business.findFirst({
           orderBy: {
             id: 'asc',
@@ -153,11 +220,62 @@ export class CategoriesService {
     });
   }
 
+  async getCategoryTreePublic(): Promise<PublicCategoryTree[]> {
+    const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
+
+    const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+      ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
+      : null;
+
+    const business = businessCandidate
+      ? businessCandidate
+      : await this.prisma.business.findFirst({
+          orderBy: {
+            id: 'asc',
+          },
+        });
+
+    if (!business) {
+      return [];
+    }
+
+    const categories = await this.prisma.category.findMany({
+      where: {
+        businessId: business.id,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        parentId: true,
+        orderIndex: true,
+      },
+      orderBy: [{ orderIndex: 'asc' }, { name: 'asc' }],
+    });
+
+    // Build tree structure recursively
+    const buildTree = (items: any[], parentId: number | null = null): PublicCategoryTree[] => {
+      return items
+        .filter((item) => item.parentId === parentId)
+        .map((item) => ({
+          ...item,
+          children: buildTree(items, item.id),
+        }));
+    };
+
+    return buildTree(categories);
+  }
+
   async findOnePublicBySlug(slug: string): Promise<PublicCategoryDetail> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+    const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
       ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
+      : null;
+
+    const business = businessCandidate
+      ? businessCandidate
       : await this.prisma.business.findFirst({
           orderBy: {
             id: 'asc',

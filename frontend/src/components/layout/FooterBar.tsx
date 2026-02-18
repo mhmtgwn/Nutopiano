@@ -35,10 +35,10 @@ export default function FooterBar() {
               Shop
             </p>
             <div className="flex flex-col gap-2 text-[var(--neutral-600)]">
-              <Link href="/products" className="hover:text-[var(--neutral-900)] transition-colors">
+              <Link href="/categories" className="hover:text-[var(--neutral-900)] transition-colors">
                 Ürün kataloğu
               </Link>
-              <Link href="/products" className="hover:text-[var(--neutral-900)] transition-colors">
+              <Link href="/categories" className="hover:text-[var(--neutral-900)] transition-colors">
                 Koleksiyonlar
               </Link>
               <Link href="/checkout" className="hover:text-[var(--neutral-900)] transition-colors">

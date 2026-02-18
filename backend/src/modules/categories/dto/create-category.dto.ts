@@ -10,6 +10,10 @@ export class CreateCategoryDto {
   slug?: string;
 
   @IsOptional()
+  @IsInt()
+  parentId?: number;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 

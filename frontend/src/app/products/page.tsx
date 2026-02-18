@@ -44,6 +44,8 @@ export default function ProductsPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const qRaw = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
-  const q = qRaw ? decodeURIComponent(qRaw) : undefined;
-  return <ProductsClient query={q} />;
+  const q = qRaw;
+  const categoryRaw = typeof searchParams?.category === 'string' ? searchParams.category : undefined;
+  const categoryId = categoryRaw && /^[0-9]+$/.test(categoryRaw) ? Number(categoryRaw) : undefined;
+  return <ProductsClient query={q} categoryId={categoryId} />;
 }

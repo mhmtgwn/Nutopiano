@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Search, ShoppingBag, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/services/api';
 import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
 import { addItem } from '@/store/cartSlice';
@@ -14,6 +16,7 @@ import Button from '@/components/common/Button';
 
 interface ProductDetail {
   id: string;
+  categoryId?: number | null;
   name: string;
   subtitle?: string | null;
   description?: string | null;
@@ -36,12 +39,108 @@ export default function ProductDetailClient({
 }: ProductDetailClientProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const isAuthenticated = useAppSelector(
-    (state) => state.user.status === 'authenticated',
-  );
   const isOutOfStock = typeof product.stock === 'number' && product.stock <= 0;
-  const breadcrumbLabel = categoryId ? 'Kategori' : 'Shop';
-  const breadcrumbHref = categoryId ? `/categories/${categoryId}` : '/products';
+
+  interface PublicCategoryTreeNode {
+    id: number;
+    name: string;
+    slug: string;
+    parentId?: number | null;
+    orderIndex: number;
+    children?: PublicCategoryTreeNode[];
+  }
+
+  const {
+    data: categoriesTree,
+  } = useQuery<PublicCategoryTreeNode[]>({
+    queryKey: ['public-categories-tree'],
+    queryFn: async () => {
+      const res = await api.get<PublicCategoryTreeNode[]>('/public/categories/tree');
+      return res.data;
+    },
+  });
+
+  const categoriesIndex = useMemo(() => {
+    const byId = new Map<number, PublicCategoryTreeNode>();
+    const walk = (nodes: PublicCategoryTreeNode[]) => {
+      for (const node of nodes) {
+        byId.set(node.id, node);
+        if (node.children && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(categoriesTree ?? []);
+    return byId;
+  }, [categoriesTree]);
+
+  const categoriesBySlug = useMemo(() => {
+    const bySlug = new Map<string, PublicCategoryTreeNode>();
+    const walk = (nodes: PublicCategoryTreeNode[]) => {
+      for (const node of nodes) {
+        if (node.slug) bySlug.set(node.slug, node);
+        if (node.children && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(categoriesTree ?? []);
+    return bySlug;
+  }, [categoriesTree]);
+
+  const breadcrumbItems = useMemo(() => {
+    const items: Array<{ label: string; href?: string }> = [
+      { label: 'Anasayfa', href: '/' },
+      { label: 'Shop', href: '/categories' },
+    ];
+
+    const categoryIdString = typeof categoryId === 'string' ? categoryId.trim() : '';
+    const fromCategoryId = categoryIdString ? Number(categoryIdString) : undefined;
+    const resolvedCategoryId =
+      typeof fromCategoryId === 'number' && Number.isFinite(fromCategoryId)
+        ? fromCategoryId
+        : typeof product.categoryId === 'number' && Number.isFinite(product.categoryId)
+          ? product.categoryId
+          : undefined;
+
+    const resolvedCategoryFromSlug =
+      categoryIdString && !Number.isFinite(fromCategoryId as number)
+        ? categoriesBySlug.get(categoryIdString)
+        : undefined;
+
+    if (resolvedCategoryFromSlug) {
+      const chain: PublicCategoryTreeNode[] = [];
+      let current: PublicCategoryTreeNode | undefined = resolvedCategoryFromSlug;
+      while (current) {
+        chain.push(current);
+        const parentId = current.parentId;
+        if (typeof parentId !== 'number') break;
+        current = categoriesIndex.get(parentId);
+      }
+      chain.reverse();
+
+      for (const node of chain) {
+        items.push({ label: node.name, href: `/categories/${node.slug}` });
+      }
+    } else if (resolvedCategoryId) {
+      const chain: PublicCategoryTreeNode[] = [];
+      let current = categoriesIndex.get(resolvedCategoryId);
+      while (current) {
+        chain.push(current);
+        const parentId = current.parentId;
+        if (typeof parentId !== 'number') break;
+        current = categoriesIndex.get(parentId);
+      }
+      chain.reverse();
+
+      for (const node of chain) {
+        items.push({ label: node.name, href: `/categories/${node.slug}` });
+      }
+    }
+
+    items.push({ label: product.name });
+    return items;
+  }, [categoriesBySlug, categoriesIndex, categoryId, product.categoryId, product.name]);
 
   const [quantity, setQuantity] = useState(1);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -95,6 +194,8 @@ export default function ProductDetailClient({
         : [fallbackImageSrc];
 
   const activeImageSrc = galleryImages[Math.min(activeImageIndex, galleryImages.length - 1)];
+  const isRemoteImage = (src: string) => /^https?:\/\//i.test(src);
+  const shouldUnoptimize = isRemoteImage(activeImageSrc);
 
   const canNavigateGallery = galleryImages.length > 1;
   const goPrevImage = () => {
@@ -149,11 +250,6 @@ export default function ProductDetailClient({
       return;
     }
 
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-
     dispatch(
       addItem({
         item: {
@@ -175,15 +271,21 @@ export default function ProductDetailClient({
     <div className="min-h-[calc(100vh-140px)] bg-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 md:px-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-          <Link href="/" className="transition-colors hover:text-[var(--primary-800)]">
-            Anasayfa
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link href={breadcrumbHref} className="transition-colors hover:text-[var(--primary-800)]">
-            {breadcrumbLabel}
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-[var(--primary-800)]">{product.name}</span>
+          {breadcrumbItems.map((item, idx) => {
+            const isLast = idx === breadcrumbItems.length - 1;
+            return (
+              <span key={`${item.label}-${idx}`} className="inline-flex items-center gap-2">
+                {item.href && !isLast ? (
+                  <Link href={item.href} className="transition-colors hover:text-[var(--primary-800)]">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className={isLast ? 'text-[var(--primary-800)]' : ''}>{item.label}</span>
+                )}
+                {!isLast && <ChevronRight className="h-3 w-3" />}
+              </span>
+            );
+          })}
         </div>
 
         <section className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-0">
@@ -195,6 +297,7 @@ export default function ProductDetailClient({
                     src={activeImageSrc}
                     alt={product.name}
                     fill
+                    unoptimized={shouldUnoptimize}
                     className="object-cover"
                     priority
                   />
@@ -423,6 +526,7 @@ export default function ProductDetailClient({
                   src={activeImageSrc}
                   alt={product.name}
                   fill
+                  unoptimized={shouldUnoptimize}
                   className="object-contain"
                   style={{
                     transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,

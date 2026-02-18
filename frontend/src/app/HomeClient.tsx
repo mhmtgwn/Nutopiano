@@ -309,7 +309,7 @@ export default function HomeClient() {
 								</h2>
 							</div>
 							<Link
-								href="/products"
+								href="/categories"
 								className="inline-flex items-center gap-2 !text-xs !font-semibold !uppercase !tracking-[0.12em] !leading-none !text-[var(--primary-800)] transition-colors hover:text-[var(--primary-800)]"
 							>
 								Tümünü gör <ArrowRight className="h-4 w-4" />

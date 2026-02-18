@@ -5,7 +5,7 @@ import userReducer from './userSlice';
 
 const CART_STORAGE_KEY = 'cart';
 
-const loadCartState = () => {
+export const loadCartState = () => {
   if (typeof window === 'undefined') return undefined;
 
   try {
@@ -59,14 +59,11 @@ const saveCartState = (state: unknown) => {
   }
 };
 
-const preloadedCart = loadCartState();
-
 export const store = configureStore({
   reducer: {
     cart: cartReducer,
     user: userReducer,
   },
-  preloadedState: preloadedCart ? { cart: preloadedCart } : undefined,
 });
 
 store.subscribe(() => {

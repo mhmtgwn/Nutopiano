@@ -28,7 +28,15 @@ interface ProductDetail {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.API_URL ??
+  (process.env.NODE_ENV === 'production'
+    ? process.env.VERCEL === '1' ||
+      process.env.VERCEL === 'true' ||
+      process.env.NETLIFY === 'true'
+      ? 'https://api.nutopiano.com/api'
+      : 'http://localhost:3001/api'
+    : 'http://localhost:3001/api');
 
 const unwrapResponse = <T,>(payload: unknown): T | null => {
   if (!payload) return null;

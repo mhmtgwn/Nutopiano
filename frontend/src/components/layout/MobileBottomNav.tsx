@@ -40,7 +40,7 @@ export default function MobileBottomNav() {
   const accountHref = user ? '/account/orders' : '/login';
 
   	const items = [
-		{ href: '/products', label: 'Shop', Icon: Store },
+		{ href: '/categories', label: 'Shop', Icon: Store },
 		{ href: '/cart', label: 'Sepet', Icon: ShoppingBag, badge: totalQuantity },
 		{ href: accountHref, label: 'Hesap', Icon: UserCircle2 },
 	];

@@ -4,18 +4,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, ShoppingBag, Store, UserCircle2 } from 'lucide-react';
-import { useAppSelector } from '@/store';
+import { LogOut, Search, ShoppingBag, Store, User, UserCircle2 } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { logout } from '@/store/userSlice';
+import { setAuthToken } from '@/utils/helpers';
+import toast from 'react-hot-toast';
 
 export default function Header() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const totalQuantity = useAppSelector((state) => state.cart.totalQuantity);
   const user = useAppSelector((state) => state.user.user);
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
 
@@ -47,12 +53,34 @@ export default function Header() {
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isSearchOpen]);
 
+  // Close user menu on outside click
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = userMenuRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [isUserMenuOpen]);
+
   const submitSearch = () => {
     const q = trimmedQuery;
     if (!q) return;
     setIsSearchOpen(false);
     router.push(`/search?q=${encodeURIComponent(q)}`);
     window.setTimeout(() => setSearchValue(''), 0);
+  };
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    dispatch(logout());
+    toast.success('Çıkış yapıldı.');
+    setIsUserMenuOpen(false);
+    router.push('/');
   };
 
   return (
@@ -128,19 +156,78 @@ export default function Header() {
               />
             </div>
             <Link
-              href="/products"
+              href="/categories"
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
               aria-label="Shop"
             >
               <Store className="h-5 w-5" />
             </Link>
-            <Link
-              href={user ? '/account/profile' : '/login'}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
-              aria-label="Hesap"
-            >
-              <UserCircle2 className="h-5 w-5" />
-            </Link>
+
+            {/* User Menu */}
+            <div ref={userMenuRef} className="relative">
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
+                aria-label="Hesap menüsü"
+              >
+                <UserCircle2 className="h-5 w-5" />
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-2xl)]">
+                  {user ? (
+                    <>
+                      <div className="border-b border-[var(--neutral-200)] px-4 py-3">
+                        <p className="text-sm font-semibold text-[var(--primary-800)]">{user.name}</p>
+                        <p className="text-xs text-[var(--neutral-500)]">{user.phone}</p>
+                      </div>
+                      <div className="space-y-1 p-2">
+                        <Link
+                          href="/account/profile"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <User className="h-4 w-4" />
+                          Profil
+                        </Link>
+                        <Link
+                          href="/account/orders"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <ShoppingBag className="h-4 w-4" />
+                          Siparişlerim
+                        </Link>
+                        <button
+                          onClick={handleLogout}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--error-600)] hover:bg-[var(--error-50)]"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Çıkış Yap
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2 p-3">
+                      <Link
+                        href="/login"
+                        className="flex items-center justify-center rounded-lg bg-[var(--primary-800)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--primary-700)]"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        Giriş Yap
+                      </Link>
+                      <Link
+                        href="/register"
+                        className="flex items-center justify-center rounded-lg border border-[var(--primary-800)] px-4 py-2 text-sm font-semibold text-[var(--primary-800)] hover:bg-[var(--primary-50)]"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        Kayıt Ol
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <Link
               href="/cart"
               className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"

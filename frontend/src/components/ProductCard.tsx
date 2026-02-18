@@ -34,7 +34,6 @@ export default function ProductCard({
 }: ProductCardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const isAuthenticated = useAppSelector((state) => state.user.status === 'authenticated');
   const isOutOfStock = typeof product.stock === 'number' && product.stock <= 0;
   const lowStock =
     typeof product.stock === 'number' && product.stock > 0 && product.stock <= 5;
@@ -55,11 +54,6 @@ export default function ProductCard({
   const isPlaceholderImage = !product.imageUrl;
 
   const handleAddToCart = () => {
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-
     dispatch(
       addItem({
         item: {
@@ -76,9 +70,16 @@ export default function ProductCard({
   };
 
   return (
-    <article className="group relative h-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-sm)] transition-[transform,shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]">
-      <Link href={productHref} className="absolute inset-0 z-10" aria-label={product.name} />
-      <div className="relative z-0 pointer-events-none">
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(productHref)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') router.push(productHref);
+      }}
+      className="group relative h-full cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-sm)] transition-[transform,shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]"
+    >
+      <div className="relative z-0">
         <div className="relative aspect-square w-full overflow-hidden bg-[var(--neutral-50)]">
           <Image
             src={imageSrc}
@@ -132,7 +133,7 @@ export default function ProductCard({
                   handleAddToCart();
                 }}
                 disabled={isOutOfStock}
-                className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] hover:shadow-[var(--shadow-sm)] active:scale-95 disabled:cursor-not-allowed disabled:text-[var(--neutral-400)] disabled:opacity-70"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] hover:shadow-[var(--shadow-sm)] active:scale-95 disabled:cursor-not-allowed disabled:text-[var(--neutral-400)] disabled:opacity-70"
                 aria-label="Sepete ekle"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />

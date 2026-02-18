@@ -29,12 +29,13 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
 
 type ProductType = 'PHYSICAL' | 'SERVICE' | 'WEIGHT' | 'CUSTOM';
 
-interface CategoryRow {
+interface CategoryTreeNode {
   id: number;
   name: string;
   slug: string;
-  isActive: boolean;
+  parentId?: number | null;
   orderIndex: number;
+  children?: CategoryTreeNode[];
 }
 
 interface ProductRow {
@@ -126,24 +127,46 @@ export default function AdminProductsPage() {
   });
 
   const {
-    data: categories,
+    data: categoriesTree,
     isLoading: categoriesLoading,
     isError: categoriesError,
-  } = useQuery<CategoryRow[]>({
-    queryKey: ['admin-categories'],
+  } = useQuery<CategoryTreeNode[]>({
+    queryKey: ['admin-categories-tree'],
     queryFn: async () => {
-      const res = await api.get<CategoryRow[]>('/categories');
+      const res = await api.get<CategoryTreeNode[]>('/categories/tree');
       return res.data;
     },
   });
 
+  // Flatten tree for select dropdown with indentation
+  const flattenCategories = (tree: CategoryTreeNode[], level = 0): Array<{ id: number; name: string; level: number }> => {
+    const result: Array<{ id: number; name: string; level: number }> = [];
+    for (const cat of tree) {
+      result.push({ id: cat.id, name: cat.name, level });
+      if (cat.children) {
+        result.push(...flattenCategories(cat.children, level + 1));
+      }
+    }
+    return result;
+  };
+
+  const flatCategories = useMemo(() => {
+    return flattenCategories(categoriesTree || []);
+  }, [categoriesTree]);
+
   const categoryNameById = useMemo(() => {
     const map = new Map<number, string>();
-    (categories ?? []).forEach((category) => {
-      map.set(category.id, category.name);
-    });
+    const mapFromTree = (tree: CategoryTreeNode[]) => {
+      for (const cat of tree) {
+        map.set(cat.id, cat.name);
+        if (cat.children) {
+          mapFromTree(cat.children);
+        }
+      }
+    };
+    mapFromTree(categoriesTree || []);
     return map;
-  }, [categories]);
+  }, [categoriesTree]);
 
   const {
     data: products,
@@ -167,24 +190,22 @@ export default function AdminProductsPage() {
       const priceCents = Number(createForm.priceCents);
       const stock = createForm.stock ? Number(createForm.stock) : undefined;
       const parsedCategoryId = createForm.categoryId ? Number(createForm.categoryId) : undefined;
+      
       if (!createForm.name.trim()) {
         throw new Error('Ürün adı zorunludur.');
       }
       if (!priceCents || Number.isNaN(priceCents) || priceCents < 0) {
         throw new Error('Fiyat (kuruş) geçerli olmalıdır.');
       }
-      if (
-        parsedCategoryId !== undefined &&
-        (Number.isNaN(parsedCategoryId) || parsedCategoryId < 1)
-      ) {
-        throw new Error('Kategori seçimi geçersiz.');
+      if (!parsedCategoryId || Number.isNaN(parsedCategoryId) || parsedCategoryId < 1) {
+        throw new Error('Kategori seçimi zorunludur.');
       }
 
       await api.post('/products', {
         name: createForm.name.trim(),
         subtitle: createForm.subtitle.trim() || undefined,
         sku: createForm.sku.trim() || undefined,
-        categoryId: parsedCategoryId ?? null,
+        categoryId: parsedCategoryId,
         type: createForm.type,
         price: String(priceCents),
         description: createForm.description.trim() || undefined,
@@ -220,18 +241,15 @@ export default function AdminProductsPage() {
       const stock = editForm.stock ? Number(editForm.stock) : undefined;
       const parsedCategoryId = editForm.categoryId ? Number(editForm.categoryId) : undefined;
 
-      if (
-        parsedCategoryId !== undefined &&
-        (Number.isNaN(parsedCategoryId) || parsedCategoryId < 1)
-      ) {
-        throw new Error('Kategori seçimi geçersiz.');
+      if (!parsedCategoryId || Number.isNaN(parsedCategoryId) || parsedCategoryId < 1) {
+        throw new Error('Kategori seçimi zorunludur.');
       }
 
       await api.patch(`/products/${productId}`, {
         name: editForm.name.trim() || undefined,
         subtitle: editForm.subtitle.trim() || undefined,
         sku: editForm.sku.trim() || undefined,
-        categoryId: parsedCategoryId ?? null,
+        categoryId: parsedCategoryId,
         type: editForm.type,
         price:
           typeof priceCents === 'number' && !Number.isNaN(priceCents)
@@ -457,10 +475,16 @@ export default function AdminProductsPage() {
                 }
                 className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
                 disabled={categoriesLoading || categoriesError}
+                required
               >
-                <option value="">Kategori seç</option>
-                {(categories ?? []).map((category) => (
-                  <option key={category.id} value={String(category.id)}>
+                <option value="">Kategori seç*</option>
+                {flatCategories.map((category) => (
+                  <option
+                    key={category.id}
+                    value={String(category.id)}
+                    style={{ paddingLeft: `${category.level * 20}px` }}
+                  >
+                    {'  '.repeat(category.level)}
                     {category.name}
                   </option>
                 ))}
@@ -477,8 +501,8 @@ export default function AdminProductsPage() {
               )}
               {!categoriesLoading &&
                 !categoriesError &&
-                categories &&
-                categories.length === 0 && (
+                flatCategories &&
+                flatCategories.length === 0 && (
                   <p className="text-[11px] text-[#8A8A8A] md:text-xs">
                     Henüz kategori yok. Önce kategori oluştur.
                   </p>
@@ -697,10 +721,16 @@ export default function AdminProductsPage() {
                             }
                             className="h-9 w-full rounded-xl border border-[#E5E5E0] bg-white px-2 text-xs outline-none"
                             disabled={categoriesLoading || categoriesError}
+                            required
                           >
-                            <option value="">Kategori seç</option>
-                            {(categories ?? []).map((category) => (
-                              <option key={category.id} value={String(category.id)}>
+                            <option value="">Kategori seç*</option>
+                            {flatCategories.map((category) => (
+                              <option
+                                key={category.id}
+                                value={String(category.id)}
+                                style={{ paddingLeft: `${category.level * 15}px` }}
+                              >
+                                {'  '.repeat(category.level)}
                                 {category.name}
                               </option>
                             ))}

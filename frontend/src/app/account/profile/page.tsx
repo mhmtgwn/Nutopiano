@@ -36,10 +36,13 @@ interface ProfileResponse {
   businessId?: string | null;
 }
 
+type TabType = 'profile' | 'security' | 'admin';
+
 export default function ProfilePage() {
   const { user, status } = useAppSelector((state) => state.user);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -49,6 +52,7 @@ export default function ProfilePage() {
   const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     if (user) return;
@@ -109,37 +113,46 @@ export default function ProfilePage() {
 
   if (!hasToken && !user) {
     return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 md:px-6 md:py-10">
-        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
-          Profil
-        </h1>
-        <section className="space-y-3 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-6 shadow-[var(--shadow-md)] md:px-6">
-          <p className="text-sm text-[var(--neutral-600)] md:text-base">
-            Profil bilgilerinizi görüntülemek için önce giriş yapmanız gerekir.
-          </p>
-          <Button
-            onClick={() => router.push('/login')}
-            className="w-fit"
-            variant="primary"
-          >
-            Giriş yap
-          </Button>
-        </section>
+      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+          <header className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+              Hesap
+            </p>
+            <h1 className="text-3xl font-serif leading-tight text-[var(--primary-800)] md:text-4xl">
+              Profil
+            </h1>
+            <p className="text-sm text-[var(--neutral-600)]">
+              Profil bilgilerinizi görüntülemek için giriş yapmanız gerekir.
+            </p>
+          </header>
+
+          <section className="border-t border-[var(--neutral-200)] pt-6">
+            <Button onClick={() => router.push('/login')} className="w-fit" variant="primary">
+              Giriş yap
+            </Button>
+          </section>
+        </div>
       </div>
     );
   }
 
   if (isLoading && !user) {
     return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 md:px-6 md:py-10">
-        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
-          Profil
-        </h1>
-        <section className="space-y-2 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-6 shadow-[var(--shadow-md)] md:px-6">
-          <p className="text-sm text-[var(--neutral-600)] md:text-base">
-            Profil bilgileriniz yükleniyor...
-          </p>
-        </section>
+      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+          <header className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+              Hesap
+            </p>
+            <h1 className="text-3xl font-serif leading-tight text-[var(--primary-800)] md:text-4xl">
+              Profil
+            </h1>
+            <p className="text-sm text-[var(--neutral-600)]">
+              Profil bilgileriniz yükleniyor...
+            </p>
+          </header>
+        </div>
       </div>
     );
   }
@@ -193,6 +206,7 @@ export default function ProfilePage() {
   const handleChangePassword = async () => {
     const trimmedCurrent = currentPassword.trim();
     const trimmedNew = newPassword.trim();
+    const trimmedConfirm = confirmPassword.trim();
 
     if (!trimmedCurrent) {
       toast.error('Mevcut şifrenizi girin.');
@@ -201,6 +215,21 @@ export default function ProfilePage() {
 
     if (!trimmedNew) {
       toast.error('Yeni şifrenizi girin.');
+      return;
+    }
+
+    if (!trimmedConfirm) {
+      toast.error('Yeni şifrenizi onaylayın.');
+      return;
+    }
+
+    if (trimmedNew !== trimmedConfirm) {
+      toast.error('Yeni şifre ve doğrulama şifresi eşleşmemektedir.');
+      return;
+    }
+
+    if (trimmedNew.length < 6) {
+      toast.error('Yeni şifre en az 6 karakter olmalıdır.');
       return;
     }
 
@@ -213,6 +242,7 @@ export default function ProfilePage() {
       });
       setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
       toast.success('Şifre güncellendi.');
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Şifre güncellenemedi.');
@@ -224,220 +254,276 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-10">
-      <header className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
-            Profilim
-          </h1>
-          <p className="text-xs text-[var(--neutral-600)] md:text-sm">
-            Hesap bilgilerinizi görüntüleyin ve oturumunuzu yönetin.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={handleLogout}
-          className="self-start md:self-auto"
-        >
-          Çıkış yap
-        </Button>
-      </header>
-
-      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
-        <div className="space-y-1 text-sm text-[var(--primary-800)]">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
-            Kullanıcı Bilgileri
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Kullanıcı ID</p>
-              <p className="text-sm font-medium md:text-base">{user.id}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Ad Soyad</p>
-              <p className="text-sm font-medium md:text-base">{user.name ?? '-'}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Telefon</p>
-              <p className="text-sm font-medium md:text-base">
-                {user.phone ?? '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Email</p>
-              <p className="text-sm font-medium md:text-base">{user.email ?? '-'}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">Rol</p>
-              <p className="text-sm font-medium md:text-base">{user.role}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">İşletme ID</p>
-              <p className="text-sm font-medium md:text-base">
-                {user.businessId ?? '-'}
-              </p>
-            </div>
+    <div className="min-h-[calc(100vh-140px)] bg-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 py-8 md:px-6 md:py-10">
+        {/* Header */}
+        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+              Hesap
+            </p>
+            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
+              Profilim
+            </h1>
           </div>
-        </div>
-      </section>
-
-      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
-            Profil Düzenle
-          </p>
-          <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
-            Bilgilerim
-          </h2>
-          <p className="mt-1 text-sm text-[var(--neutral-600)]">
-            Ad soyad, telefon ve email bilgilerinizi güncelleyin.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-1">
-            <label
-              htmlFor="profileName"
-              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
-            >
-              Ad Soyad
-            </label>
-            <input
-              id="profileName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-              placeholder="Ad Soyad"
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="profilePhone"
-              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
-            >
-              Telefon
-            </label>
-            <input
-              id="profilePhone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-              placeholder="5XXXXXXXXX"
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="profileEmail"
-              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
-            >
-              Email
-            </label>
-            <input
-              id="profileEmail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-              placeholder="ornek@domain.com"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={handleSaveProfile}
-            className="w-full md:w-fit"
-            disabled={isSavingProfile}
-            isLoading={isSavingProfile}
+          <Button 
+            type="button" 
+            variant="secondary" 
+            onClick={handleLogout}
           >
-            Kaydet
+            Çıkış yap
           </Button>
-        </div>
-      </section>
+        </header>
 
-      <section className="space-y-4 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
-            Güvenlik
-          </p>
-          <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
-            Şifre Değiştir
-          </h2>
-          <p className="mt-1 text-sm text-[var(--neutral-600)]">
-            Mevcut şifrenizle doğrulayın ve yeni şifrenizi belirleyin.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1">
-            <label
-              htmlFor="currentPassword"
-              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+        {/* Tabs */}
+        <div className="border-b border-[var(--neutral-200)]">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`pb-3 text-sm font-semibold transition-colors ${
+                activeTab === 'profile'
+                  ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
+                  : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+              }`}
             >
-              Mevcut Şifre
-            </label>
-            <input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-              placeholder="••••••"
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="newPassword"
-              className="text-xs font-medium text-[var(--primary-800)] md:text-sm"
+              Profil
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`pb-3 text-sm font-semibold transition-colors ${
+                activeTab === 'security'
+                  ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
+                  : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+              }`}
             >
-              Yeni Şifre
-            </label>
-            <input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-              placeholder="••••••"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={handleChangePassword}
-            className="w-full md:w-fit"
-            disabled={isChangingPassword}
-            isLoading={isChangingPassword}
-          >
-            Şifreyi Güncelle
-          </Button>
-        </div>
-      </section>
-
-      {isAdmin && (
-        <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-5 md:py-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--accent-600)]">
+              Güvenlik
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`pb-3 text-sm font-semibold transition-colors ${
+                  activeTab === 'admin'
+                    ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
+                    : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+                }`}
+              >
                 Yönetim
-              </p>
-              <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
-                Admin paneli
-              </h2>
-              <p className="mt-1 text-sm text-[var(--neutral-600)]">
-                Ürünleri, kategorileri ve siparişleri yönetmek için panele geçin.
-              </p>
-            </div>
-            <Button type="button" onClick={() => router.push('/admin')} className="w-fit">
-              Admin Paneline Git
-            </Button>
+              </button>
+            )}
           </div>
-        </section>
-      )}
+        </div>
+
+        {/* Tab Content */}
+        <div>
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <div className="space-y-6">
+              <section className="border-t border-[var(--neutral-200)] pt-6">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Bilgileri Görüntüle
+                  </p>
+                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                    Hesap Bilgilerim
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Ad Soyad
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
+                      {user.name ?? '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Telefon
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
+                      {user.phone ?? '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Email
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
+                      {user.email ?? '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Rol
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
+                      {user.role}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="border-t border-[var(--neutral-200)] pt-6">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Düzenle
+                  </p>
+                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                    Bilgilerimi Güncelle
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <label htmlFor="profileName" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Ad Soyad
+                    </label>
+                    <input
+                      id="profileName"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                      placeholder="Ad Soyad"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="profilePhone" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Telefon
+                    </label>
+                    <input
+                      id="profilePhone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                      placeholder="5XXXXXXXXX"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="profileEmail" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                      Email
+                    </label>
+                    <input
+                      id="profileEmail"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                      placeholder="ornek@domain.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile}
+                    isLoading={isSavingProfile}
+                  >
+                    Kaydet
+                  </Button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* Security Tab */}
+          {activeTab === 'security' && (
+            <section className="border-t border-[var(--neutral-200)] pt-6">
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                  Güvenlik
+                </p>
+                <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                  Şifre Değiştir
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2 space-y-2">
+                  <label htmlFor="currentPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Mevcut Şifre
+                  </label>
+                  <input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    placeholder="••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="newPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Yeni Şifre
+                  </label>
+                  <input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    placeholder="••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="confirmPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Yeni Şifre (Doğrula)
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    placeholder="••••••"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword}
+                  isLoading={isChangingPassword}
+                >
+                  Şifreyi Güncelle
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {/* Admin Tab */}
+          {activeTab === 'admin' && isAdmin && (
+            <section className="border-t border-[var(--neutral-200)] pt-6">
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                  Yönetim
+                </p>
+                <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                  Admin Paneli
+                </p>
+                <p className="mt-2 text-sm text-[var(--neutral-600)]">
+                  Ürünleri, kategorileri ve siparişleri yönetmek için panele geçin.
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button 
+                  type="button" 
+                  onClick={() => router.push('/admin')}
+                >
+                  Admin Paneline Git
+                </Button>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

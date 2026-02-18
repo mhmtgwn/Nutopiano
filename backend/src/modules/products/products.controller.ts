@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '@core/decorators';
 import { JwtAuthGuard, RolesGuard } from '@core/guards';
@@ -25,6 +25,33 @@ export class ProductsController {
   @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN.' })
   create(@Req() req: { user: JwtPayload }, @Body() payload: CreateProductDto) {
     return this.productsService.create(req.user, payload);
+  }
+
+  @Get('search')
+  @ApiOperation({
+    summary: 'Search products',
+    description:
+      'Public endpoint to search and filter products. Supports query, category, price range, and sorting.',
+  })
+  @ApiOkResponse({ description: 'Array of products matching search criteria.' })
+  search(
+    @Query('q') query?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('sort') sort?: string,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.productsService.searchProducts({
+      query: query || undefined,
+      categoryId: categoryId ? Number(categoryId) : undefined,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      sort: sort || 'newest',
+      skip: skip ? Number(skip) : 0,
+      take: take ? Number(take) : 20,
+    });
   }
 
   @Get()

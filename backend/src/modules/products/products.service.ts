@@ -50,9 +50,8 @@ export class ProductsService {
     const createdByUserId = Number(currentUser.userId);
     const priceCents = Number(payload.price);
 
-    if (payload.categoryId) {
-      await this.assertCategoryScoped(currentUser, payload.categoryId);
-    }
+    // categoryId is now required
+    await this.assertCategoryScoped(currentUser, payload.categoryId);
 
     const images = payload.images ?? undefined;
     const imageUrl =
@@ -135,8 +134,12 @@ export class ProductsService {
   async findAllPublic(): Promise<ProductSummary[]> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+    const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
       ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
+      : null;
+
+    const business = businessCandidate
+      ? businessCandidate
       : await this.prisma.business.findFirst({
           orderBy: {
             id: 'asc',
@@ -283,13 +286,15 @@ export class ProductsService {
   async update(currentUser: JwtPayload, id: number, payload: UpdateProductDto): Promise<ProductSummary> {
     await this.findByIdScoped(currentUser, id);
 
-    const data: Prisma.ProductUncheckedUpdateInput & { categoryId?: number | null } = {};
+    const data: Prisma.ProductUncheckedUpdateInput = {};
 
     if (payload.categoryId !== undefined) {
-      if (payload.categoryId !== null) {
-        await this.assertCategoryScoped(currentUser, payload.categoryId);
+      if (payload.categoryId === null) {
+        // categoryId is required; do not allow clearing
+        throw new NotFoundException('Category not found');
       }
 
+      await this.assertCategoryScoped(currentUser, payload.categoryId);
       data.categoryId = payload.categoryId;
     }
     if (payload.name) data.name = payload.name;
@@ -370,5 +375,120 @@ export class ProductsService {
     });
 
     return removed;
+  }
+
+  async searchProducts(params: {
+    query?: string;
+    categoryId?: number;
+    minPrice?: number;
+    maxPrice?: number;
+    sort?: string;
+    skip?: number;
+    take?: number;
+  }): Promise<{
+    data: ProductSummary[];
+    total: number;
+    skip: number;
+    take: number;
+  }> {
+    const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
+
+    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+      ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
+      : await this.prisma.business.findFirst({
+          orderBy: { id: 'asc' },
+        });
+
+    if (!business) {
+      return { data: [], total: 0, skip: params.skip ?? 0, take: params.take ?? 20 };
+    }
+
+    // Build where clause
+    const whereConditions: any = {
+      businessId: business.id,
+      isActive: true,
+    };
+
+    // Text search
+    if (params.query) {
+      const searchTerm = params.query.toLowerCase();
+      whereConditions.OR = [
+        { name: { contains: searchTerm, mode: 'insensitive' } },
+        { subtitle: { contains: searchTerm, mode: 'insensitive' } },
+        { description: { contains: searchTerm, mode: 'insensitive' } },
+        { tags: { hasSome: [searchTerm] } },
+      ];
+    }
+
+    // Category filter
+    if (params.categoryId) {
+      whereConditions.categoryId = params.categoryId;
+    }
+
+    // Price range filter
+    if (params.minPrice !== undefined || params.maxPrice !== undefined) {
+      whereConditions.priceCents = {};
+      if (params.minPrice !== undefined) {
+        whereConditions.priceCents.gte = params.minPrice;
+      }
+      if (params.maxPrice !== undefined) {
+        whereConditions.priceCents.lte = params.maxPrice;
+      }
+    }
+
+    // Get total count
+    const total = await this.prisma.product.count({ where: whereConditions });
+
+    // Build order by
+    let orderBy: any = { name: 'asc' };
+    switch (params.sort) {
+      case 'price-asc':
+        orderBy = { priceCents: 'asc' };
+        break;
+      case 'price-desc':
+        orderBy = { priceCents: 'desc' };
+        break;
+      case 'newest':
+        orderBy = { createdAt: 'desc' };
+        break;
+      case 'name':
+        orderBy = { name: 'asc' };
+        break;
+      default:
+        orderBy = { createdAt: 'desc' };
+    }
+
+    // Fetch products
+    const products = await this.prisma.product.findMany({
+      where: whereConditions,
+      select: {
+        id: true,
+        categoryId: true,
+        name: true,
+        subtitle: true,
+        sku: true,
+        type: true,
+        priceCents: true,
+        description: true,
+        features: true,
+        imageUrl: true,
+        images: true,
+        stock: true,
+        tags: true,
+        seoTitle: true,
+        seoDescription: true,
+        isActive: true,
+      },
+      orderBy,
+      skip: params.skip ?? 0,
+      take: params.take ?? 20,
+    });
+
+    return {
+      data: products,
+      total,
+      skip: params.skip ?? 0,
+      take: params.take ?? 20,
+    };
   }
 }

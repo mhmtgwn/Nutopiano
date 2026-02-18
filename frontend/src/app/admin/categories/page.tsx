@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { Archive, LayoutGrid, Pencil, Save, X } from 'lucide-react';
+import { FormEvent, useMemo, useState } from 'react';
+import { Archive, LayoutGrid, Pencil, Save, X, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -26,12 +26,27 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-interface CategoryRow {
+interface CategoryTreeNode {
   id: number;
   name: string;
   slug: string;
+  parentId?: number | null;
   isActive: boolean;
   orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+  children?: CategoryTreeNode[];
+}
+
+interface FlatCategory {
+  id: number;
+  name: string;
+  slug: string;
+  parentId?: number | null;
+  isActive: boolean;
+  orderIndex: number;
+  level: number;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -43,6 +58,7 @@ export default function AdminCategoriesPage() {
   const [createForm, setCreateForm] = useState({
     name: '',
     slug: '',
+    parentId: '',
     orderIndex: '0',
     isActive: true,
   });
@@ -51,42 +67,89 @@ export default function AdminCategoriesPage() {
   const [editForm, setEditForm] = useState({
     name: '',
     slug: '',
+    parentId: '',
     orderIndex: '0',
     isActive: true,
   });
 
   const {
-    data: categories,
+    data: categoriesTree,
     isLoading,
     isError,
-  } = useQuery<CategoryRow[]>({
-    queryKey: ['admin-categories'],
+  } = useQuery<CategoryTreeNode[]>({
+    queryKey: ['admin-categories-tree'],
     queryFn: async () => {
-      const res = await api.get<CategoryRow[]>('/categories');
+      const res = await api.get<CategoryTreeNode[]>('/categories/tree');
       return res.data;
     },
   });
 
+  // Flatten tree for table display
+  const flattenCategories = (tree: CategoryTreeNode[], level = 0): FlatCategory[] => {
+    const result: FlatCategory[] = [];
+    for (const cat of tree) {
+      result.push({
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        parentId: cat.parentId,
+        isActive: cat.isActive,
+        orderIndex: cat.orderIndex,
+        level,
+        createdAt: cat.createdAt,
+        updatedAt: cat.updatedAt,
+        archivedAt: cat.archivedAt,
+      });
+      if (cat.children) {
+        result.push(...flattenCategories(cat.children, level + 1));
+      }
+    }
+    return result;
+  };
+
+  const flatCategories = useMemo(() => {
+    return flattenCategories(categoriesTree || []);
+  }, [categoriesTree]);
+
+  // For parent selectors, create list excluding current category if editing
+  const availableParents = useMemo(() => {
+    const categories = flatCategories.filter(
+      (cat) => editingId === null || cat.id !== editingId
+    );
+    return categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      level: cat.level,
+    }));
+  }, [flatCategories, editingId]);
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const orderIndex = Number(createForm.orderIndex);
+      const parentId = createForm.parentId ? Number(createForm.parentId) : undefined;
+      
       if (!createForm.name.trim()) {
         throw new Error('Kategori adı zorunludur.');
       }
       if (Number.isNaN(orderIndex) || orderIndex < 0) {
         throw new Error('Sıra değeri geçersiz.');
       }
+      if (parentId !== undefined && (Number.isNaN(parentId) || parentId < 1)) {
+        throw new Error('Üst kategori seçimi geçersiz.');
+      }
+
       await api.post('/categories', {
         name: createForm.name.trim(),
         slug: createForm.slug.trim() || undefined,
+        parentId,
         isActive: createForm.isActive,
         orderIndex,
       });
     },
     onSuccess: async () => {
       toast.success('Kategori oluşturuldu.');
-      setCreateForm({ name: '', slug: '', orderIndex: '0', isActive: true });
-      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      setCreateForm({ name: '', slug: '', parentId: '', orderIndex: '0', isActive: true });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori oluşturulamadı.'));
@@ -96,16 +159,22 @@ export default function AdminCategoriesPage() {
   const updateMutation = useMutation({
     mutationFn: async (categoryId: number) => {
       const orderIndex = Number(editForm.orderIndex);
+      const parentId = editForm.parentId ? Number(editForm.parentId) : null;
+      
       if (!editForm.name.trim()) {
         throw new Error('Kategori adı zorunludur.');
       }
       if (Number.isNaN(orderIndex) || orderIndex < 0) {
         throw new Error('Sıra değeri geçersiz.');
       }
+      if (parentId !== null && (Number.isNaN(parentId) || parentId < 1)) {
+        throw new Error('Üst kategori seçimi geçersiz.');
+      }
 
       await api.patch(`/categories/${categoryId}`, {
         name: editForm.name.trim(),
         slug: editForm.slug.trim() || undefined,
+        parentId: parentId || undefined,
         isActive: editForm.isActive,
         orderIndex,
       });
@@ -113,7 +182,7 @@ export default function AdminCategoriesPage() {
     onSuccess: async () => {
       toast.success('Kategori güncellendi.');
       setEditingId(null);
-      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori güncellenemedi.'));
@@ -126,18 +195,19 @@ export default function AdminCategoriesPage() {
     },
     onSuccess: async () => {
       toast.success('Kategori arşivlendi.');
-      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori arşivlenemedi.'));
     },
   });
 
-  const beginEdit = (category: CategoryRow) => {
+  const beginEdit = (category: FlatCategory) => {
     setEditingId(category.id);
     setEditForm({
       name: category.name,
       slug: category.slug,
+      parentId: category.parentId ? String(category.parentId) : '',
       orderIndex: String(category.orderIndex ?? 0),
       isActive: category.isActive,
     });
@@ -145,7 +215,7 @@ export default function AdminCategoriesPage() {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ name: '', slug: '', orderIndex: '0', isActive: true });
+    setEditForm({ name: '', slug: '', parentId: '', orderIndex: '0', isActive: true });
   };
 
   const handleCreate = (event: FormEvent) => {
@@ -170,7 +240,7 @@ export default function AdminCategoriesPage() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/10 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
             <LayoutGrid className="h-4 w-4" />
-            Toplam: {categories?.length ?? 0}
+            Toplam: {flatCategories?.length ?? 0}
           </div>
         </div>
       </section>
@@ -215,6 +285,27 @@ export default function AdminCategoriesPage() {
                 className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
                 placeholder="örn: piyanolar"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                Üst Kategori (opsiyonel)
+              </label>
+              <select
+                value={createForm.parentId}
+                onChange={(e) =>
+                  setCreateForm((p) => ({ ...p, parentId: e.target.value }))
+                }
+                className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
+              >
+                <option value="">Kök kategori (üst yok)</option>
+                {availableParents.map((cat) => (
+                  <option key={cat.id} value={String(cat.id)}>
+                    {'  '.repeat(cat.level)}
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -276,10 +367,11 @@ export default function AdminCategoriesPage() {
           </div>
 
           <div className="mt-6 overflow-hidden rounded-2xl border border-[#1A3C34]/10 bg-white">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.9fr)] gap-3 border-b border-[#E5E5E0] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
+            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,1fr)] gap-3 border-b border-[#E5E5E0] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
               <span>Kategori</span>
               <span>Slug</span>
               <span>Sıra</span>
+              <span>Üst Kat.</span>
               <span>Durum</span>
               <span className="text-right">Aksiyon</span>
             </div>
@@ -296,23 +388,28 @@ export default function AdminCategoriesPage() {
                 </div>
               )}
 
-              {!isLoading && !isError && (!categories || categories.length === 0) && (
+              {!isLoading && !isError && (!flatCategories || flatCategories.length === 0) && (
                 <div className="px-4 py-4 text-sm text-[#5C5C5C]">
                   Kategori bulunamadı.
                 </div>
               )}
 
-              {!isLoading && !isError && categories?.map((c) => {
+              {!isLoading && !isError && flatCategories?.map((c) => {
                 const isEditing = editingId === c.id;
                 return (
                   <div
                     key={c.id}
-                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.9fr)] gap-3 px-4 py-3 text-sm text-[#1A3C34]"
+                    className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,1fr)] gap-3 px-4 py-3 text-sm text-[#1A3C34]"
                   >
                     <div className="min-w-0">
                       {!isEditing ? (
                         <div>
-                          <p className="truncate font-semibold">{c.name}</p>
+                          <p className="truncate font-semibold" style={{ paddingLeft: `${c.level * 12}px` }}>
+                            {c.level > 0 && (
+                              <ChevronRight className="inline h-3 w-3 mr-1" />
+                            )}
+                            {c.name}
+                          </p>
                           <p className="truncate text-xs text-[#5C5C5C]">ID: {c.id}</p>
                         </div>
                       ) : (
@@ -363,28 +460,27 @@ export default function AdminCategoriesPage() {
 
                     <div>
                       {!isEditing ? (
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                            c.isActive
-                              ? 'bg-[#F3EEE3] text-[#3E2723]'
-                              : 'bg-[#3E2723] text-white'
-                          }`}
-                        >
-                          {c.isActive ? 'Aktif' : 'Pasif'}
+                        <span className="text-sm text-[#5C5C5C]">
+                          {c.parentId ? flatCategories.find(cat => cat.id === c.parentId)?.name || '-' : '-'}
                         </span>
                       ) : (
                         <select
-                          value={editForm.isActive ? 'active' : 'inactive'}
+                          value={editForm.parentId}
                           onChange={(e) =>
                             setEditForm((p) => ({
                               ...p,
-                              isActive: e.target.value === 'active',
+                              parentId: e.target.value,
                             }))
                           }
                           className="h-9 w-full rounded-xl border border-[#E5E5E0] bg-white px-2 text-xs outline-none"
                         >
-                          <option value="active">Aktif</option>
-                          <option value="inactive">Pasif</option>
+                          <option value="">Kök</option>
+                          {availableParents.map((cat) => (
+                            <option key={cat.id} value={String(cat.id)}>
+                              {'  '.repeat(cat.level)}
+                              {cat.name}
+                            </option>
+                          ))}
                         </select>
                       )}
                     </div>

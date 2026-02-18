@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -8,11 +9,14 @@ import {
   CreditCard,
   Home,
   Mail,
+  Menu,
   MessageCircle,
   Package,
   Settings,
   Tags,
   Truck,
+  Users,
+  X,
 } from 'lucide-react';
 
 interface AdminShellProps {
@@ -22,7 +26,10 @@ interface AdminShellProps {
 const navSections = [
   {
     title: 'Merkez',
-    items: [{ label: 'Genel Bakış', href: '/admin', icon: Home }],
+    items: [
+      { label: 'Genel Bakış', href: '/admin', icon: Home },
+      { label: 'Kullanıcılar', href: '/admin/users', icon: Users },
+    ],
   },
   {
     title: 'Katalog',
@@ -54,28 +61,33 @@ const navSections = [
 
 export default function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const isActive = (href: string) =>
     href === '/admin' ? pathname === href : pathname.startsWith(href);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   return (
-    <div className="min-h-screen bg-[#F7F4EF]">
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="space-y-6">
-            <div className="rounded-[28px] border border-[#1A3C34]/10 bg-white/90 p-5 shadow-[0_20px_60px_rgba(26,60,52,0.08)]">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+    <div className="min-h-screen bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="hidden space-y-6 lg:block">
+            <div className="border-b border-[var(--neutral-200)] pb-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Nutopiano Admin
               </p>
-              <h2 className="mt-2 text-xl font-serif text-[#1A3C34]">
+              <h2 className="mt-2 text-xl font-serif text-[var(--primary-800)]">
                 Yönetim Merkezi
               </h2>
-              <p className="mt-2 text-xs text-[#5C5C5C]">
+              <p className="mt-2 text-xs text-[var(--neutral-600)]">
                 Ürün, sipariş ve ödeme akışlarını tek panelden yönetin.
               </p>
               <Link
                 href="/"
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/15 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34] transition hover:-translate-y-0.5"
+                className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
               >
                 Mağazaya dön
               </Link>
@@ -84,7 +96,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             <nav className="space-y-5">
               {navSections.map((section) => (
                 <div key={section.title} className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                     {section.title}
                   </p>
                   <div className="space-y-2">
@@ -95,10 +107,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                         <Link
                           key={item.href}
                           href={item.href}
-                          className={`flex items-center gap-3 rounded-2xl px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                          className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
                             active
-                              ? 'bg-[#1A3C34] text-white shadow-[0_15px_40px_rgba(26,60,52,0.18)]'
-                              : 'border border-transparent text-[#1A3C34]/70 hover:border-[#1A3C34]/15 hover:bg-white/80'
+                              ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                              : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
@@ -113,21 +125,31 @@ export default function AdminShell({ children }: AdminShellProps) {
           </aside>
 
           <div className="space-y-6">
-            <header className="rounded-[32px] border border-[#1A3C34]/10 bg-white/90 px-6 py-6 shadow-[0_30px_90px_rgba(26,60,52,0.12)]">
+            <header className="border-b border-[var(--neutral-200)] pb-4 lg:pb-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                <div>
+                  <p className="hidden text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] lg:block">
                     Admin Panel
                   </p>
-                  <h1 className="text-3xl font-serif text-[#1A3C34] md:text-4xl">
+                  <h1 className="mt-2 hidden text-3xl font-serif text-[var(--primary-800)] md:text-4xl lg:block">
                     Kontrol Paneli
                   </h1>
-                  <p className="text-sm text-[#5C5C5C]">
+                  <p className="mt-2 hidden text-sm text-[var(--neutral-600)] lg:block">
                     Sipariş, ödeme, kapıya hizmet ve bildirim akışlarını yönetin.
                   </p>
                 </div>
-                <div className="rounded-full border border-[#1A3C34]/15 bg-white px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]">
-                  Yönetici erişimi
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMobileNavOpen(true)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)] lg:hidden"
+                    aria-label="Menüyü aç"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <div className="rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4">
+                    Yönetici erişimi
+                  </div>
                 </div>
               </div>
             </header>
@@ -135,6 +157,71 @@ export default function AdminShell({ children }: AdminShellProps) {
             <main className="space-y-6">{children}</main>
           </div>
         </div>
+
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Menüyü kapat"
+              onClick={() => setMobileNavOpen(false)}
+              className="absolute inset-0 bg-black/30"
+            />
+            <div className="absolute left-0 top-0 h-full w-[86vw] max-w-[340px] bg-white shadow-[var(--shadow-lg)]">
+              <div className="flex items-center justify-between border-b border-[var(--neutral-200)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                  Nutopiano Admin
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+                  aria-label="Kapat"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="px-4 py-5">
+                <Link
+                  href="/"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+                >
+                  Mağazaya dön
+                </Link>
+
+                <nav className="mt-6 space-y-5">
+                  {navSections.map((section) => (
+                    <div key={section.title} className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                        {section.title}
+                      </p>
+                      <div className="space-y-2">
+                        {section.items.map((item) => {
+                          const Icon = item.icon;
+                          const active = isActive(item.href);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+                                active
+                                  ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                                  : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
+                              }`}
+                            >
+                              <Icon className="h-4 w-4" />
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

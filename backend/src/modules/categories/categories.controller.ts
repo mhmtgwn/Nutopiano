@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTa
 import { Roles } from '@core/decorators';
 import { JwtAuthGuard, RolesGuard } from '@core/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
-import { CategoriesService, CategorySummary } from './categories.service';
+import { CategoriesService, CategorySummary, CategoryTree } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -34,6 +34,16 @@ export class CategoriesController {
   @ApiOkResponse({ description: 'Array of active categories.' })
   findAll(@Req() req: { user: JwtPayload }): Promise<CategorySummary[]> {
     return this.categoriesService.findAll(req.user);
+  }
+
+  @Get('tree')
+  @ApiOperation({
+    summary: 'Get category tree',
+    description: 'ADMIN can fetch the hierarchical category tree for their business.',
+  })
+  @ApiOkResponse({ description: 'Hierarchical category tree structure.' })
+  getTree(@Req() req: { user: JwtPayload }): Promise<CategoryTree[]> {
+    return this.categoriesService.getCategoryTree(req.user);
   }
 
   @Patch(':id')

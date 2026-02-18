@@ -105,7 +105,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   if (!token) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+      <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
           <Spinner fullscreen label="Yönlendiriliyor..." />
         </div>
@@ -115,7 +115,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   if (isLoading && !user) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+      <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
           <Spinner fullscreen label="Yetki kontrol ediliyor..." />
         </div>
@@ -125,7 +125,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   if (!user || !isAdminRole(user.role)) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
+      <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
           <Spinner fullscreen label="Yönlendiriliyor..." />
         </div>

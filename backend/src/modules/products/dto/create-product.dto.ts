@@ -10,10 +10,10 @@ import {
 import { ProductType } from '@prisma/client';
 
 export class CreateProductDto {
-  @IsOptional()
   @IsInt()
+  @IsNotEmpty()
   @Min(1)
-  categoryId?: number | null;
+  categoryId: number;
 
   @IsString()
   @IsNotEmpty()

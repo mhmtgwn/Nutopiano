@@ -10,6 +10,10 @@ export class UpdateCategoryDto {
   slug?: string;
 
   @IsOptional()
+  @IsInt()
+  parentId?: number | null;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 

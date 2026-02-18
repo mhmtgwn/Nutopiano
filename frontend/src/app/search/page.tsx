@@ -140,7 +140,7 @@ function SearchPageInner() {
               <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-8 text-center shadow-[var(--shadow-md)]">
                 <p className="text-sm text-[var(--neutral-600)]">Sonuç bulunamadı.</p>
                 <Link
-                  href="/products"
+                  href="/categories"
                   className="mt-4 inline-flex text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
                 >
                   Mağazaya dön

@@ -1,6 +1,6 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CategoriesService } from './categories.service';
+import { CategoriesService, PublicCategoryTree } from './categories.service';
 
 @ApiTags('public-categories')
 @Controller('public/categories')
@@ -15,6 +15,16 @@ export class PublicCategoriesController {
   @ApiOkResponse({ description: 'Array of active categories for the default business.' })
   findAll() {
     return this.categoriesService.findAllPublic();
+  }
+
+  @Get('tree')
+  @ApiOperation({
+    summary: 'Get category tree',
+    description: 'Public endpoint to fetch the hierarchical category tree for the default business.',
+  })
+  @ApiOkResponse({ description: 'Hierarchical category tree structure.' })
+  getTree(): Promise<PublicCategoryTree[]> {
+    return this.categoriesService.getCategoryTreePublic();
   }
 
   @Get(':slug')

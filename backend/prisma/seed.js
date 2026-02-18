@@ -19,9 +19,16 @@ async function main() {
   const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || '123456';
   const businessName = 'Default Business';
 
-  let business = await prisma.business.findFirst({
-    orderBy: { id: 'asc' },
-  });
+  const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
+  const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
+    ? await prisma.business.findUnique({ where: { id: publicBusinessId } })
+    : null;
+
+  let business = businessCandidate
+    ? businessCandidate
+    : await prisma.business.findFirst({
+        orderBy: { id: 'asc' },
+      });
 
   if (!business) {
     business = await prisma.business.create({
@@ -30,6 +37,8 @@ async function main() {
       },
     });
   }
+
+  console.log('ℹ️ Seed business:', { id: business.id, name: business.name });
 
   let adminUser = await prisma.user.findFirst({
     where: {
@@ -79,6 +88,49 @@ async function main() {
   }
 
   const createdByUserId = adminUser.id;
+
+  const categoriesToSeed = [
+    { name: 'Piyano', slug: 'piyano', orderIndex: 0 },
+    { name: 'Aksesuar', slug: 'aksesuar', orderIndex: 1 },
+    { name: 'Bakım', slug: 'bakim', orderIndex: 2 },
+    { name: 'Hizmet', slug: 'hizmet', orderIndex: 3 },
+    { name: 'Gıda', slug: 'gida', orderIndex: 4 },
+    { name: 'Atıştırmalık', slug: 'atistirmalik', orderIndex: 5 },
+    { name: 'Kahvaltılık', slug: 'kahvaltilik', orderIndex: 6 },
+    { name: 'İçecek', slug: 'icecek', orderIndex: 7 },
+  ];
+
+  const seededCategories = await Promise.all(
+    categoriesToSeed.map((entry) =>
+      prisma.category.upsert({
+        where: {
+          businessId_slug: {
+            businessId: business.id,
+            slug: entry.slug,
+          },
+        },
+        update: {
+          name: entry.name,
+          orderIndex: entry.orderIndex,
+          isActive: true,
+          archivedAt: null,
+        },
+        create: {
+          businessId: business.id,
+          createdByUserId,
+          name: entry.name,
+          slug: entry.slug,
+          orderIndex: entry.orderIndex,
+          isActive: true,
+        },
+        select: { id: true, name: true, slug: true },
+      }),
+    ),
+  );
+
+  console.log('✅ Seeded categories:', seededCategories.map((c) => `${c.slug}:${c.id}`));
+
+  const categoryIdBySlug = new Map(seededCategories.map((c) => [c.slug, c.id]));
 
   const existingProductCount = await prisma.product.count({
     where: { businessId: business.id },
@@ -134,7 +186,7 @@ async function main() {
       return {
         businessId: business.id,
         createdByUserId,
-        categoryId: null,
+        categoryId: categoryIdBySlug.get('piyano') ?? seededCategories[0].id,
         name: `Nutopiano Ürün ${index + 1}`,
         subtitle: 'Alt başlık örneği (ürün detayda görünür).',
         sku,
@@ -162,6 +214,125 @@ async function main() {
       data: heroProductsToCreate,
     });
   }
+
+  const perCategoryProductCount = 4;
+  const seededProductSkus = new Set(
+    (
+      await prisma.product.findMany({
+        where: {
+          businessId: business.id,
+          sku: {
+            startsWith: 'CAT-',
+          },
+        },
+        select: { sku: true },
+      })
+    )
+      .map((row) => row.sku)
+      .filter(Boolean),
+  );
+
+  const categoryProductRows = [];
+  const heroImagePathsForSeed = heroImages.map((entry) => `/hero/${entry}`);
+
+  const foodTemplates = {
+    gida: [
+      { name: 'Organik Zeytinyağı 1L', subtitle: 'Soğuk sıkım', tags: ['gida', 'organik'] },
+      { name: 'Bal (Çiçek Balı) 850g', subtitle: 'Doğal', tags: ['gida'] },
+      { name: 'Yer fıstığı ezmesi 330g', subtitle: 'Şekersiz', tags: ['gida', 'protein'] },
+      { name: 'Ev yapımı granola 400g', subtitle: 'Yulaf + kuruyemiş', tags: ['gida'] },
+    ],
+    atistirmalik: [
+      { name: 'Kuru meyve karışımı 250g', subtitle: 'Kayısı + incir', tags: ['atistirmalik'] },
+      { name: 'Fındık içi 200g', subtitle: 'Kavrulmuş', tags: ['atistirmalik'] },
+      { name: 'Badem 200g', subtitle: 'Çiğ', tags: ['atistirmalik'] },
+      { name: 'Bitter çikolata 80g', subtitle: '%70 kakao', tags: ['atistirmalik'] },
+    ],
+    kahvaltilik: [
+      { name: 'Tahin 500g', subtitle: 'Doğal', tags: ['kahvalti'] },
+      { name: 'Pekmez 800g', subtitle: 'Üzüm pekmezi', tags: ['kahvalti'] },
+      { name: 'Reçel 380g', subtitle: 'Çilek', tags: ['kahvalti'] },
+      { name: 'Zeytin 500g', subtitle: 'Sele', tags: ['kahvalti'] },
+    ],
+    icecek: [
+      { name: 'Türk kahvesi 250g', subtitle: 'Taze çekim', tags: ['icecek'] },
+      { name: 'Siyah çay 500g', subtitle: 'Rize', tags: ['icecek'] },
+      { name: 'Bitki çayı 20li', subtitle: 'Papatya', tags: ['icecek'] },
+      { name: 'Soğuk kahve 250ml', subtitle: 'Şekersiz', tags: ['icecek'] },
+    ],
+  };
+
+  for (let cIndex = 0; cIndex < seededCategories.length; cIndex += 1) {
+    const category = seededCategories[cIndex];
+    const categoryId = category.id;
+
+    const isFoodCategory = Object.prototype.hasOwnProperty.call(foodTemplates, category.slug);
+    const templateList = isFoodCategory ? foodTemplates[category.slug] : null;
+    const loopCount = templateList ? templateList.length : perCategoryProductCount;
+
+    for (let pIndex = 0; pIndex < loopCount; pIndex += 1) {
+      const seedIndex = cIndex * perCategoryProductCount + pIndex;
+      const sku = `CAT-${category.slug}-${pIndex + 1}`;
+      if (seededProductSkus.has(sku)) continue;
+
+      const startIndex = (seedIndex * 2) % heroImagePathsForSeed.length;
+      const images = heroImagePathsForSeed
+        .slice(startIndex, startIndex + 4)
+        .concat(
+          heroImagePathsForSeed.slice(
+            0,
+            Math.max(0, startIndex + 4 - heroImagePathsForSeed.length),
+          ),
+        )
+        .slice(0, 4);
+
+      const priceCents = isFoodCategory ? 8900 + seedIndex * 700 : 9900 + seedIndex * 1500;
+
+      const template = templateList ? templateList[pIndex] : null;
+      const name = template ? template.name : `${category.name} Örnek Ürün ${pIndex + 1}`;
+      const subtitle = template
+        ? template.subtitle
+        : 'Seed örneği - admin panelinden düzenleyebilirsiniz.';
+      const tags = template ? template.tags : [];
+
+      categoryProductRows.push({
+        businessId: business.id,
+        createdByUserId,
+        categoryId,
+        name,
+        subtitle,
+        sku,
+        type: category.slug === 'hizmet' ? 'SERVICE' : 'PHYSICAL',
+        priceCents,
+        description: 'Bu ürün seed tarafından oluşturuldu. Fotoğraf/isim/fiyatı admin panelinden güncelleyebilirsiniz.',
+        features: ['El yapımı', 'Kaliteli malzeme', 'Hızlı teslimat'],
+        imageUrl: images[0],
+        images,
+        stock: category.slug === 'hizmet' ? null : 10 - pIndex,
+        tags,
+        seoTitle: null,
+        seoDescription: null,
+        isActive: true,
+      });
+    }
+  }
+
+  if (categoryProductRows.length > 0) {
+    await prisma.product.createMany({
+      data: categoryProductRows,
+    });
+    console.log(`✅ ${categoryProductRows.length} adet kategori ürünü oluşturuldu.`);
+  } else {
+    console.log('✅ Kategori ürünleri zaten mevcut.');
+  }
+
+  const finalCategoryCount = await prisma.category.count({ where: { businessId: business.id } });
+  const finalProductCount = await prisma.product.count({ where: { businessId: business.id } });
+  console.log('ℹ️ Final counts:', {
+    businessId: business.id,
+    categories: finalCategoryCount,
+    products: finalProductCount,
+  });
 
   await prisma.product.updateMany({
     where: {
@@ -217,15 +388,8 @@ async function main() {
       where: { id: product.id },
       data: {
         images: nextImages,
-        imageUrl: nextImages[0],
       },
     });
-  }
-
-  if (heroProductsToCreate.length > 0) {
-    console.log(
-      `✅ ${heroProductsToCreate.length} adet hero görseli ile örnek ürün oluşturuldu.`,
-    );
   }
 }
 

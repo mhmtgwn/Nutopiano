@@ -110,7 +110,15 @@ export default function RegisterPage() {
       );
 
       toast.success('Kayıt başarılı.');
-      router.push('/products');
+      
+      // Redirect to shop or saved location
+      const redirectUrl = typeof window !== 'undefined' ? localStorage.getItem('redirectAfterLogin') : null;
+      if (redirectUrl) {
+        localStorage.removeItem('redirectAfterLogin');
+        router.push(redirectUrl);
+      } else {
+        router.push('/shop');
+      }
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Kayıt olurken bir hata oluştu.');
       dispatch(setAuthError(message));

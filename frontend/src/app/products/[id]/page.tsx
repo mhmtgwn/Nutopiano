@@ -5,6 +5,7 @@ import { getSiteUrl } from '@/utils/site';
 
 interface ProductResponse {
   id: number;
+  categoryId?: number | null;
   name: string;
   subtitle?: string | null;
   description?: string | null;
@@ -20,6 +21,7 @@ interface ProductResponse {
 
 interface ProductDetail {
   id: string;
+  categoryId?: number | null;
   name: string;
   subtitle?: string | null;
   description?: string | null;
@@ -33,11 +35,19 @@ interface ProductDetail {
   seoDescription?: string | null;
 }
 
+const isHostedProduction =
+  process.env.VERCEL === '1' ||
+  process.env.VERCEL === 'true' ||
+  process.env.NETLIFY === 'true';
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
+  process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? 'https://api.nutopiano.com/api'
-    : 'http://localhost:3000/api');
+    ? isHostedProduction
+      ? 'https://api.nutopiano.com/api'
+      : 'http://localhost:3001/api'
+    : 'http://localhost:3001/api');
 
 const unwrapResponse = <T,>(payload: unknown): T | null => {
   if (!payload) return null;
@@ -54,6 +64,7 @@ const unwrapResponse = <T,>(payload: unknown): T | null => {
 
 const normalizeProduct = (product: ProductResponse): ProductDetail => ({
   id: String(product.id),
+  categoryId: product.categoryId ?? null,
   name: product.name,
   subtitle: product.subtitle ?? null,
   description: product.description ?? null,

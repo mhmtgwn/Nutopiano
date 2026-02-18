@@ -103,7 +103,28 @@ export class DevController {
       });
     }
 
-    // 5) Demo products (update existing by SKU, create if missing)
+    // 5) Default category (required for Product.categoryId)
+    let defaultCategory = await this.prisma.category.findFirst({
+      where: {
+        businessId,
+        slug: 'genel',
+      },
+    });
+
+    if (!defaultCategory) {
+      defaultCategory = await this.prisma.category.create({
+        data: {
+          businessId,
+          createdByUserId: admin.id,
+          name: 'Genel',
+          slug: 'genel',
+          isActive: true,
+          orderIndex: 0,
+        },
+      });
+    }
+
+    // 6) Demo products (update existing by SKU, create if missing)
     const seedProducts = [
       {
         name: 'Nutopiano Premium Hizmet',
@@ -196,6 +217,7 @@ export class DevController {
         await this.prisma.product.create({
           data: {
             ...seedProduct,
+            categoryId: defaultCategory.id,
             businessId,
             createdByUserId: admin.id,
           },

@@ -159,6 +159,46 @@ export class CustomersService {
       throw new NotFoundException('User not found');
     }
 
+    // If a customer already exists with the same phone number in this business,
+    // link it to this user instead of creating a duplicate record (phone is unique per business).
+    const existingByPhone = await this.prisma.customer.findFirst({
+      where: {
+        businessId,
+        phone: user.phone,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        balance: true,
+        userId: true,
+      },
+    });
+
+    if (existingByPhone) {
+      if (existingByPhone.userId && existingByPhone.userId !== userId) {
+        throw new ForbiddenException('Customer record already linked to another user');
+      }
+
+      if (!existingByPhone.userId) {
+        const linked = await this.prisma.customer.update({
+          where: { id: existingByPhone.id },
+          data: { userId },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            balance: true,
+          },
+        });
+
+        return linked;
+      }
+
+      const { id, name, phone, balance } = existingByPhone;
+      return { id, name, phone, balance };
+    }
+
     // Create customer record linked to this user
     customer = await this.prisma.customer.create({
       data: {

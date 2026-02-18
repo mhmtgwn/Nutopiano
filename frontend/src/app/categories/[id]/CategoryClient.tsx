@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import ProductCard from '@/components/ProductCard';
 import Spinner from '@/components/common/Spinner';
+import Breadcrumbs from '@/components/common/Breadcrumbs';
 import api from '@/services/api';
 
 interface Product {
@@ -17,6 +18,8 @@ interface Product {
   price: number;
   imageUrl?: string | null;
   type?: string;
+  stock?: number | null;
+  tags?: string[];
 }
 
 interface ApiProduct {
@@ -47,6 +50,11 @@ export default function CategoryClient() {
 
   const slug = params?.id ?? '';
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [qInput, setQInput] = useState('');
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
 
   useEffect(() => {
     if (slug === 'all') {
@@ -111,8 +119,69 @@ export default function CategoryClient() {
     }));
   }, [category]);
 
+  const normalizeText = (value: string) => {
+    try {
+      const lowered = value.toLocaleLowerCase?.('tr-TR') ?? value.toLowerCase();
+      const normalized =
+        typeof lowered.normalize === 'function' ? lowered.normalize('NFD') : lowered;
+      return normalized
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ı/g, 'i')
+        .replace(/İ/g, 'i')
+        .replace(/ş/g, 's')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/\s+/g, ' ')
+        .trim();
+    } catch {
+      return String(value ?? '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  };
+
+  const normalizedQuery = normalizeText(qInput);
+  const queryTokens = useMemo(() => {
+    if (!normalizedQuery) return [] as string[];
+    return normalizedQuery
+      .split(' ')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => /^[0-9]+$/.test(t) || t.length >= 2)
+      .slice(0, 6);
+  }, [normalizedQuery]);
+
+  const filteredProducts = useMemo(() => {
+    const min = Number(minPrice);
+    const max = Number(maxPrice);
+    const hasMin = minPrice.trim().length > 0 && Number.isFinite(min);
+    const hasMax = maxPrice.trim().length > 0 && Number.isFinite(max);
+
+    return products.filter((p) => {
+      if (inStockOnly && !(typeof p.stock === 'number' && p.stock > 0)) {
+        return false;
+      }
+
+      if (hasMin && p.price < min) return false;
+      if (hasMax && p.price > max) return false;
+
+      if (queryTokens.length > 0) {
+        const hay = normalizeText(
+          [p.name, p.subtitle, p.description, (p.tags ?? []).join(' ')].filter(Boolean).join(' '),
+        );
+        const ok = queryTokens.every((t) => hay.includes(t));
+        if (!ok) return false;
+      }
+
+      return true;
+    });
+  }, [inStockOnly, maxPrice, minPrice, products, queryTokens]);
+
   const sortedProducts = useMemo(() => {
-    const next = [...products];
+    const next = [...filteredProducts];
 
     if (sort === 'price-asc') {
       next.sort((a, b) => a.price - b.price);
@@ -121,7 +190,14 @@ export default function CategoryClient() {
     }
 
     return next;
-  }, [products, sort]);
+  }, [filteredProducts, sort]);
+
+  const handleClearFilters = () => {
+    setQInput('');
+    setInStockOnly(false);
+    setMinPrice('');
+    setMaxPrice('');
+  };
 
   const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 1), totalPages);
@@ -137,23 +213,25 @@ export default function CategoryClient() {
 
   if (isLegacy) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 md:px-6">
-          <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/90 p-6 shadow-[0_30px_90px_rgba(26,60,52,0.08)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-              Shop
-            </p>
-            <h1 className="mt-2 text-3xl font-serif text-[#1A3C34] md:text-4xl">
-              Kategori bulunamadı
-            </h1>
-            <p className="mt-3 text-sm text-[#5C5C5C] md:text-base">
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="flex flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+          <Breadcrumbs
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Shop', href: '/categories' },
+              { label: 'Kategori bulunamadı' },
+            ]}
+          />
+
+          <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-6 shadow-[var(--shadow-sm)]">
+            <p className="text-sm text-[var(--neutral-600)]">
               Bu kategori artık mevcut değil.
             </p>
             <Link
-              href="/products"
-              className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/80 hover:text-[#1A3C34]"
+              href="/categories"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
             >
-              Ürünlere git <ArrowRight className="h-4 w-4" />
+              Kategorilere dön <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
         </div>
@@ -163,23 +241,25 @@ export default function CategoryClient() {
 
   if (!category && !isLoading && !isError) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 md:px-6">
-          <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/90 p-6 shadow-[0_30px_90px_rgba(26,60,52,0.08)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-              Shop
-            </p>
-            <h1 className="mt-2 text-3xl font-serif text-[#1A3C34] md:text-4xl">
-              Kategori bulunamadı
-            </h1>
-            <p className="mt-3 text-sm text-[#5C5C5C] md:text-base">
-              Aradığınız koleksiyon bulunamadı. Tüm ürünlere göz atabilirsiniz.
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="flex flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+          <Breadcrumbs
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Shop', href: '/categories' },
+              { label: 'Kategori bulunamadı' },
+            ]}
+          />
+
+          <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-6 shadow-[var(--shadow-sm)]">
+            <p className="text-sm text-[var(--neutral-600)]">
+              Aradığınız kategori bulunamadı.
             </p>
             <Link
-              href="/products"
-              className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/80 hover:text-[#1A3C34]"
+              href="/categories"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
             >
-              Tüm ürünlere git <ArrowRight className="h-4 w-4" />
+              Kategorilere dön <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
         </div>
@@ -188,100 +268,185 @@ export default function CategoryClient() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-[#F7F4EF]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 md:px-6">
-        <section className="rounded-[36px] border border-[#1A3C34]/10 bg-gradient-to-br from-[#FFF9E6] via-white to-[#F3FAF5] px-6 py-8 shadow-[0_40px_120px_rgba(26,60,52,0.12)] md:px-10">
-          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                Shop · Koleksiyon
-              </p>
-              <h1 className="text-3xl font-serif text-[#1A3C34] md:text-4xl">
-                {category?.name ?? 'Koleksiyon'}
-              </h1>
-              <p className="text-sm text-[#5C5C5C] md:text-base">
-                {'Seçili koleksiyondaki ürünleri görüntüleyin. Sıralama ve filtre ile hızlıca bulun.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
+    <div className="min-h-[calc(100vh-140px)] bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <div className="flex flex-col gap-6">
+          <section className="space-y-4">
+            <Breadcrumbs
+              items={[
+                { label: 'Home', href: '/' },
+                { label: 'Shop', href: '/categories' },
+                { label: category?.name ?? 'Kategori' },
+              ]}
+            />
+
+            <div className="flex items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-3 shadow-[var(--shadow-sm)]">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((prev) => !prev)}
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/80 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
+                aria-expanded={filtersOpen}
+              >
                 <SlidersHorizontal className="h-4 w-4" />
-                Sırala
-              </div>
+                Filtre
+              </button>
+
               <div className="relative">
                 <select
                   value={sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="h-10 appearance-none rounded-full border border-[#1A3C34]/20 bg-white/90 px-4 pr-10 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/30"
+                  className="h-11 min-w-[220px] appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 pr-10 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
                 >
-                  <option value="popular">Popüler</option>
-                  <option value="price-asc">Fiyat (Artan)</option>
-                  <option value="price-desc">Fiyat (Azalan)</option>
+                  <option value="popular">Default sorting</option>
+                  <option value="price-asc">Sort by price: low to high</option>
+                  <option value="price-desc">Sort by price: high to low</option>
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1A3C34]/70" />
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--neutral-500)]" />
               </div>
             </div>
-          </div>
-          <div className="mt-6 flex flex-wrap gap-3 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
-            <span className="rounded-full bg-white px-4 py-2">{sortedProducts.length} ürün</span>
-            <span className="rounded-full border border-[#1A3C34]/20 px-4 py-2">Hızlı teslimat</span>
-            <span className="rounded-full border border-[#1A3C34]/20 px-4 py-2">Güvenli ödeme</span>
-          </div>
-        </section>
 
-        <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/80 p-6 shadow-[0_20px_70px_rgba(26,60,52,0.08)]">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner />
-            </div>
-          ) : isError ? (
-            <div className="p-2 text-center">
-              <p className="text-sm text-[#5C5C5C]">Ürünler yüklenirken bir hata oluştu.</p>
-            </div>
-          ) : hasProducts ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {pagedProducts.map((product) => (
-                <ProductCard key={product.id} product={product} categoryId={slug} />
-              ))}
-            </div>
-          ) : (
-            <div className="p-2 text-center">
-              <p className="text-sm text-[#5C5C5C]">Bu kategoride henüz ürün bulunmuyor.</p>
-              <Link
-                href="/products"
-                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/80 hover:text-[#1A3C34]"
-              >
-                Tüm ürünleri keşfet <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          )}
-        </section>
+            {filtersOpen && (
+              <div className="mt-3 grid gap-3 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-4 shadow-[var(--shadow-sm)]">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                      Ara
+                    </p>
+                    <input
+                      value={qInput}
+                      onChange={(e) => setQInput(e.target.value)}
+                      placeholder="Ürün ara..."
+                      className="mt-2 h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                    />
+                  </div>
 
-        {!isLoading && !isError && totalPages > 1 && (
-          <section className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#E0D7C6] pt-4 text-xs text-[#5C5C5C]">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
-              Sayfa {safePage} / {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrevPage}
-                disabled={safePage === 1}
-                className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/20 bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <ArrowLeft className="h-4 w-4" /> Önceki
-              </button>
-              <button
-                type="button"
-                onClick={handleNextPage}
-                disabled={safePage >= totalPages}
-                className="inline-flex items-center gap-2 rounded-full bg-[#1A3C34] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white shadow-sm hover:bg-[#3E2723] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Sonraki <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                      Fiyat
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                      <input
+                        value={minPrice}
+                        inputMode="decimal"
+                        onChange={(e) => setMinPrice(e.target.value)}
+                        placeholder="Min ₺"
+                        className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                      />
+                      <input
+                        value={maxPrice}
+                        inputMode="decimal"
+                        onChange={(e) => setMaxPrice(e.target.value)}
+                        placeholder="Max ₺"
+                        className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                    Kategori
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <div className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] inline-flex items-center">
+                      {category?.name ?? 'Kategori'}
+                    </div>
+                    <Link
+                      href="/categories"
+                      className="inline-flex h-11 flex-shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--neutral-700)] shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
+                    >
+                      Temizle
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setInStockOnly((prev) => !prev)}
+                    className={`inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border px-4 text-xs font-semibold uppercase tracking-[0.3em] shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] ${
+                      inStockOnly
+                        ? 'border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                        : 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]/80'
+                    }`}
+                  >
+                    Stokta
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--neutral-700)] shadow-[var(--shadow-sm)] transition hover:bg-white hover:shadow-[var(--shadow-md)]"
+                  >
+                    Temizle
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
-        )}
+
+          {isLoading && (
+            <section>
+              <Spinner fullscreen />
+            </section>
+          )}
+
+          {isError && !isLoading && (
+            <section className="rounded-[var(--radius-lg)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-3 text-sm text-[var(--error-600)]">
+              Ürünler yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.
+            </section>
+          )}
+
+          {!isLoading && !isError && (
+            <section>
+              {hasProducts ? (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+                  {pagedProducts.map((product) => (
+                    <div key={product.id}>
+                      <ProductCard product={product} categoryId={slug} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-8 text-center shadow-[var(--shadow-md)]">
+                  <p className="text-sm text-[var(--neutral-600)]">Ürün bulunamadı.</p>
+                  <Link
+                    href="/categories"
+                    className="mt-4 inline-flex text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                  >
+                    Kategorilere dön
+                  </Link>
+                </div>
+              )}
+            </section>
+          )}
+
+          {!isLoading && !isError && totalPages > 1 && (
+            <section className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--neutral-200)] pt-4 text-xs text-[var(--neutral-500)]">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                Sayfa {safePage} / {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevPage}
+                  disabled={safePage === 1}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] shadow-[var(--shadow-sm)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Önceki
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextPage}
+                  disabled={safePage >= totalPages}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--primary-800)] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[var(--shadow-sm)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sonraki <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

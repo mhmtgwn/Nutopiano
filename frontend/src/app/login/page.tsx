@@ -91,7 +91,15 @@ export default function LoginPage() {
       );
 
       toast.success('Giriş başarılı.');
-      router.push('/account/orders');
+      
+      // Try to redirect to the page user was trying to access, otherwise go to shop
+      const redirectUrl = typeof window !== 'undefined' ? localStorage.getItem('redirectAfterLogin') : null;
+      if (redirectUrl) {
+        localStorage.removeItem('redirectAfterLogin');
+        router.push(redirectUrl);
+      } else {
+        router.push('/shop');
+      }
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Giriş yapılırken bir hata oluştu.');
 

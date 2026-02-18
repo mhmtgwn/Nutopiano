@@ -5,7 +5,7 @@ export class UpdateProductDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  categoryId?: number | null;
+  categoryId?: number;
 
   @IsOptional()
   @IsString()

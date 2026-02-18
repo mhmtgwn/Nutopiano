@@ -49,11 +49,16 @@ interface CreateOrderPayload {
 
 interface FieldErrors {
   customerId?: string;
-  phone?: string;
 }
 
 const PHONE_PATTERN = /^(?:\+?90|0)?5\d{9}$/;
-const normalizePhone = (value: string) => value.replace(/[^\d+]/g, '');
+
+interface CustomerData {
+  id: number;
+  name: string;
+  phone: string;
+  balance: number;
+}
 
 export default function CheckoutPage() {
   const { items, totalPrice, totalQuantity } = useAppSelector(
@@ -65,10 +70,11 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  const [customerId, setCustomerId] = useState('');
-  const [phone, setPhone] = useState('');
+  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [customerData, setCustomerData] = useState<CustomerData | null>(null);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState<{
@@ -78,10 +84,36 @@ export default function CheckoutPage() {
 
   const hasItems = items.length > 0;
 
+  // Fetch or create customer record for authenticated user
   useEffect(() => {
     if (!isAuthenticated) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('redirectAfterLogin', '/checkout');
+      }
       router.push('/login');
+      return;
     }
+
+    const fetchCustomer = async () => {
+      try {
+        setIsLoadingCustomer(true);
+        const response = await api.get<CustomerData>('/customers/me');
+        const customer = response.data;
+        setCustomerData(customer);
+        setCustomerId(customer.id);
+      } catch (error) {
+        const message = resolveApiErrorMessage(
+          error,
+          'Müşteri kaydı alınamadı. Lütfen tekrar deneyin.',
+        );
+        setFormError(message);
+        toast.error(message);
+      } finally {
+        setIsLoadingCustomer(false);
+      }
+    };
+
+    fetchCustomer();
   }, [isAuthenticated, router]);
 
   const handleSubmit = async (event: FormEvent) => {
@@ -95,18 +127,17 @@ export default function CheckoutPage() {
       return;
     }
 
-    const nextErrors: FieldErrors = {};
-    const parsedCustomerId = Number(customerId);
-    const normalizedPhone = normalizePhone(phone);
-
-    if (!parsedCustomerId || Number.isNaN(parsedCustomerId) || parsedCustomerId < 1) {
-      nextErrors.customerId = 'Lütfen geçerli bir müşteri ID girin.';
+    if (!customerId || !customerData) {
+      const message = 'Müşteri bilgileri yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.';
+      setFormError(message);
+      toast.error(message);
+      return;
     }
 
-    if (!normalizedPhone) {
-      nextErrors.phone = 'Telefon numarası zorunludur.';
-    } else if (!PHONE_PATTERN.test(normalizedPhone)) {
-      nextErrors.phone = 'Telefon formatı geçersiz. Örn: 5XXXXXXXXX veya +90 5XXXXXXXXX';
+    const nextErrors: FieldErrors = {};
+
+    if (!customerId || customerId < 1) {
+      nextErrors.customerId = 'Müşteri bilgileri eksik.';
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -115,16 +146,10 @@ export default function CheckoutPage() {
     }
 
     setFieldErrors({});
-    const combinedNotes = [
-      normalizedPhone ? `Telefon: ${normalizedPhone}` : null,
-      notes.trim() || null,
-    ]
-      .filter(Boolean)
-      .join('\n');
 
     const payload: CreateOrderPayload = {
-      customerId: parsedCustomerId,
-      notes: combinedNotes || undefined,
+      customerId,
+      notes: notes.trim() || undefined,
       items: items.map((item) => ({
         productId: Number(item.productId),
         quantity: item.quantity,
@@ -206,7 +231,7 @@ export default function CheckoutPage() {
                 <Button className="rounded-full px-6">Siparişlerime git</Button>
               </Link>
               <Link
-                href="/products"
+                href="/categories"
                 className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 hover:text-[var(--primary-800)]"
               >
                 Alışverişe devam et <ArrowRight className="h-4 w-4" />
@@ -247,7 +272,7 @@ export default function CheckoutPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Link href="/products">
+              <Link href="/categories">
                 <Button className="rounded-full px-6">Shop now</Button>
               </Link>
               <Link
@@ -354,80 +379,35 @@ export default function CheckoutPage() {
               </h2>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label
-                  htmlFor="customerId"
-                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]"
-                >
-                  Müşteri ID
-                </label>
-                <input
-                  id="customerId"
-                  type="number"
-                  min={1}
-                  value={customerId}
-                  onChange={(e) => {
-                    setCustomerId(e.target.value);
-                    if (fieldErrors.customerId) {
-                      setFieldErrors((prev) => ({ ...prev, customerId: undefined }));
-                    }
-                  }}
-                  className={`h-11 w-full rounded-[var(--radius-md)] border bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.customerId
-                      ? 'border-[var(--error-600)]/30 focus-visible:border-[var(--error-600)] focus-visible:ring-[var(--error-100)]'
-                      : 'border-[var(--neutral-200)] focus-visible:border-[var(--primary-800)] focus-visible:ring-[var(--primary-200)]'
-                    }`}
-                  placeholder="Örn: 1"
-                  required
-                  aria-invalid={!!fieldErrors.customerId}
-                />
-                {fieldErrors.customerId ? (
-                  <p className="text-[11px] text-[var(--error-600)] md:text-xs">
-                    {fieldErrors.customerId}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
-                    Backend tarafında kayıtlı bir müşteri kimliği olmalıdır. Gerekirse test için
-                    1 değerini kullanabilirsiniz.
-                  </p>
-                )}
+            {isLoadingCustomer ? (
+              <div className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-100)] px-4 py-3 animate-pulse">
+                <p className="text-sm text-[var(--neutral-600)]">Müşteri bilgileri yükleniyor...</p>
               </div>
-
-              <div className="space-y-1">
-                <label
-                  htmlFor="phone"
-                  className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]"
-                >
-                  Müşteri telefonu
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(e.target.value);
-                    if (fieldErrors.phone) {
-                      setFieldErrors((prev) => ({ ...prev, phone: undefined }));
-                    }
-                  }}
-                  className={`h-11 w-full rounded-[var(--radius-md)] border bg-white px-3 text-sm text-[var(--primary-800)] shadow-sm outline-none focus-visible:ring-2 md:h-11 ${fieldErrors.phone
-                      ? 'border-[var(--error-600)]/30 focus-visible:border-[var(--error-600)] focus-visible:ring-[var(--error-100)]'
-                      : 'border-[var(--neutral-200)] focus-visible:border-[var(--primary-800)] focus-visible:ring-[var(--primary-200)]'
-                    }`}
-                  placeholder="5XXXXXXXXX"
-                  required
-                  aria-invalid={!!fieldErrors.phone}
-                />
-                {fieldErrors.phone ? (
-                  <p className="text-[11px] text-[var(--error-600)] md:text-xs">{fieldErrors.phone}</p>
-                ) : (
-                  <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
-                    Telefon numarası satış sonrası iletişim için kullanılır.
-                  </p>
-                )}
+            ) : customerData ? (
+              <div className="rounded-[var(--radius-md)] border border-[var(--success-200)] bg-[var(--success-50)] px-4 py-4 space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+                  ✓ Müşteri kaydı bulundu
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] text-[var(--neutral-500)] uppercase tracking-[0.2em]">Ad</p>
+                    <p className="text-sm font-semibold text-[var(--primary-800)]">{customerData.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-[var(--neutral-500)] uppercase tracking-[0.2em]">Telefon</p>
+                    <p className="text-sm font-semibold text-[var(--primary-800)]">{customerData.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-[var(--neutral-500)] uppercase tracking-[0.2em]">Müşteri ID</p>
+                    <p className="text-sm font-semibold text-[var(--primary-800)]">#{customerData.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-[var(--neutral-500)] uppercase tracking-[0.2em]">Bakiye</p>
+                    <p className="text-sm font-semibold text-[var(--primary-800)]">{formatPrice(customerData.balance)}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="space-y-1">
               <label
@@ -455,7 +435,7 @@ export default function CheckoutPage() {
               <Button
                 type="submit"
                 className="w-full rounded-full py-3 text-base"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isLoadingCustomer || !customerData}
                 isLoading={isSubmitting}
               >
                 Siparişi oluştur

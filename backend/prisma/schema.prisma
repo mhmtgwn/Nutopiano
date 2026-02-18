@@ -59,6 +59,7 @@ model Category {
   createdByUserId Int
   name            String
   slug            String
+  parentId        Int?
   isActive        Boolean  @default(true)
   orderIndex      Int      @default(0)
   archivedAt      DateTime?
@@ -67,11 +68,15 @@ model Category {
 
   business  Business @relation(fields: [businessId], references: [id])
   createdBy User     @relation("CategoryCreatedBy", fields: [createdByUserId], references: [id])
+  parent    Category? @relation("CategoryParent", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryParent")
   products  Product[]
 
   @@unique([businessId, slug])
   @@index([businessId])
   @@index([businessId, orderIndex])
+  @@index([parentId])
+  @@index([businessId, parentId])
 }
 
 model Customer {
@@ -113,7 +118,7 @@ model Product {
   id              Int         @id @default(autoincrement())
   businessId      Int
   createdByUserId Int
-  categoryId      Int?
+  categoryId      Int
   name            String
   subtitle        String?
   sku             String?
@@ -134,7 +139,7 @@ model Product {
 
   business Business @relation(fields: [businessId], references: [id])
   createdBy User    @relation("ProductCreatedBy", fields: [createdByUserId], references: [id])
-  category Category? @relation(fields: [categoryId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
   items     OrderItem[]
 
   @@index([businessId])

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { ForbiddenException } from '@nestjs/common';
+import type { JwtPayload } from '../../auth/types/jwt-payload';
 import type { UserRole } from '../../core/decorators/roles.decorator';
 
 export interface UserSummary {
@@ -14,8 +16,36 @@ export interface UserSummary {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): Promise<UserSummary[]> {
+  findAll(currentUser: JwtPayload): Promise<UserSummary[]> {
+    const businessId = Number(currentUser.businessId);
+    if (!Number.isFinite(businessId)) {
+      return Promise.resolve([]);
+    }
+
     return this.prisma.user.findMany({
+      where: {
+        businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        isActive: true,
+      },
+      orderBy: {
+        id: 'desc',
+      },
+    });
+  }
+
+  async findById(currentUser: JwtPayload, id: number): Promise<UserSummary> {
+    const businessId = Number(currentUser.businessId);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id,
+        businessId,
+      },
       select: {
         id: true,
         name: true,
@@ -24,11 +54,61 @@ export class UsersService {
         isActive: true,
       },
     });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 
-  async findById(id: number): Promise<UserSummary> {
-    const user = await this.prisma.user.findUnique({
+  async findByPhone(currentUser: JwtPayload, phone: string): Promise<UserSummary> {
+    const businessId = Number(currentUser.businessId);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        phone,
+        businessId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        isActive: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
+  async updateRole(currentUser: JwtPayload, id: number, role: UserRole): Promise<UserSummary> {
+    const businessId = Number(currentUser.businessId);
+    const currentUserId = Number(currentUser.userId);
+    if (!Number.isFinite(businessId)) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (Number.isFinite(currentUserId) && id === currentUserId) {
+      throw new ForbiddenException('Kendi rolünüzü bu ekrandan değiştiremezsiniz.');
+    }
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updated = await this.prisma.user.update({
       where: { id },
+      data: { role },
       select: {
         id: true,
         name: true,
@@ -37,15 +117,38 @@ export class UsersService {
         isActive: true,
       },
     });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    return user;
+
+    return updated;
   }
 
-  async findByPhone(phone: string): Promise<UserSummary> {
-    const user = await this.prisma.user.findUnique({
-      where: { phone },
+  async updateActive(currentUser: JwtPayload, id: number, isActive: boolean): Promise<UserSummary> {
+    const businessId = Number(currentUser.businessId);
+    const currentUserId = Number(currentUser.userId);
+    if (!Number.isFinite(businessId)) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (Number.isFinite(currentUserId) && id === currentUserId) {
+      throw new ForbiddenException('Kendi hesabınızı bu ekrandan pasife alamazsınız.');
+    }
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        id,
+        businessId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { isActive },
       select: {
         id: true,
         name: true,
@@ -54,9 +157,7 @@ export class UsersService {
         isActive: true,
       },
     });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    return user;
+
+    return updated;
   }
 }

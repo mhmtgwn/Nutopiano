@@ -86,10 +86,27 @@ export class OrdersService {
       select: {
         id: true,
         priceCents: true,
+        stock: true,
+        name: true,
       },
     });
 
     const productMap = new Map(products.map((p) => [p.id, p]));
+
+    // Check stock availability
+    for (const item of payload.items) {
+      const product = productMap.get(item.productId);
+      if (!product) {
+        throw new NotFoundException(`Product not found: ${item.productId}`);
+      }
+      
+      // Only check stock if it's defined (null means unlimited stock)
+      if (product.stock !== null && product.stock !== undefined && product.stock < item.quantity) {
+        throw new NotFoundException(
+          `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
+        );
+      }
+    }
 
     let totalAmountCents = 0;
     const itemData: Array<{
