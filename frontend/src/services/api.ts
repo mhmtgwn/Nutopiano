@@ -1,18 +1,11 @@
 import axios from 'axios';
 import { getAuthToken } from '@/utils/helpers';
 
-const isHostedProduction =
-  process.env.VERCEL === '1' ||
-  process.env.VERCEL === 'true' ||
-  process.env.NETLIFY === 'true';
-
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? isHostedProduction
-      ? 'https://api.nutopiano.com/api'
-      : 'http://localhost:3001/api'
+    ? 'https://api.nutopiano.com/api'
     : 'http://localhost:3001/api');
 
 export const api = axios.create({

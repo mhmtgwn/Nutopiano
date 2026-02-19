@@ -153,8 +153,16 @@ export default function ProductsClient({
   } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: async () => {
-      const res = await api.get<ApiProduct[]>('/products');
-      return res.data.map((p) => ({
+      const res = await api.get<unknown>('/products');
+
+      const payload = res.data as unknown;
+      const apiProducts: ApiProduct[] = Array.isArray(payload)
+        ? (payload as ApiProduct[])
+        : Array.isArray((payload as { data?: unknown })?.data)
+          ? ((payload as { data: ApiProduct[] }).data ?? [])
+          : [];
+
+      return apiProducts.map((p) => ({
         id: String(p.id),
         categoryId: p.categoryId ?? null,
         name: p.name,
