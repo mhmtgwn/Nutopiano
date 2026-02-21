@@ -100,6 +100,7 @@ fi
 
 if [[ -f prisma/schema.prisma ]]; then
   npx prisma generate
+  npx prisma migrate resolve --rolled-back 20260221202318_product_image || true
   npx prisma migrate deploy
 fi
 
