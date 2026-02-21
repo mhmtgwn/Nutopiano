@@ -100,7 +100,8 @@ fi
 
 if [[ -f prisma/schema.prisma ]]; then
   npx prisma generate
-  npx prisma migrate resolve --rolled-back 20260221202318_product_image || true
+  log "Prisma: resolve failed migrations (if any)"
+  npx prisma migrate resolve --rolled-back 20260221202318_product_image --schema prisma/schema.prisma
   npx prisma migrate deploy
 fi
 
