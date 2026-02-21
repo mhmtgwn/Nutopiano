@@ -8,7 +8,6 @@ import Button from '@/components/common/Button';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { setAuthToken } from '@/utils/helpers';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -90,7 +89,6 @@ export default function RegisterPage() {
       });
 
       const token = registerResponse.data.accessToken;
-      setAuthToken(token);
 
       const profileResponse = await api.get<ProfileResponse>('/auth/profile');
       const profile = profileResponse.data;
@@ -122,7 +120,6 @@ export default function RegisterPage() {
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Kayıt olurken bir hata oluştu.');
       dispatch(setAuthError(message));
-      setAuthToken(null);
       toast.error(message);
     }
   };

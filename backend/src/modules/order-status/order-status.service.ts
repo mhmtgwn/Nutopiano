@@ -17,7 +17,10 @@ export interface OrderStatusSummary {
 export class OrderStatusService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(currentUser: JwtPayload, payload: CreateOrderStatusDto): Promise<OrderStatusSummary> {
+  async create(
+    currentUser: JwtPayload,
+    payload: CreateOrderStatusDto,
+  ): Promise<OrderStatusSummary> {
     const businessId = Number(currentUser.businessId);
 
     let orderIndex = payload.orderIndex;
@@ -90,7 +93,10 @@ export class OrderStatusService {
     return status;
   }
 
-  async findOne(currentUser: JwtPayload, id: number): Promise<OrderStatusSummary> {
+  async findOne(
+    currentUser: JwtPayload,
+    id: number,
+  ): Promise<OrderStatusSummary> {
     const status = await this.findByIdScoped(currentUser, id);
     const { id: statusId, key, label, orderIndex, isFinal, isDefault } = status;
     return { id: statusId, key, label, orderIndex, isFinal, isDefault };
@@ -140,7 +146,10 @@ export class OrderStatusService {
     return updated;
   }
 
-  async remove(currentUser: JwtPayload, id: number): Promise<OrderStatusSummary> {
+  async remove(
+    currentUser: JwtPayload,
+    id: number,
+  ): Promise<OrderStatusSummary> {
     await this.findByIdScoped(currentUser, id);
 
     const removed = await this.prisma.orderStatus.delete({
@@ -159,7 +168,9 @@ export class OrderStatusService {
   }
 
   async createDefaultStatusesForBusiness(businessId: number) {
-    const existing = await this.prisma.orderStatus.count({ where: { businessId } });
+    const existing = await this.prisma.orderStatus.count({
+      where: { businessId },
+    });
     if (existing > 0) {
       return;
     }

@@ -68,7 +68,11 @@ export class SettingsService {
     return (setting?.value as T) ?? null;
   }
 
-  async setJson<T>(businessId: number, key: string, value: T): Promise<SettingSummary> {
+  async setJson<T>(
+    businessId: number,
+    key: string,
+    value: T,
+  ): Promise<SettingSummary> {
     return this.set(businessId, key, value as Prisma.InputJsonValue);
   }
 }

@@ -1,7 +1,25 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Roles } from '@core/decorators';
-import { JwtAuthGuard, RolesGuard } from '@core/guards';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Roles } from '@common/decorators';
+import { JwtAuthGuard, RolesGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -12,7 +30,7 @@ import { CustomersService } from './customers.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) { }
+  constructor(private readonly customersService: CustomersService) {}
 
   @Post()
   @Roles('ADMIN', 'STAFF')
@@ -22,7 +40,9 @@ export class CustomersController {
       'ADMIN and STAFF can create customers in their own business. The createdByUserId is set to the calling user.',
   })
   @ApiOkResponse({ description: 'The created customer.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN or STAFF.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN or STAFF.',
+  })
   create(@Req() req: { user: JwtPayload }, @Body() payload: CreateCustomerDto) {
     return this.customersService.create(req.user, payload);
   }
@@ -34,9 +54,26 @@ export class CustomersController {
     description:
       'ADMIN sees all customers in their business. STAFF sees only customers they created in their business.',
   })
-  @ApiOkResponse({ description: 'Array of customers scoped to the current business and role.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN or STAFF.' })
-  findAll(@Req() req: { user: JwtPayload }) {
+  @ApiOkResponse({
+    description: 'Array of customers scoped to the current business and role.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN or STAFF.',
+  })
+  findAll(
+    @Req() req: { user: JwtPayload },
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const hasPagination = Boolean(page) || Boolean(pageSize);
+
+    if (hasPagination) {
+      return this.customersService.findAllPaginated(req.user, {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+      });
+    }
+
     return this.customersService.findAll(req.user);
   }
 
@@ -47,9 +84,17 @@ export class CustomersController {
     description:
       'ADMIN can fetch any customer by id in their business. STAFF can only access customers they created. Cross-tenant access is not allowed.',
   })
-  @ApiOkResponse({ description: 'Customer matching the given id within the current business and access rules.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to access a customer created by another user.' })
-  @ApiNotFoundResponse({ description: 'Customer with the given id does not exist in the current business.' })
+  @ApiOkResponse({
+    description:
+      'Customer matching the given id within the current business and access rules.',
+  })
+  @ApiForbiddenResponse({
+    description: 'STAFF trying to access a customer created by another user.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Customer with the given id does not exist in the current business.',
+  })
   findOne(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.customersService.findOne(req.user, Number(id));
   }
@@ -62,8 +107,13 @@ export class CustomersController {
       'ADMIN can update any customer in their business. STAFF can only update customers they created. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({ description: 'Updated customer.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to update a customer created by another user.' })
-  @ApiNotFoundResponse({ description: 'Customer with the given id does not exist in the current business.' })
+  @ApiForbiddenResponse({
+    description: 'STAFF trying to update a customer created by another user.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Customer with the given id does not exist in the current business.',
+  })
   update(
     @Req() req: { user: JwtPayload },
     @Param('id') id: string,
@@ -75,13 +125,18 @@ export class CustomersController {
   @Delete(':id')
   @Roles('ADMIN', 'STAFF')
   @ApiOperation({
-    summary: 'Delete customer',
+    summary: 'Delete customer (soft delete)',
     description:
-      'ADMIN can delete any customer in their business. STAFF can only delete customers they created. Cross-tenant access is not allowed.',
+      'ADMIN can soft-delete any customer in their business. STAFF can only soft-delete customers they created. Cross-tenant access is not allowed.',
   })
-  @ApiOkResponse({ description: 'Deleted customer.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to delete a customer created by another user.' })
-  @ApiNotFoundResponse({ description: 'Customer with the given id does not exist in the current business.' })
+  @ApiOkResponse({ description: 'Soft-deleted customer.' })
+  @ApiForbiddenResponse({
+    description: 'STAFF trying to delete a customer created by another user.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Customer with the given id does not exist in the current business.',
+  })
   remove(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.customersService.remove(req.user, Number(id));
   }

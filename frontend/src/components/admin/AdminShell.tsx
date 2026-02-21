@@ -1,13 +1,14 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ClipboardList,
   CreditCard,
   Home,
+  Landmark,
   Mail,
   Menu,
   MessageCircle,
@@ -21,50 +22,73 @@ import {
 
 interface AdminShellProps {
   children: ReactNode;
+  basePath?: string;
 }
 
-const navSections = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
+const createNavSections = (basePath: string): NavSection[] => [
   {
     title: 'Merkez',
     items: [
-      { label: 'Genel Bakış', href: '/admin', icon: Home },
-      { label: 'Kullanıcılar', href: '/admin/users', icon: Users },
+      { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
+      { label: 'Kullanıcılar', href: `${basePath}/users`, icon: Users },
+      { label: 'Müşteriler', href: `${basePath}/customers`, icon: Users },
+      { label: 'Satıcılar', href: `${basePath}/sellers`, icon: Users },
+      { label: 'Satıcı Başvuru', href: `${basePath}/sellers/applications`, icon: Users },
+      { label: 'Planlar', href: `${basePath}/plans`, icon: CreditCard },
     ],
   },
   {
     title: 'Katalog',
     items: [
-      { label: 'Ürünler', href: '/admin/products', icon: Package },
-      { label: 'Kategoriler', href: '/admin/categories', icon: Tags },
+      { label: 'Katalog', href: `${basePath}/catalog`, icon: Package },
+      { label: 'Ürünler', href: `${basePath}/products`, icon: Package },
+      { label: 'Kategoriler', href: `${basePath}/categories`, icon: Tags },
     ],
   },
   {
     title: 'Sipariş',
     items: [
-      { label: 'Siparişler', href: '/admin/orders', icon: ClipboardList },
-      { label: 'Kapıya Hizmet', href: '/admin/services', icon: Truck },
-      { label: 'Ödeme Ayarları', href: '/admin/payments', icon: CreditCard },
+      { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
+      { label: 'Kapıya Hizmet', href: `${basePath}/services`, icon: Truck },
+      { label: 'Ödeme Ayarları', href: `${basePath}/payments`, icon: CreditCard },
+      { label: 'Finans', href: `${basePath}/finance`, icon: Landmark },
     ],
   },
   {
     title: 'Bildirim',
     items: [
-      { label: 'SMTP', href: '/admin/smtp', icon: Mail },
-      { label: 'SMS', href: '/admin/sms', icon: MessageCircle },
+      { label: 'SMTP', href: `${basePath}/smtp`, icon: Mail },
+      { label: 'SMS', href: `${basePath}/sms`, icon: MessageCircle },
     ],
   },
   {
     title: 'Ayarlar',
-    items: [{ label: 'Genel Ayarlar', href: '/admin/settings', icon: Settings }],
+    items: [
+      { label: 'Raporlar', href: `${basePath}/reports`, icon: ClipboardList },
+      { label: 'Genel Ayarlar', href: `${basePath}/settings`, icon: Settings },
+    ],
   },
 ];
 
-export default function AdminShell({ children }: AdminShellProps) {
+export default function AdminShell({ children, basePath = '/admin' }: AdminShellProps) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  const navSections = useMemo(() => createNavSections(basePath), [basePath]);
+
   const isActive = (href: string) =>
-    href === '/admin' ? pathname === href : pathname.startsWith(href);
+    href === basePath ? pathname === href : pathname.startsWith(href);
 
   useEffect(() => {
     setMobileNavOpen(false);

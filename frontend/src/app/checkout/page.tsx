@@ -39,6 +39,7 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
 interface CreateOrderItemPayload {
   productId: number;
   quantity: number;
+  expectedUnitPriceCents: number;
 }
 
 interface CreateOrderPayload {
@@ -59,6 +60,14 @@ interface CustomerData {
   phone: string;
   balance: number;
 }
+
+type IyzicoInitResponse = {
+  status?: string;
+  token?: string;
+  checkoutFormContent?: string;
+  paymentPageUrl?: string;
+  errorMessage?: string;
+};
 
 export default function CheckoutPage() {
   const { items, totalPrice, totalQuantity } = useAppSelector(
@@ -81,6 +90,10 @@ export default function CheckoutPage() {
     orderId?: number;
     total?: number;
   } | null>(null);
+
+  const [iyzicoInitLoading, setIyzicoInitLoading] = useState(false);
+  const [iyzicoInitError, setIyzicoInitError] = useState<string | null>(null);
+  const [iyzicoFormHtml, setIyzicoFormHtml] = useState<string | null>(null);
 
   const hasItems = items.length > 0;
 
@@ -153,6 +166,7 @@ export default function CheckoutPage() {
       items: items.map((item) => ({
         productId: Number(item.productId),
         quantity: item.quantity,
+        expectedUnitPriceCents: Math.round(Number(item.price) * 100),
       })),
     };
 
@@ -230,6 +244,61 @@ export default function CheckoutPage() {
               <Link href="/account/orders">
                 <Button className="rounded-full px-6">Siparişlerime git</Button>
               </Link>
+
+              {orderSuccess.orderId && (
+                <Button
+                  className="rounded-full px-6"
+                  disabled={iyzicoInitLoading}
+                  isLoading={iyzicoInitLoading}
+                  onClick={async () => {
+                    if (!orderSuccess.orderId) return;
+                    setIyzicoInitError(null);
+                    setIyzicoFormHtml(null);
+
+                    try {
+                      setIyzicoInitLoading(true);
+                      const resp = await api.post<IyzicoInitResponse>('/payments/iyzico/initialize', {
+                        orderId: orderSuccess.orderId,
+                      });
+
+                      const data = resp.data ?? {};
+                      const paymentPageUrl =
+                        typeof data.paymentPageUrl === 'string' ? data.paymentPageUrl : '';
+                      const checkoutFormContent =
+                        typeof data.checkoutFormContent === 'string'
+                          ? data.checkoutFormContent
+                          : '';
+
+                      if (paymentPageUrl) {
+                        window.location.href = paymentPageUrl;
+                        return;
+                      }
+
+                      if (checkoutFormContent) {
+                        setIyzicoFormHtml(checkoutFormContent);
+                        return;
+                      }
+
+                      setIyzicoInitError(
+                        data.errorMessage ||
+                          'Ödeme başlatılamadı. Lütfen tekrar deneyin.',
+                      );
+                    } catch (error) {
+                      const message = resolveApiErrorMessage(
+                        error,
+                        'Ödeme başlatılırken bir hata oluştu.',
+                      );
+                      setIyzicoInitError(message);
+                      toast.error(message);
+                    } finally {
+                      setIyzicoInitLoading(false);
+                    }
+                  }}
+                >
+                  iyzico ile öde
+                </Button>
+              )}
+
               <Link
                 href="/categories"
                 className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)]/70 hover:text-[var(--primary-800)]"
@@ -237,6 +306,23 @@ export default function CheckoutPage() {
                 Alışverişe devam et <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+
+            {iyzicoInitError && (
+              <div className="rounded-[var(--radius-md)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-3 text-xs text-[var(--error-600)]">
+                {iyzicoInitError}
+              </div>
+            )}
+
+            {iyzicoFormHtml && (
+              <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white p-3">
+                <iframe
+                  title="iyzico-checkout-form"
+                  sandbox="allow-forms allow-scripts allow-same-origin"
+                  srcDoc={iyzicoFormHtml}
+                  className="h-[720px] w-full rounded-[var(--radius-lg)]"
+                />
+              </div>
+            )}
           </section>
         </div>
       </div>

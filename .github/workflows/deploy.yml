@@ -1,0 +1,67 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - staging
+          - production
+          - both
+
+jobs:
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.event_name == 'push' || github.event.inputs.target == 'staging' || github.event.inputs.target == 'both'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Add host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.STAGING_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging
+        run: |
+          ssh "${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}" \
+            "bash -lc 'APP_DIR=${{ secrets.STAGING_APP_DIR }} BRANCH=main DEPLOY_ENV=staging ECOSYSTEM_FILE=ecosystem.staging.config.cjs FRONTEND_API_URL=${{ secrets.STAGING_FRONTEND_API_URL }} bash ${{ secrets.STAGING_DEPLOY_SCRIPT_PATH }}'"
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    environment: production
+    needs: deploy-staging
+    if: github.event_name == 'push' || github.event.inputs.target == 'production' || github.event.inputs.target == 'both'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Add host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.PRODUCTION_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to production
+        run: |
+          ssh "${{ secrets.PRODUCTION_SSH_USER }}@${{ secrets.PRODUCTION_SSH_HOST }}" \
+            "bash -lc 'APP_DIR=${{ secrets.PRODUCTION_APP_DIR }} BRANCH=main DEPLOY_ENV=production ECOSYSTEM_FILE=ecosystem.config.cjs FRONTEND_API_URL=${{ secrets.PRODUCTION_FRONTEND_API_URL }} bash ${{ secrets.PRODUCTION_DEPLOY_SCRIPT_PATH }}'"

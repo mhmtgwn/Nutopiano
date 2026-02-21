@@ -61,6 +61,8 @@ export default function ProductsClient({
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -73,6 +75,10 @@ export default function ProductsClient({
   useEffect(() => {
     setSelectedCategoryId(categoryId);
   }, [categoryId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [qInput, selectedCategoryId, sort, inStockOnly, minPrice, maxPrice]);
 
   const buildUrl = (next: { q?: string; category?: number }) => {
     const params = new URLSearchParams();
@@ -147,22 +153,50 @@ export default function ProductsClient({
   }, [normalizedQuery]);
 
   const {
-    data: products,
+    data: productsPayload,
     isLoading: productsLoading,
     isError: productsError,
-  } = useQuery<Product[]>({
-    queryKey: ['products'],
+  } = useQuery<{ data: Product[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>({
+    queryKey: [
+      'marketplace-products',
+      {
+        q: qInput.trim() || undefined,
+        categoryId: selectedCategoryId,
+        sort,
+        inStockOnly,
+        minPrice,
+        maxPrice,
+        page,
+        pageSize,
+      },
+    ],
     queryFn: async () => {
-      const res = await api.get<unknown>('/products');
+      const minPriceValue = minPrice.trim() ? Number(minPrice) : undefined;
+      const maxPriceValue = maxPrice.trim() ? Number(maxPrice) : undefined;
 
-      const payload = res.data as unknown;
-      const apiProducts: ApiProduct[] = Array.isArray(payload)
-        ? (payload as ApiProduct[])
-        : Array.isArray((payload as { data?: unknown })?.data)
-          ? ((payload as { data: ApiProduct[] }).data ?? [])
-          : [];
+      const res = await api.get<{ data: ApiProduct[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }>(
+        '/marketplace/search',
+        {
+          params: {
+            q: qInput.trim() || undefined,
+            categoryId: selectedCategoryId,
+            minPrice:
+              typeof minPriceValue === 'number' && !Number.isNaN(minPriceValue)
+                ? Math.round(minPriceValue * 100)
+                : undefined,
+            maxPrice:
+              typeof maxPriceValue === 'number' && !Number.isNaN(maxPriceValue)
+                ? Math.round(maxPriceValue * 100)
+                : undefined,
+            sort: sort === 'popular' ? 'newest' : sort,
+            page,
+            pageSize,
+          },
+        },
+      );
 
-      return apiProducts.map((p) => ({
+      const apiProducts = Array.isArray(res.data?.data) ? res.data.data : [];
+      const items = apiProducts.map((p) => ({
         id: String(p.id),
         categoryId: p.categoryId ?? null,
         name: p.name,
@@ -173,8 +207,16 @@ export default function ProductsClient({
         stock: p.stock ?? null,
         tags: p.tags ?? [],
       }));
+
+      return {
+        data: inStockOnly ? items.filter((p) => (p.stock ?? 0) > 0) : items,
+        meta: res.data.meta,
+      };
     },
   });
+
+  const products = productsPayload?.data ?? [];
+  const productsMeta = productsPayload?.meta;
 
   const {
     data: categoriesTree,

@@ -4,6 +4,15 @@ import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { CreateProductVariantDto } from './dto/create-product-variant.dto';
+import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
+import {
+  buildPaginationMeta,
+  clampPage,
+  clampPageSize,
+  paginationToSkipTake,
+  type PaginationMeta,
+} from '../../common/utils/pagination';
 
 export interface ProductSummary {
   id: number;
@@ -22,13 +31,87 @@ export interface ProductSummary {
   seoTitle?: string | null;
   seoDescription?: string | null;
   isActive: boolean;
+  variants?: ProductVariantSummary[];
+}
+
+export interface ProductVariantSummary {
+  id: number;
+  productId: number;
+  name: string;
+  sku?: string | null;
+  color?: string | null;
+  size?: string | null;
+  material?: string | null;
+  priceCents: number;
+  stock?: number | null;
+  isActive: boolean;
+}
+
+export interface PublicProductReviewSummary {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  customerName: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async assertCategoryScoped(currentUser: JwtPayload, categoryId: number) {
+  private normalizeImageUrls(images?: string[], imageUrl?: string) {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const raw of images ?? []) {
+      const value = String(raw ?? '').trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      normalized.push(value);
+    }
+
+    const primary = String(imageUrl ?? '').trim();
+    if (primary && !seen.has(primary)) {
+      normalized.unshift(primary);
+    }
+
+    return { images: normalized, primary: primary || normalized[0] || null };
+  }
+
+  private async syncProductImages(params: {
+    businessId: number;
+    productId: number;
+    images: string[];
+    primaryUrl?: string | null;
+  }) {
+    const productImage = (this.prisma as any).productImage;
+    await productImage.deleteMany({
+      where: {
+        businessId: params.businessId,
+        productId: params.productId,
+      },
+    });
+
+    if (!params.images.length) {
+      return;
+    }
+
+    await productImage.createMany({
+      data: params.images.map((url, index) => ({
+        businessId: params.businessId,
+        productId: params.productId,
+        url,
+        orderIndex: index,
+        isPrimary: params.primaryUrl ? params.primaryUrl === url : index === 0,
+      })),
+    });
+  }
+
+  private async assertCategoryScoped(
+    currentUser: JwtPayload,
+    categoryId: number,
+  ) {
     const businessId = Number(currentUser.businessId);
 
     const category = await this.prisma.category.findFirst({
@@ -45,7 +128,10 @@ export class ProductsService {
     }
   }
 
-  async create(currentUser: JwtPayload, payload: CreateProductDto): Promise<ProductSummary> {
+  async create(
+    currentUser: JwtPayload,
+    payload: CreateProductDto,
+  ): Promise<ProductSummary> {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
     const priceCents = Number(payload.price);
@@ -53,9 +139,10 @@ export class ProductsService {
     // categoryId is now required
     await this.assertCategoryScoped(currentUser, payload.categoryId);
 
-    const images = payload.images ?? undefined;
-    const imageUrl =
-      payload.imageUrl ?? (images && images.length > 0 ? images[0] : undefined);
+    const normalizedImages = this.normalizeImageUrls(payload.images, payload.imageUrl);
+    const images =
+      normalizedImages.images.length > 0 ? normalizedImages.images : undefined;
+    const imageUrl = normalizedImages.primary ?? undefined;
 
     const product = await this.prisma.product.create({
       data: {
@@ -96,17 +183,102 @@ export class ProductsService {
       },
     });
 
+    await this.syncProductImages({
+      businessId,
+      productId: product.id,
+      images: normalizedImages.images,
+      primaryUrl: normalizedImages.primary,
+    });
+
     return product;
   }
 
-  async findAll(currentUser: JwtPayload): Promise<ProductSummary[]> {
-    const businessId = Number(currentUser.businessId);
+  async listReviewsPublic(
+    productId: number,
+  ): Promise<PublicProductReviewSummary[]> {
+    const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    return this.prisma.product.findMany({
+    const business =
+      Number.isFinite(publicBusinessId) && publicBusinessId > 0
+        ? await this.prisma.business.findUnique({
+            where: { id: publicBusinessId },
+          })
+        : await this.prisma.business.findFirst({
+            orderBy: {
+              id: 'asc',
+            },
+          });
+
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    const product = await this.prisma.product.findFirst({
       where: {
-        businessId,
+        id: productId,
+        businessId: business.id,
         isActive: true,
       },
+      select: { id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.prisma.productReview
+      .findMany({
+        where: {
+          businessId: business.id,
+          productId,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      })
+      .then((rows) =>
+        rows.map((r) => ({
+          id: r.id,
+          rating: r.rating,
+          comment: r.comment,
+          customerName: r.customer.name,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        })),
+      );
+  }
+
+  async findAll(
+    currentUser: JwtPayload,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<{ data: ProductSummary[]; meta: PaginationMeta }> {
+    const businessId = Number(currentUser.businessId);
+
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+    const where = {
+      businessId,
+      isActive: true,
+    };
+
+    const total = await this.prisma.product.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const data = await this.prisma.product.findMany({
+      where,
       select: {
         id: true,
         categoryId: true,
@@ -128,15 +300,25 @@ export class ProductsService {
       orderBy: {
         name: 'asc',
       },
+      skip,
+      take,
     });
+
+    return { data, meta };
   }
 
-  async findAllPublic(): Promise<ProductSummary[]> {
+  async findAllPublic(params?: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ data: ProductSummary[]; meta: PaginationMeta }> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const businessCandidate = Number.isFinite(publicBusinessId) && publicBusinessId > 0
-      ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
-      : null;
+    const businessCandidate =
+      Number.isFinite(publicBusinessId) && publicBusinessId > 0
+        ? await this.prisma.business.findUnique({
+            where: { id: publicBusinessId },
+          })
+        : null;
 
     const business = businessCandidate
       ? businessCandidate
@@ -147,14 +329,23 @@ export class ProductsService {
         });
 
     if (!business) {
-      return [];
+      const meta = buildPaginationMeta(0, 1, 20);
+      return { data: [], meta };
     }
 
-    return this.prisma.product.findMany({
-      where: {
-        businessId: business.id,
-        isActive: true,
-      },
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+    const where = {
+      businessId: business.id,
+      isActive: true,
+    };
+
+    const total = await this.prisma.product.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const data = await this.prisma.product.findMany({
+      where,
       select: {
         id: true,
         categoryId: true,
@@ -176,7 +367,11 @@ export class ProductsService {
       orderBy: {
         name: 'asc',
       },
+      skip,
+      take,
     });
+
+    return { data, meta };
   }
 
   private async findByIdScoped(currentUser: JwtPayload, id: number) {
@@ -196,8 +391,228 @@ export class ProductsService {
     return product;
   }
 
+  private async findVariantByIdScoped(
+    currentUser: JwtPayload,
+    productId: number,
+    variantId: number,
+  ) {
+    const businessId = Number(currentUser.businessId);
+
+    const variant = await (this.prisma as any).productVariant.findFirst({
+      where: {
+        id: variantId,
+        businessId,
+        productId,
+      },
+    });
+
+    if (!variant) {
+      throw new NotFoundException('Product variant not found');
+    }
+
+    return variant;
+  }
+
+  async createVariant(
+    currentUser: JwtPayload,
+    productId: number,
+    payload: CreateProductVariantDto,
+  ): Promise<ProductVariantSummary> {
+    const businessId = Number(currentUser.businessId);
+    await this.findByIdScoped(currentUser, productId);
+
+    return (this.prisma as any).productVariant.create({
+      data: {
+        businessId,
+        productId,
+        name: payload.name,
+        sku: payload.sku,
+        color: payload.color,
+        size: payload.size,
+        material: payload.material,
+        priceCents: payload.priceCents,
+        stock: payload.stock,
+      },
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
+  }
+
+  async updateVariant(
+    currentUser: JwtPayload,
+    productId: number,
+    variantId: number,
+    payload: UpdateProductVariantDto,
+  ): Promise<ProductVariantSummary> {
+    await this.findByIdScoped(currentUser, productId);
+    await this.findVariantByIdScoped(currentUser, productId, variantId);
+
+    const data: Record<string, unknown> = {};
+    if (payload.name !== undefined) data.name = payload.name;
+    if (payload.sku !== undefined) data.sku = payload.sku;
+    if (payload.color !== undefined) data.color = payload.color;
+    if (payload.size !== undefined) data.size = payload.size;
+    if (payload.material !== undefined) data.material = payload.material;
+    if (payload.priceCents !== undefined) data.priceCents = payload.priceCents;
+    if (payload.stock !== undefined) data.stock = payload.stock;
+    if (payload.isActive !== undefined) data.isActive = payload.isActive;
+
+    return (this.prisma as any).productVariant.update({
+      where: { id: variantId },
+      data,
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
+  }
+
+  async removeVariant(
+    currentUser: JwtPayload,
+    productId: number,
+    variantId: number,
+  ): Promise<ProductVariantSummary> {
+    await this.findByIdScoped(currentUser, productId);
+    await this.findVariantByIdScoped(currentUser, productId, variantId);
+
+    return (this.prisma as any).productVariant.update({
+      where: { id: variantId },
+      data: { isActive: false },
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
+  }
+
+  async listVariants(
+    currentUser: JwtPayload,
+    productId: number,
+    params?: { includeInactive?: boolean },
+  ): Promise<ProductVariantSummary[]> {
+    await this.findByIdScoped(currentUser, productId);
+    const businessId = Number(currentUser.businessId);
+
+    return (this.prisma as any).productVariant.findMany({
+      where: {
+        businessId,
+        productId,
+        ...(params?.includeInactive ? {} : { isActive: true }),
+      },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
+  }
+
+  async listVariantsPublic(productId: number): Promise<ProductVariantSummary[]> {
+    const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
+    const business =
+      Number.isFinite(publicBusinessId) && publicBusinessId > 0
+        ? await this.prisma.business.findUnique({
+            where: { id: publicBusinessId },
+          })
+        : await this.prisma.business.findFirst({
+            orderBy: { id: 'asc' },
+          });
+
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        businessId: business.id,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return (this.prisma as any).productVariant.findMany({
+      where: {
+        businessId: business.id,
+        productId: product.id,
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
+  }
+
   async findOne(currentUser: JwtPayload, id: number): Promise<ProductSummary> {
     const product = await this.findByIdScoped(currentUser, id);
+    const variants = await (this.prisma as any).productVariant.findMany({
+      where: {
+        businessId: Number(currentUser.businessId),
+        productId: id,
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        productId: true,
+        name: true,
+        sku: true,
+        color: true,
+        size: true,
+        material: true,
+        priceCents: true,
+        stock: true,
+        isActive: true,
+      },
+    });
     const {
       id: productId,
       categoryId,
@@ -233,19 +648,23 @@ export class ProductsService {
       seoTitle,
       seoDescription,
       isActive,
+      variants,
     };
   }
 
   async findOnePublic(id: number): Promise<ProductSummary> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
-      ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
-      : await this.prisma.business.findFirst({
-          orderBy: {
-            id: 'asc',
-          },
-        });
+    const business =
+      Number.isFinite(publicBusinessId) && publicBusinessId > 0
+        ? await this.prisma.business.findUnique({
+            where: { id: publicBusinessId },
+          })
+        : await this.prisma.business.findFirst({
+            orderBy: {
+              id: 'asc',
+            },
+          });
 
     if (!business) {
       throw new NotFoundException('Business not found');
@@ -283,7 +702,11 @@ export class ProductsService {
     return product;
   }
 
-  async update(currentUser: JwtPayload, id: number, payload: UpdateProductDto): Promise<ProductSummary> {
+  async update(
+    currentUser: JwtPayload,
+    id: number,
+    payload: UpdateProductDto,
+  ): Promise<ProductSummary> {
     await this.findByIdScoped(currentUser, id);
 
     const data: Prisma.ProductUncheckedUpdateInput = {};
@@ -304,12 +727,17 @@ export class ProductsService {
     if (payload.price !== undefined) {
       data.priceCents = Number(payload.price);
     }
-    if (payload.description !== undefined) data.description = payload.description;
+    if (payload.description !== undefined)
+      data.description = payload.description;
     if (payload.features !== undefined) data.features = payload.features;
     if (payload.imageUrl !== undefined) data.imageUrl = payload.imageUrl;
     if (payload.images !== undefined) {
       data.images = payload.images;
-      if (payload.imageUrl === undefined && payload.images && payload.images.length > 0) {
+      if (
+        payload.imageUrl === undefined &&
+        payload.images &&
+        payload.images.length > 0
+      ) {
         data.imageUrl = payload.images[0];
       }
     }
@@ -341,6 +769,17 @@ export class ProductsService {
         seoDescription: true,
         isActive: true,
       },
+    });
+
+    const normalizedImages = this.normalizeImageUrls(
+      updated.images ?? [],
+      updated.imageUrl ?? undefined,
+    );
+    await this.syncProductImages({
+      businessId: Number(currentUser.businessId),
+      productId: id,
+      images: normalizedImages.images,
+      primaryUrl: normalizedImages.primary,
     });
 
     return updated;
@@ -393,18 +832,26 @@ export class ProductsService {
   }> {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
-    const business = Number.isFinite(publicBusinessId) && publicBusinessId > 0
-      ? await this.prisma.business.findUnique({ where: { id: publicBusinessId } })
-      : await this.prisma.business.findFirst({
-          orderBy: { id: 'asc' },
-        });
+    const business =
+      Number.isFinite(publicBusinessId) && publicBusinessId > 0
+        ? await this.prisma.business.findUnique({
+            where: { id: publicBusinessId },
+          })
+        : await this.prisma.business.findFirst({
+            orderBy: { id: 'asc' },
+          });
 
     if (!business) {
-      return { data: [], total: 0, skip: params.skip ?? 0, take: params.take ?? 20 };
+      return {
+        data: [],
+        total: 0,
+        skip: params.skip ?? 0,
+        take: params.take ?? 20,
+      };
     }
 
     // Build where clause
-    const whereConditions: any = {
+    const whereConditions: Prisma.ProductWhereInput = {
       businessId: business.id,
       isActive: true,
     };
@@ -440,7 +887,7 @@ export class ProductsService {
     const total = await this.prisma.product.count({ where: whereConditions });
 
     // Build order by
-    let orderBy: any = { name: 'asc' };
+    let orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
     switch (params.sort) {
       case 'price-asc':
         orderBy = { priceCents: 'asc' };

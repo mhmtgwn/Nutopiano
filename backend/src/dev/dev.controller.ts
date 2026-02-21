@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { OrderSource, ProductType, Role } from '@prisma/client';
+import { ProductType, Role } from '@prisma/client';
 
 @Controller('dev')
 export class DevController {
@@ -86,21 +86,79 @@ export class DevController {
       });
     }
 
+    const commissionRateKey = 'global_commission_rate';
+    const existingCommissionRate = await this.prisma.settings.findUnique({
+      where: {
+        businessId_key: {
+          businessId,
+          key: commissionRateKey,
+        },
+      },
+    });
+
+    if (!existingCommissionRate) {
+      await this.prisma.settings.create({
+        data: {
+          businessId,
+          key: commissionRateKey,
+          value: 0.05,
+        },
+      });
+    }
+
+    const moderationKey = 'moderation_enabled';
+    const existingModeration = await this.prisma.settings.findUnique({
+      where: {
+        businessId_key: {
+          businessId,
+          key: moderationKey,
+        },
+      },
+    });
+
+    if (!existingModeration) {
+      await this.prisma.settings.create({
+        data: {
+          businessId,
+          key: moderationKey,
+          value: false,
+        },
+      });
+    }
+
     // 4) Demo customer for checkout
     let customer = await this.prisma.customer.findFirst({
-      where: { businessId },
+      where: { businessId, deletedAt: null },
     });
 
     if (!customer) {
-      customer = await this.prisma.customer.create({
-        data: {
+      const deletedCustomer = await this.prisma.customer.findFirst({
+        where: {
           businessId,
-          createdByUserId: admin.id,
-          name: 'Demo Müşteri',
           phone: '5550000000',
-          balance: 0,
+          deletedAt: { not: null },
         },
+        select: { id: true },
       });
+
+      customer = deletedCustomer
+        ? await this.prisma.customer.update({
+            where: { id: deletedCustomer.id },
+            data: {
+              name: 'Demo Müşteri',
+              balance: 0,
+              deletedAt: null,
+            },
+          })
+        : await this.prisma.customer.create({
+            data: {
+              businessId,
+              createdByUserId: admin.id,
+              name: 'Demo Müşteri',
+              phone: '5550000000',
+              balance: 0,
+            },
+          });
     }
 
     // 5) Default category (required for Product.categoryId)
@@ -239,8 +297,7 @@ export class DevController {
       totalProducts,
       createdProductsCount,
       updatedProductsCount,
-      note:
-        'Giriş için bu telefonu kullanın: 5551112233 (şifre yok, sadece telefon). Checkout için müşteri ID: customerId.',
+      note: 'Giriş için bu telefonu kullanın: 5551112233 (şifre yok, sadece telefon). Checkout için müşteri ID: customerId.',
     };
   }
 }

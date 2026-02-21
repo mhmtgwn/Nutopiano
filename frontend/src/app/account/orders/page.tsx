@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
-import { formatDate, formatPrice, getAuthToken } from '@/utils/helpers';
+import { formatDate, formatPrice } from '@/utils/helpers';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -34,43 +35,42 @@ interface OrderSummary {
   createdAt: string;
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface PaginatedOrders {
+  data: OrderSummary[];
+  meta: PaginationMeta;
+}
+
 export default function OrdersPage() {
-  const token = getAuthToken();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
 
   const {
-    data: orders,
+    data: ordersPayload,
     isLoading,
     isError,
     error,
-  } = useQuery<OrderSummary[]>({
-    queryKey: ['orders'],
-    enabled: !!token,
+  } = useQuery<PaginatedOrders>({
+    queryKey: ['orders', { page, pageSize }],
     queryFn: async () => {
-      const res = await api.get<OrderSummary[]>('/orders');
+      const res = await api.get<PaginatedOrders>('/customer/orders', {
+        params: {
+          page,
+          pageSize,
+        },
+      });
       return res.data;
     },
   });
 
-  if (!token) {
-    return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 md:px-6 md:py-10">
-        <h1 className="text-2xl font-semibold text-[var(--primary-800)] md:text-3xl">
-          Siparişlerim
-        </h1>
-        <section className="space-y-3 rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-6 shadow-[var(--shadow-md)] md:px-6">
-          <p className="text-sm text-[var(--neutral-600)] md:text-base">
-            Sipariş geçmişinizi görüntülemek için önce giriş yapmanız gerekir.
-          </p>
-          <Link
-            href="/login"
-            className="text-sm text-[var(--primary-800)] underline-offset-2 hover:underline"
-          >
-            Giriş yap
-          </Link>
-        </section>
-      </div>
-    );
-  }
+  const orders = ordersPayload?.data ?? [];
+  const meta = ordersPayload?.meta;
 
   if (isLoading) {
     return (
@@ -148,7 +148,12 @@ export default function OrdersPage() {
                   className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-4 py-3 text-xs text-[var(--primary-800)] md:px-5 md:py-3 md:text-sm"
                 >
                   <div className="flex flex-col">
-                    <span className="font-medium">#{order.id}</span>
+                    <Link
+                      href={`/account/orders/${order.id}`}
+                      className="font-medium underline-offset-2 hover:underline"
+                    >
+                      #{order.id}
+                    </Link>
                     <span className="text-[11px] text-[var(--neutral-500)] md:text-xs">
                       {formatDate(order.createdAt)}
                     </span>
@@ -178,6 +183,32 @@ export default function OrdersPage() {
               ))}
             </div>
           </div>
+
+          {!isLoading && !isError && meta && meta.totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-2 text-xs text-[var(--neutral-600)]">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                Sayfa {meta.page} / {meta.totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={meta.page <= 1}
+                  className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Önceki
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  disabled={meta.page >= meta.totalPages}
+                  className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sonraki
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </div>

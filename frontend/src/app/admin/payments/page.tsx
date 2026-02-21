@@ -60,6 +60,17 @@ export default function AdminPaymentsPage() {
             </div>
           );
         })}
+
+        <Link
+          href="/admin/payments/webhooks"
+          className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6 transition hover:bg-[var(--neutral-50)]"
+        >
+          <ShieldCheck className="h-5 w-5 text-[var(--primary-800)]/70" />
+          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">Webhook event’leri</h2>
+          <p className="mt-2 text-sm text-[var(--neutral-600)]">
+            Gelen webhook event’lerini listele ve manuel işleme tetikle.
+          </p>
+        </Link>
       </section>
     </div>
   );

@@ -3,13 +3,11 @@
 import { useRouter } from 'next/navigation';
 import Button from '@/components/common/Button';
 import { useAppSelector } from '@/store';
-import { getAuthToken } from '@/utils/helpers';
 
 export default function PosPage() {
   const router = useRouter();
   const user = useAppSelector((state) => state.user.user);
-  const hasToken = !!getAuthToken();
-  const isAuthed = !!user || hasToken;
+  const isAuthed = !!user;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:px-6 md:py-10">

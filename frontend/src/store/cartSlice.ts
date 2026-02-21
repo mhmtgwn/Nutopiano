@@ -39,16 +39,18 @@ const cartSlice = createSlice({
       }>,
     ) {
       const { item, quantity = 1 } = action.payload;
+      // Ensure quantity is at least 1
+      const safeQuantity = Math.max(1, quantity);
       const existing = state.items.find((i) => i.lineId === item.lineId);
 
       if (existing) {
-        existing.quantity += quantity;
+        existing.quantity += safeQuantity;
       } else {
-        state.items.push({ ...item, quantity });
+        state.items.push({ ...item, quantity: safeQuantity });
       }
 
-      state.totalQuantity += quantity;
-      state.totalPrice += item.price * quantity;
+      state.totalQuantity += safeQuantity;
+      state.totalPrice += item.price * safeQuantity;
     },
     removeItem(state, action: PayloadAction<string>) {
       const index = state.items.findIndex(
@@ -71,6 +73,7 @@ const cartSlice = createSlice({
 
       if (!item) return;
 
+      // If quantity is 0 or invalid, remove the item
       if (quantity <= 0 || Number.isNaN(quantity)) {
         state.totalQuantity -= item.quantity;
         state.totalPrice -= item.price * item.quantity;
@@ -78,9 +81,11 @@ const cartSlice = createSlice({
         return;
       }
 
-      state.totalQuantity += quantity - item.quantity;
-      state.totalPrice += item.price * (quantity - item.quantity);
-      item.quantity = quantity;
+      // Ensure quantity is a positive integer
+      const safeQuantity = Math.max(1, Math.floor(quantity));
+      state.totalQuantity += safeQuantity - item.quantity;
+      state.totalPrice += item.price * (safeQuantity - item.quantity);
+      item.quantity = safeQuantity;
     },
     clearCart(state) {
       state.items = [];

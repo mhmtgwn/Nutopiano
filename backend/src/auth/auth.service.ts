@@ -12,6 +12,19 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { EmailService } from '../email/email.service';
 
+type RefreshJwtPayload = {
+  userId: string;
+  type: 'refresh';
+  jti: string;
+};
+
+/**
+ * OWASP recommended bcrypt salt rounds for modern hardware (2024).
+ * Using 12 instead of 10 for improved security.
+ * Higher values increase computational cost, protecting against brute-force attacks.
+ */
+const BCRYPT_SALT_ROUNDS = 12;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -19,6 +32,66 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
   ) { }
+
+  private hashToken(token: string) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private createAccessToken(user: {
+    id: number;
+    phone: string | null;
+    role: JwtPayload['role'];
+    businessId: number;
+  }) {
+    const payload: JwtPayload = {
+      userId: user.id.toString(),
+      phone: user.phone ?? undefined,
+      role: user.role,
+      businessId: user.businessId.toString(),
+    };
+
+    return this.jwtService.sign(payload, { expiresIn: '15m' });
+  }
+
+  private async createAndStoreRefreshToken(user: { id: number; businessId: number }) {
+    const jti = crypto.randomUUID();
+    const refreshPayload: RefreshJwtPayload = {
+      userId: user.id.toString(),
+      type: 'refresh',
+      jti,
+    };
+
+    const refreshToken = this.jwtService.sign(refreshPayload, { expiresIn: '7d' });
+    const tokenHash = this.hashToken(refreshToken);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+
+    const record = await (this.prisma as any).refreshToken.create({
+      data: {
+        businessId: user.businessId,
+        userId: user.id,
+        jti,
+        tokenHash,
+        expiresAt,
+      },
+      select: { id: true },
+    });
+
+    return { refreshToken, refreshTokenId: record.id as number };
+  }
+
+  private async createAuthTokensForUser(user: {
+    id: number;
+    phone: string | null;
+    role: JwtPayload['role'];
+    businessId: number;
+  }) {
+    const accessToken = this.createAccessToken(user);
+    const refresh = await this.createAndStoreRefreshToken({
+      id: user.id,
+      businessId: user.businessId,
+    });
+    return { accessToken, refreshToken: refresh.refreshToken };
+  }
 
   private createResetToken() {
     const token = crypto.randomBytes(32).toString('hex');
@@ -69,9 +142,12 @@ export class AuthService {
       businessId: user.businessId.toString(),
     };
 
-    return {
-      accessToken: this.jwtService.sign(payload),
-    };
+    return this.createAuthTokensForUser({
+      id: Number(payload.userId),
+      phone: user.phone,
+      role: user.role,
+      businessId: user.businessId,
+    });
   }
 
   async register(payload: RegisterDto) {
@@ -111,36 +187,154 @@ export class AuthService {
       throw new BadRequestException('Bu telefon numarası zaten kayıtlı.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.password, 10);
+    const passwordHash = await bcrypt.hash(payload.password, BCRYPT_SALT_ROUNDS);
 
-    const user = await this.prisma.user.create({
-      data: {
-        businessId: business.id,
-        name: trimmedName,
-        phone: trimmedPhone,
-        email: trimmedEmail,
-        passwordHash,
-        role: 'CUSTOMER',
-        isActive: true,
-      },
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          businessId: business.id,
+          name: trimmedName,
+          phone: trimmedPhone,
+          email: trimmedEmail,
+          passwordHash,
+          role: 'CUSTOMER',
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          role: true,
+          businessId: true,
+        },
+      });
+
+      const jwtPayload: JwtPayload = {
+        userId: String(user.id),
+        phone: user.phone ?? undefined,
+        role: user.role,
+        businessId: String(user.businessId),
+      };
+
+      const accessToken = this.jwtService.sign(jwtPayload, { expiresIn: '15m' });
+      const refresh = await this.createAndStoreRefreshToken({
+        id: user.id,
+        businessId: user.businessId,
+      });
+
+      return { accessToken, refreshToken: refresh.refreshToken };
+    } catch (error: unknown) {
+      const prismaError = error as { code?: string; meta?: { target?: string[] } } | null;
+      // Handle Prisma unique constraint errors
+      if (prismaError?.code === 'P2002') {
+        const target = prismaError?.meta?.target?.[0];
+        if (target === 'phone') {
+          throw new BadRequestException('Bu telefon numarası zaten kayıtlı.');
+        }
+        if (target === 'email') {
+          throw new BadRequestException('Bu email zaten kayıtlı.');
+        }
+      }
+      throw new BadRequestException('Kayıt işlemi başarısız oldu.');
+    }
+  }
+
+  async refresh(rawRefreshToken: string) {
+    let decoded: RefreshJwtPayload;
+    try {
+      decoded = this.jwtService.verify<RefreshJwtPayload>(rawRefreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (!decoded || decoded.type !== 'refresh' || !decoded.userId || !decoded.jti) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const tokenHash = this.hashToken(rawRefreshToken);
+
+    const tokenRecord = await (this.prisma as any).refreshToken.findUnique({
+      where: { tokenHash },
       select: {
         id: true,
-        name: true,
-        phone: true,
-        email: true,
-        role: true,
+        userId: true,
         businessId: true,
+        jti: true,
+        expiresAt: true,
+        revokedAt: true,
       },
     });
 
-    const jwtPayload: JwtPayload = {
-      userId: String(user.id),
-      phone: user.phone ?? undefined,
-      role: user.role,
-      businessId: String(user.businessId),
-    };
+    if (!tokenRecord) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
 
-    return { accessToken: this.jwtService.sign(jwtPayload) };
+    if (tokenRecord.revokedAt) {
+      throw new UnauthorizedException('Refresh token revoked');
+    }
+
+    if (tokenRecord.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    if (String(tokenRecord.userId) !== decoded.userId || tokenRecord.jti !== decoded.jti) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: tokenRecord.userId },
+      select: {
+        id: true,
+        phone: true,
+        role: true,
+        businessId: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const rotated = await this.createAndStoreRefreshToken({
+      id: user.id,
+      businessId: user.businessId,
+    });
+
+    await (this.prisma as any).refreshToken.update({
+      where: { id: tokenRecord.id },
+      data: {
+        revokedAt: new Date(),
+        replacedByTokenId: rotated.refreshTokenId,
+      },
+    });
+
+    return {
+      accessToken: this.createAccessToken({
+        id: user.id,
+        phone: user.phone,
+        role: user.role,
+        businessId: user.businessId,
+      }),
+      refreshToken: rotated.refreshToken,
+    };
+  }
+
+  async revokeRefreshToken(rawRefreshToken: string) {
+    const tokenHash = this.hashToken(rawRefreshToken);
+
+    await (this.prisma as any).refreshToken.updateMany({
+      where: {
+        tokenHash,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    return { ok: true };
   }
 
   async forgotPassword(payload: ForgotPasswordDto) {
@@ -185,13 +379,27 @@ export class AuthService {
           gt: new Date(),
         },
       },
+      select: {
+        id: true,
+        resetPasswordTokenHash: true,
+      },
     });
 
-    if (!user) {
+    if (!user || !user.resetPasswordTokenHash) {
       throw new BadRequestException('Geçersiz veya süresi dolmuş token.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.password, 10);
+    // Use timing-safe comparison to prevent timing attacks
+    const isValidToken = crypto.timingSafeEqual(
+      Buffer.from(tokenHash),
+      Buffer.from(user.resetPasswordTokenHash),
+    );
+
+    if (!isValidToken) {
+      throw new BadRequestException('Geçersiz veya süresi dolmuş token.');
+    }
+
+    const passwordHash = await bcrypt.hash(payload.password, BCRYPT_SALT_ROUNDS);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -260,7 +468,7 @@ export class AuthService {
       throw new BadRequestException('Mevcut şifre yanlış.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.newPassword, 10);
+    const passwordHash = await bcrypt.hash(payload.newPassword, BCRYPT_SALT_ROUNDS);
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash },

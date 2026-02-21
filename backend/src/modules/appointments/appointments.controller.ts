@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -7,8 +16,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { Roles } from '@core/decorators';
-import { JwtAuthGuard, RolesGuard } from '@core/guards';
+import { Roles } from '@common/decorators';
+import { JwtAuthGuard, RolesGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
@@ -33,7 +42,10 @@ export class AppointmentsController {
     description:
       'Forbidden for roles other than ADMIN or STAFF, or when STAFF is not allowed to create appointments (appointment.allowStaffCreate=false).',
   })
-  create(@Req() req: { user: JwtPayload }, @Body() payload: CreateAppointmentDto) {
+  create(
+    @Req() req: { user: JwtPayload },
+    @Body() payload: CreateAppointmentDto,
+  ) {
     return this.appointmentsService.create(req.user, payload);
   }
 
@@ -44,8 +56,13 @@ export class AppointmentsController {
     description:
       'ADMIN sees all appointments in their business. STAFF sees only appointments assigned to them (staffUserId = current user). Cross-tenant access is not allowed.',
   })
-  @ApiOkResponse({ description: 'Array of appointments for the current business and RBAC scope.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN or STAFF.' })
+  @ApiOkResponse({
+    description:
+      'Array of appointments for the current business and RBAC scope.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN or STAFF.',
+  })
   findAll(@Req() req: { user: JwtPayload }) {
     return this.appointmentsService.findAll(req.user);
   }
@@ -57,9 +74,18 @@ export class AppointmentsController {
     description:
       'ADMIN can fetch any appointment by id in their business. STAFF can fetch only appointments assigned to them. Cross-tenant access is not allowed and results in 404.',
   })
-  @ApiOkResponse({ description: 'Appointment matching the given id within the current business and RBAC scope.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to access an appointment assigned to another staff or unassigned appointment.' })
-  @ApiNotFoundResponse({ description: 'Appointment with the given id does not exist in the current business.' })
+  @ApiOkResponse({
+    description:
+      'Appointment matching the given id within the current business and RBAC scope.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'STAFF trying to access an appointment assigned to another staff or unassigned appointment.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Appointment with the given id does not exist in the current business.',
+  })
   findOne(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.appointmentsService.findOne(req.user, Number(id));
   }
@@ -76,7 +102,10 @@ export class AppointmentsController {
     description:
       'STAFF trying to update an appointment not assigned to them, or trying to change staff assignment, or roles other than ADMIN/STAFF.',
   })
-  @ApiNotFoundResponse({ description: 'Appointment with the given id does not exist in the current business.' })
+  @ApiNotFoundResponse({
+    description:
+      'Appointment with the given id does not exist in the current business.',
+  })
   update(
     @Req() req: { user: JwtPayload },
     @Param('id') id: string,

@@ -26,31 +26,12 @@ export const truncate = (value: string, maxLength: number) => {
 };
 
 export const getAuthToken = (): string | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    return window.localStorage.getItem('token');
-  } catch {
-    return null;
-  }
+  return null;
 };
 
 export const setAuthToken = (token: string | null) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    if (token) {
-      window.localStorage.setItem('token', token);
-    } else {
-      window.localStorage.removeItem('token');
-    }
-  } catch {
-    return;
-  }
+  void token;
+  return;
 };
 
 export const buildQueryParams = (params: Record<string, unknown>): string => {

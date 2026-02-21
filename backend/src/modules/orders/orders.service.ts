@@ -1,11 +1,24 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { SettingsService } from '../settings/settings.service';
+import { FinanceService } from '../finance/finance.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { OrderSource } from '@prisma/client';
+import {
+  buildPaginationMeta,
+  clampPage,
+  clampPageSize,
+  paginationToSkipTake,
+  type PaginationMeta,
+} from '../../common/utils/pagination';
 
 export interface OrderSummary {
   id: number;
@@ -22,6 +35,8 @@ export interface OrderDetail extends OrderSummary {
   items: Array<{
     id: number;
     productId: number;
+    variantId?: number | null;
+    productName: string;
     quantity: number;
     unitPriceCents: number;
     totalAmountCents: number;
@@ -37,20 +52,247 @@ export interface PaymentSummary {
 }
 
 const ORDER_DEFAULT_STATUS_KEY = 'order.defaultStatusKey';
+type VariantRow = {
+  id: number;
+  productId: number;
+  priceCents: number;
+  stock: number | null;
+  name: string;
+};
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
-  ) { }
+    private readonly financeService: FinanceService,
+  ) {}
 
-  async create(currentUser: JwtPayload, payload: CreateOrderDto): Promise<OrderDetail> {
+  private async resolveCustomerIdForUser(
+    currentUser: JwtPayload,
+    businessId: number,
+  ): Promise<number | null> {
+    const userId = Number(currentUser.userId);
+
+    if (Number.isFinite(userId)) {
+      const linkedCustomer = await this.prisma.customer.findFirst({
+        where: {
+          businessId,
+          userId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (linkedCustomer) {
+        return linkedCustomer.id;
+      }
+    }
+
+    const phone = currentUser.phone?.trim();
+    if (!phone) {
+      return null;
+    }
+
+    const fallbackCustomer = await this.prisma.customer.findFirst({
+      where: {
+        businessId,
+        phone,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return fallbackCustomer?.id ?? null;
+  }
+
+  async findAllPaginated(
+    currentUser: JwtPayload,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    if (currentUser.role === 'CUSTOMER') {
+      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      if (!customerId) {
+        const meta = buildPaginationMeta(0, page, pageSize);
+        return { data: [], meta };
+      }
+
+      const where = {
+        businessId,
+        customerId,
+        deletedAt: null as null,
+      };
+
+      const total = await this.prisma.order.count({ where });
+      const meta = buildPaginationMeta(total, page, pageSize);
+      const { skip, take } = paginationToSkipTake(meta);
+
+      const orders = await this.prisma.order.findMany({
+        where,
+        select: {
+          id: true,
+          customerId: true,
+          totalAmountCents: true,
+          source: true,
+          createdByUserId: true,
+          createdAt: true,
+          status: {
+            select: {
+              key: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take,
+      });
+
+      return {
+        data: orders.map((o) => ({
+          id: o.id,
+          customerId: o.customerId,
+          totalAmountCents: o.totalAmountCents,
+          statusKey: o.status.key,
+          source: o.source,
+          createdByUserId: o.createdByUserId,
+          createdAt: o.createdAt,
+        })),
+        meta,
+      };
+    }
+
+    const where =
+      currentUser.role === 'STAFF'
+        ? { businessId, createdByUserId: userId, deletedAt: null as null }
+        : { businessId, deletedAt: null as null };
+
+    const total = await this.prisma.order.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: {
+        id: true,
+        customerId: true,
+        totalAmountCents: true,
+        source: true,
+        createdByUserId: true,
+        createdAt: true,
+        status: {
+          select: {
+            key: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take,
+    });
+
+    return {
+      data: orders.map((o) => ({
+        id: o.id,
+        customerId: o.customerId,
+        totalAmountCents: o.totalAmountCents,
+        statusKey: o.status.key,
+        source: o.source,
+        createdByUserId: o.createdByUserId,
+        createdAt: o.createdAt,
+      })),
+      meta,
+    };
+  }
+
+  async listPlatformOrders(
+    currentUser: JwtPayload,
+    params?: { source?: string; page?: number; pageSize?: number },
+  ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const source = (params?.source ?? '').trim();
+
+    const isValidSource =
+      source.length > 0 && (Object.values(OrderSource) as string[]).includes(source);
+
+    const where: {
+      businessId: number;
+      deletedAt: null;
+      source?: OrderSource;
+    } = { businessId, deletedAt: null };
+    if (isValidSource) {
+      where.source = source as OrderSource;
+    }
+
+    const total = await this.prisma.order.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: {
+        id: true,
+        customerId: true,
+        totalAmountCents: true,
+        source: true,
+        createdByUserId: true,
+        createdAt: true,
+        status: {
+          select: {
+            key: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take,
+    });
+
+    return {
+      data: orders.map((o) => ({
+        id: o.id,
+        customerId: o.customerId,
+        totalAmountCents: o.totalAmountCents,
+        statusKey: o.status.key,
+        source: o.source,
+        createdByUserId: o.createdByUserId,
+        createdAt: o.createdAt,
+      })),
+      meta,
+    };
+  }
+
+  async create(
+    currentUser: JwtPayload,
+    payload: CreateOrderDto,
+  ): Promise<OrderDetail> {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
 
     const customer = await this.prisma.customer.findFirst({
-      where: { id: payload.customerId, businessId },
+      where: { id: payload.customerId, businessId, deletedAt: null },
       select: { id: true },
     });
     if (!customer) {
@@ -58,7 +300,10 @@ export class OrdersService {
     }
 
     const defaultStatusKey =
-      (await this.settingsService.getJson<string>(businessId, ORDER_DEFAULT_STATUS_KEY)) ?? 'CREATED';
+      (await this.settingsService.getJson<string>(
+        businessId,
+        ORDER_DEFAULT_STATUS_KEY,
+      )) ?? 'CREATED';
 
     const status = await this.prisma.orderStatus.findFirst({
       where: {
@@ -76,7 +321,29 @@ export class OrdersService {
       throw new NotFoundException('Order items are required');
     }
 
+    const configuredTaxRateBps = await this.settingsService.getJson<number>(
+      businessId,
+      'order.defaultTaxRateBps',
+    );
+    const taxRateBpsRaw = Number(configuredTaxRateBps ?? 0);
+    const taxRateBps =
+      Number.isFinite(taxRateBpsRaw) && taxRateBpsRaw > 0
+        ? Math.floor(taxRateBpsRaw)
+        : 0;
+    const normalizedCouponCode =
+      typeof payload.couponCode === 'string' && payload.couponCode.trim().length > 0
+        ? payload.couponCode.trim().toUpperCase()
+        : null;
+
     const productIds = payload.items.map((i) => i.productId);
+    const variantIds = Array.from(
+      new Set(
+        payload.items
+          .map((i) => i.variantId)
+          .filter((id): id is number => Number.isFinite(id) && Number(id) > 0),
+      ),
+    );
+
     const products = await this.prisma.product.findMany({
       where: {
         businessId,
@@ -92,6 +359,24 @@ export class OrdersService {
     });
 
     const productMap = new Map(products.map((p) => [p.id, p]));
+    const variants: VariantRow[] =
+      variantIds.length > 0
+        ? await (this.prisma as any).productVariant.findMany({
+            where: {
+              businessId,
+              id: { in: variantIds },
+              isActive: true,
+            },
+            select: {
+              id: true,
+              productId: true,
+              priceCents: true,
+              stock: true,
+              name: true,
+            },
+          })
+        : [];
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
 
     // Check stock availability
     for (const item of payload.items) {
@@ -99,51 +384,278 @@ export class OrdersService {
       if (!product) {
         throw new NotFoundException(`Product not found: ${item.productId}`);
       }
-      
-      // Only check stock if it's defined (null means unlimited stock)
-      if (product.stock !== null && product.stock !== undefined && product.stock < item.quantity) {
+
+      if (item.variantId) {
+        const variant = variantMap.get(item.variantId);
+        if (!variant || variant.productId !== item.productId) {
+          throw new NotFoundException(`Product variant not found: ${item.variantId}`);
+        }
+        if (
+          variant.stock !== null &&
+          variant.stock !== undefined &&
+          variant.stock < item.quantity
+        ) {
+          throw new NotFoundException(
+            `Insufficient stock for variant "${variant.name}". Available: ${variant.stock}, Requested: ${item.quantity}`,
+          );
+        }
+      } else if (
+        product.stock !== null &&
+        product.stock !== undefined &&
+        product.stock < item.quantity
+      ) {
         throw new NotFoundException(
           `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
         );
       }
     }
 
-    let totalAmountCents = 0;
-    const itemData: Array<{
-      businessId: number;
-      orderId?: number;
-      productId: number;
-      quantity: number;
-      unitPriceCents: number;
-      totalAmountCents: number;
-    }> = [];
-
-    for (const item of payload.items) {
-      const product = productMap.get(item.productId);
-      if (!product) {
-        throw new NotFoundException(`Product not found: ${item.productId}`);
-      }
-      const unitPriceCents = product.priceCents;
-      const lineTotal = unitPriceCents * item.quantity;
-      totalAmountCents += lineTotal;
-      itemData.push({
-        businessId,
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPriceCents,
-        totalAmountCents: lineTotal,
-      });
-    }
-
     const source: OrderSource = payload.source ?? OrderSource.POS;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
+      // Fetch products with row-level locking (SELECT ... FOR UPDATE NOWAIT)
+      // This prevents concurrent requests from reading stale stock values
+      const productsLocked = await tx.$queryRaw<
+        Array<{ id: number; priceCents: number; stock: number | null; name: string }>
+      >`
+        SELECT id, "priceCents", stock, name FROM "Product"
+        WHERE "businessId" = ${businessId}
+          AND id = ANY(${productIds}::int[])
+          AND "isActive" = true
+        FOR UPDATE NOWAIT
+      `;
+
+      const productMapLocked = new Map(
+        productsLocked.map((p) => [p.id, p]),
+      );
+      const variantsLocked =
+        variantIds.length > 0
+          ? await tx.$queryRaw<
+              Array<{
+                id: number;
+                productId: number;
+                priceCents: number;
+                stock: number | null;
+                name: string;
+              }>
+            >`
+              SELECT id, "productId", "priceCents", stock, name FROM "ProductVariant"
+              WHERE "businessId" = ${businessId}
+                AND id = ANY(${variantIds}::int[])
+                AND "isActive" = true
+              FOR UPDATE NOWAIT
+            `
+          : [];
+      const variantMapLocked = new Map(
+        variantsLocked.map((v) => [v.id, v]),
+      );
+
+      // Validate stock again inside transaction with locked rows
+      for (const item of payload.items) {
+        const product = productMapLocked.get(item.productId);
+        if (!product) {
+          throw new NotFoundException(`Product not found: ${item.productId}`);
+        }
+
+        if (item.variantId) {
+          const variant = variantMapLocked.get(item.variantId);
+          if (!variant || variant.productId !== item.productId) {
+            throw new NotFoundException(`Product variant not found: ${item.variantId}`);
+          }
+          if (
+            variant.stock !== null &&
+            variant.stock !== undefined &&
+            variant.stock < item.quantity
+          ) {
+            throw new NotFoundException(
+              `Insufficient stock for variant "${variant.name}". Available: ${variant.stock}, Requested: ${item.quantity}`,
+            );
+          }
+          if (
+            typeof item.expectedUnitPriceCents === 'number' &&
+            item.expectedUnitPriceCents !== variant.priceCents
+          ) {
+            throw new BadRequestException(
+              `Sepetteki fiyat güncellendi: "${product.name} / ${variant.name}". Lütfen sepeti yenileyin.`,
+            );
+          }
+        } else {
+          if (
+            product.stock !== null &&
+            product.stock !== undefined &&
+            product.stock < item.quantity
+          ) {
+            throw new NotFoundException(
+              `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
+            );
+          }
+          if (
+            typeof item.expectedUnitPriceCents === 'number' &&
+            item.expectedUnitPriceCents !== product.priceCents
+          ) {
+            throw new BadRequestException(
+              `Sepetteki fiyat güncellendi: "${product.name}". Lütfen sepeti yenileyin.`,
+            );
+          }
+        }
+      }
+
+      let totalAmountCents = 0;
+      let subtotalAmountCents = 0;
+      let taxAmountCents = 0;
+      const itemData: Array<{
+        businessId: number;
+        orderId?: number;
+        productId: number;
+        variantId?: number;
+        productName: string;
+        quantity: number;
+        unitPriceCents: number;
+        subtotalAmountCents: number;
+        taxAmountCents: number;
+        taxRateBps: number;
+        totalAmountCents: number;
+      }> = [];
+
+      for (const item of payload.items) {
+        const product = productMapLocked.get(item.productId);
+        if (!product) {
+          throw new NotFoundException(`Product not found: ${item.productId}`);
+        }
+        const variant =
+          typeof item.variantId === 'number'
+            ? variantMapLocked.get(item.variantId)
+            : undefined;
+        const unitPriceCents = variant ? variant.priceCents : product.priceCents;
+        const lineSubtotal = unitPriceCents * item.quantity;
+        const lineTax = Math.round((lineSubtotal * taxRateBps) / 10_000);
+        const lineTotal = lineSubtotal + lineTax;
+        subtotalAmountCents += lineSubtotal;
+        taxAmountCents += lineTax;
+        totalAmountCents += lineTotal;
+        itemData.push({
+          businessId,
+          productId: item.productId,
+          variantId: variant?.id,
+          productName: product.name,
+          quantity: item.quantity,
+          unitPriceCents,
+          subtotalAmountCents: lineSubtotal,
+          taxAmountCents: lineTax,
+          taxRateBps,
+          totalAmountCents: lineTotal,
+        });
+      }
+
+      // Decrement stock for each item (inside transaction with locked rows)
+      for (const item of payload.items) {
+        if (item.variantId) {
+          const variant = variantMapLocked.get(item.variantId);
+          if (variant && variant.stock !== null && variant.stock !== undefined) {
+            await (tx as any).productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { decrement: item.quantity } },
+            });
+          }
+        } else {
+          const product = productMapLocked.get(item.productId);
+          if (product && product.stock !== null && product.stock !== undefined) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { decrement: item.quantity } },
+            });
+          }
+        }
+      }
+
+      let discountAmountCents = 0;
+      let couponToConsume: { id: number; code: string } | null = null;
+      if (normalizedCouponCode) {
+        const rows = await tx.$queryRaw<
+          Array<{
+            id: number;
+            code: string;
+            type: string;
+            value: number;
+            usageLimit: number | null;
+            usedCount: number;
+            minOrderAmountCents: number | null;
+            maxDiscountCents: number | null;
+            startsAt: Date | null;
+            endsAt: Date | null;
+            isActive: boolean;
+          }>
+        >`
+          SELECT id, code, type, value, "usageLimit", "usedCount", "minOrderAmountCents", "maxDiscountCents", "startsAt", "endsAt", "isActive"
+          FROM "Coupon"
+          WHERE "businessId" = ${businessId}
+            AND code = ${normalizedCouponCode}
+          FOR UPDATE NOWAIT
+        `;
+
+        const coupon = rows[0];
+        if (!coupon || !coupon.isActive) {
+          throw new BadRequestException('Kupon geçersiz veya pasif.');
+        }
+
+        const now = new Date();
+        if (coupon.startsAt && now < new Date(coupon.startsAt)) {
+          throw new BadRequestException('Kupon henüz aktif değil.');
+        }
+        if (coupon.endsAt && now > new Date(coupon.endsAt)) {
+          throw new BadRequestException('Kupon süresi dolmuş.');
+        }
+        if (
+          coupon.usageLimit !== null &&
+          coupon.usageLimit !== undefined &&
+          coupon.usedCount >= coupon.usageLimit
+        ) {
+          throw new BadRequestException('Kupon kullanım limiti dolmuş.');
+        }
+        if (
+          coupon.minOrderAmountCents !== null &&
+          coupon.minOrderAmountCents !== undefined &&
+          subtotalAmountCents < coupon.minOrderAmountCents
+        ) {
+          throw new BadRequestException('Kupon minimum sepet tutarı sağlanmadı.');
+        }
+
+        if (String(coupon.type).toUpperCase() === 'PERCENT') {
+          discountAmountCents = Math.round((subtotalAmountCents * Number(coupon.value)) / 10_000);
+        } else {
+          discountAmountCents = Number(coupon.value);
+        }
+
+        if (
+          coupon.maxDiscountCents !== null &&
+          coupon.maxDiscountCents !== undefined &&
+          discountAmountCents > coupon.maxDiscountCents
+        ) {
+          discountAmountCents = coupon.maxDiscountCents;
+        }
+
+        if (discountAmountCents > totalAmountCents) {
+          discountAmountCents = totalAmountCents;
+        }
+        if (discountAmountCents < 0) {
+          discountAmountCents = 0;
+        }
+
+        totalAmountCents -= discountAmountCents;
+        couponToConsume = { id: coupon.id, code: coupon.code };
+      }
+
+      const order = await (tx as any).order.create({
         data: {
           businessId,
           customerId: payload.customerId,
           createdByUserId,
           statusId: status.id,
+          subtotalAmountCents,
+          taxAmountCents,
+          taxRateBps,
+          discountAmountCents,
+          couponCode: couponToConsume?.code ?? null,
           totalAmountCents,
           source,
           notes: payload.notes ?? null,
@@ -159,22 +671,36 @@ export class OrdersService {
         },
       });
 
-      await tx.orderItem.createMany({
+      await (tx as any).orderItem.createMany({
         data: itemData.map((i) => ({
           businessId: i.businessId,
           orderId: order.id,
           productId: i.productId,
+          variantId: i.variantId,
+          productName: i.productName,
           quantity: i.quantity,
           unitPriceCents: i.unitPriceCents,
+          subtotalAmountCents: i.subtotalAmountCents,
+          taxAmountCents: i.taxAmountCents,
+          taxRateBps: i.taxRateBps,
           totalAmountCents: i.totalAmountCents,
         })),
       });
 
-      const items = await tx.orderItem.findMany({
+      if (couponToConsume) {
+        await (tx as any).coupon.update({
+          where: { id: couponToConsume.id },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
+
+      const items = await (tx as any).orderItem.findMany({
         where: { businessId, orderId: order.id },
         select: {
           id: true,
           productId: true,
+          variantId: true,
+          productName: true,
           quantity: true,
           unitPriceCents: true,
           totalAmountCents: true,
@@ -202,29 +728,16 @@ export class OrdersService {
     const userId = Number(currentUser.userId);
 
     if (currentUser.role === 'CUSTOMER') {
-      const phone = currentUser.phone?.trim();
-      if (!phone) {
-        return [];
-      }
-
-      const customer = await this.prisma.customer.findFirst({
-        where: {
-          businessId,
-          phone,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!customer) {
+      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      if (!customerId) {
         return [];
       }
 
       const orders = await this.prisma.order.findMany({
         where: {
           businessId,
-          customerId: customer.id,
+          customerId,
+          deletedAt: null,
         },
         select: {
           id: true,
@@ -256,9 +769,9 @@ export class OrdersService {
     }
 
     const where =
-      currentUser.role === 'ADMIN'
-        ? { businessId }
-        : { businessId, createdByUserId: userId };
+      currentUser.role === 'STAFF'
+        ? { businessId, createdByUserId: userId, deletedAt: null as null }
+        : { businessId, deletedAt: null as null };
 
     const orders = await this.prisma.order.findMany({
       where,
@@ -299,6 +812,7 @@ export class OrdersService {
       where: {
         id,
         businessId,
+        deletedAt: null,
       },
       include: {
         status: true,
@@ -313,74 +827,60 @@ export class OrdersService {
       throw new ForbiddenException('Access denied');
     }
 
+    if (currentUser.role === 'CUSTOMER') {
+      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      if (!customerId || order.customerId !== customerId) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+
     return order;
   }
 
-  async findOne(currentUser: JwtPayload, id: number): Promise<OrderDetail> {
-    const order = await this.findAccessibleOrder(currentUser, id);
-    const items = await this.prisma.orderItem.findMany({
-      where: {
-        businessId: order.businessId,
-        orderId: order.id,
-      },
-      select: {
-        id: true,
-        productId: true,
-        quantity: true,
-        unitPriceCents: true,
-        totalAmountCents: true,
-      },
-    });
-
-    return {
-      id: order.id,
-      customerId: order.customerId,
-      totalAmountCents: order.totalAmountCents,
-      statusKey: order.status.key,
-      source: order.source,
-      createdByUserId: order.createdByUserId,
-      createdAt: order.createdAt,
-      notes: order.notes ?? undefined,
-      items,
-    };
-  }
-
-  async update(
+  async findOneCustomer(
     currentUser: JwtPayload,
     id: number,
-    payload: UpdateOrderDto,
   ): Promise<OrderDetail> {
-    const order = await this.findAccessibleOrder(currentUser, id);
+    if (currentUser.role !== 'CUSTOMER') {
+      throw new ForbiddenException('Access denied');
+    }
+    return this.findOne(currentUser, id);
+  }
 
-    const data: Partial<{ notes: string | null; statusId: number }> = {};
-
-    if (payload.notes !== undefined) {
-      data.notes = payload.notes;
+  private async setCustomerOrderStatus(
+    currentUser: JwtPayload,
+    id: number,
+    nextStatusKey: string,
+  ) {
+    if (currentUser.role !== 'CUSTOMER') {
+      throw new ForbiddenException('Access denied');
     }
 
-    if (payload.statusKey) {
-      const status = await this.prisma.orderStatus.findFirst({
-        where: {
-          businessId: order.businessId,
-          key: payload.statusKey,
-        },
-        select: { id: true },
-      });
-      if (!status) {
-        throw new NotFoundException('Order status not found');
-      }
-      data.statusId = status.id;
+    const order = await this.findAccessibleOrder(currentUser, id);
+
+    if (order.status?.isFinal) {
+      throw new ForbiddenException('Order can not be updated');
+    }
+
+    const status = await this.prisma.orderStatus.findFirst({
+      where: {
+        businessId: order.businessId,
+        key: nextStatusKey,
+      },
+      select: { id: true },
+    });
+
+    if (!status) {
+      throw new NotFoundException('Order status not found');
     }
 
     const updated = await this.prisma.order.update({
       where: { id: order.id },
-      data,
-      include: {
-        status: true,
-      },
+      data: { statusId: status.id },
+      include: { status: true },
     });
 
-    const items = await this.prisma.orderItem.findMany({
+    const items = await (this.prisma as any).orderItem.findMany({
       where: {
         businessId: updated.businessId,
         orderId: updated.id,
@@ -388,6 +888,8 @@ export class OrdersService {
       select: {
         id: true,
         productId: true,
+        variantId: true,
+        productName: true,
         quantity: true,
         unitPriceCents: true,
         totalAmountCents: true,
@@ -407,7 +909,178 @@ export class OrdersService {
     };
   }
 
-  async listPayments(currentUser: JwtPayload, id: number): Promise<PaymentSummary[]> {
+  async requestCancelCustomerOrder(currentUser: JwtPayload, id: number) {
+    return this.setCustomerOrderStatus(currentUser, id, 'CANCELLED');
+  }
+
+  async requestReturnCustomerOrder(currentUser: JwtPayload, id: number) {
+    return this.setCustomerOrderStatus(currentUser, id, 'RETURN_REQUESTED');
+  }
+
+  async findOne(currentUser: JwtPayload, id: number): Promise<OrderDetail> {
+    const order = await this.findAccessibleOrder(currentUser, id);
+    const items = await (this.prisma as any).orderItem.findMany({
+      where: {
+        businessId: order.businessId,
+        orderId: order.id,
+      },
+      select: {
+        id: true,
+        productId: true,
+        variantId: true,
+        productName: true,
+        quantity: true,
+        unitPriceCents: true,
+        totalAmountCents: true,
+      },
+    });
+
+    return {
+      id: order.id,
+      customerId: order.customerId,
+      totalAmountCents: order.totalAmountCents,
+      statusKey: order.status.key,
+      source: order.source,
+      createdByUserId: order.createdByUserId,
+      createdAt: order.createdAt,
+      notes: order.notes ?? undefined,
+      items,
+    };
+  }
+
+  /**
+   * Detect if a status key indicates a cancelled order
+   * Based on convention: status keys containing "CANCEL" (case-insensitive)
+   */
+  private isCancelledStatus(statusKey?: string): boolean {
+    return statusKey?.toUpperCase().includes('CANCEL') ?? false;
+  }
+
+  async update(
+    currentUser: JwtPayload,
+    id: number,
+    payload: UpdateOrderDto,
+  ): Promise<OrderDetail> {
+    const order = await this.findAccessibleOrder(currentUser, id);
+    const wasCancelled = this.isCancelledStatus(order.status?.key);
+    const wasFinal = Boolean(order.status?.isFinal);
+
+    const data: Partial<{ notes: string | null; statusId: number }> = {};
+
+    if (payload.notes !== undefined) {
+      data.notes = payload.notes;
+    }
+
+    let newStatusKey: string | undefined;
+
+    if (payload.statusKey) {
+      const status = await this.prisma.orderStatus.findFirst({
+        where: {
+          businessId: order.businessId,
+          key: payload.statusKey,
+        },
+        select: { id: true, key: true },
+      });
+      if (!status) {
+        throw new NotFoundException('Order status not found');
+      }
+      data.statusId = status.id;
+      newStatusKey = status.key;
+    }
+
+    const isCancellingNow = newStatusKey && this.isCancelledStatus(newStatusKey);
+
+    // Use transaction to ensure stock restoration is atomic with status update
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id: order.id },
+        data,
+        include: {
+          status: true,
+        },
+      });
+
+      // Restore stock if transitioning to cancelled status (and wasn't already cancelled)
+      if (isCancellingNow && !wasCancelled) {
+        const items: Array<{ productId: number; variantId?: number | null; quantity: number }> =
+          await (tx as any).orderItem.findMany({
+          where: { orderId: updated.id },
+          select: { productId: true, variantId: true, quantity: true },
+        });
+
+        for (const item of items) {
+          if (item.variantId) {
+            const variant = await (tx as any).productVariant.findFirst({
+              where: { id: item.variantId },
+              select: { stock: true },
+            });
+            if (variant && variant.stock !== null && variant.stock !== undefined) {
+              await (tx as any).productVariant.update({
+                where: { id: item.variantId },
+                data: { stock: { increment: item.quantity } },
+              });
+            }
+          } else {
+            const product = await tx.product.findFirst({
+              where: { id: item.productId },
+              select: { stock: true },
+            });
+            if (product && product.stock !== null && product.stock !== undefined) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } },
+              });
+            }
+          }
+        }
+      }
+
+      return updated;
+    });
+
+    const isFinalNow = Boolean(result.status?.isFinal);
+    if (!wasFinal && isFinalNow) {
+      await this.financeService.ensureCommissionForFinalOrder({
+        businessId: result.businessId,
+        orderId: result.id,
+        beneficiaryUserId: result.createdByUserId,
+        grossAmountCents: result.totalAmountCents,
+      });
+    }
+
+    const items = await (this.prisma as any).orderItem.findMany({
+      where: {
+        businessId: result.businessId,
+        orderId: result.id,
+      },
+      select: {
+        id: true,
+        productId: true,
+        variantId: true,
+        productName: true,
+        quantity: true,
+        unitPriceCents: true,
+        totalAmountCents: true,
+      },
+    });
+
+    return {
+      id: result.id,
+      customerId: result.customerId,
+      totalAmountCents: result.totalAmountCents,
+      statusKey: result.status.key,
+      source: result.source,
+      createdByUserId: result.createdByUserId,
+      createdAt: result.createdAt,
+      notes: result.notes ?? undefined,
+      items,
+    };
+  }
+
+  async listPayments(
+    currentUser: JwtPayload,
+    id: number,
+  ): Promise<PaymentSummary[]> {
     const order = await this.findAccessibleOrder(currentUser, id);
 
     const payments = await this.prisma.payment.findMany({
@@ -444,6 +1117,10 @@ export class OrdersService {
     const order = await this.findAccessibleOrder(currentUser, id);
 
     const amountCents = Number(payload.amount);
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      throw new BadRequestException('Tutar pozitif olmalı');
+    }
 
     const payment = await this.prisma.payment.create({
       data: {

@@ -1,4 +1,11 @@
-import { IsArray, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { ProductType } from '@prisma/client';
 
 export class UpdateProductDto {

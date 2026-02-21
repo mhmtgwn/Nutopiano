@@ -11,7 +11,6 @@ import { Response } from 'express';
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
       console.error('Exception caught by filter:', exception);
     }
     const ctx = host.switchToHttp();
@@ -27,7 +26,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
       } else if (typeof exceptionResponse === 'object' && exceptionResponse) {
-        const payload = exceptionResponse as { message?: string | string[]; error?: string };
+        const payload = exceptionResponse as {
+          message?: string | string[];
+          error?: string;
+        };
         if (Array.isArray(payload.message)) {
           message = payload.message[0] ?? 'Validation error';
           errors = payload.message;

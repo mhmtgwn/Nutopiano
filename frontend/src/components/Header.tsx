@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut, Search, ShoppingBag, Store, User, UserCircle2 } from 'lucide-react';
+import { Heart, LogOut, MapPin, MessageSquare, Search, Settings, ShoppingBag, Store, User, UserCircle2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
-import { setAuthToken } from '@/utils/helpers';
+import api from '@/services/api';
 import toast from 'react-hot-toast';
 
 export default function Header() {
@@ -75,12 +75,17 @@ export default function Header() {
     window.setTimeout(() => setSearchValue(''), 0);
   };
 
-  const handleLogout = () => {
-    setAuthToken(null);
-    dispatch(logout());
-    toast.success('Çıkış yapıldı.');
-    setIsUserMenuOpen(false);
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore
+    } finally {
+      dispatch(logout());
+      toast.success('Çıkış yapıldı.');
+      setIsUserMenuOpen(false);
+      router.push('/');
+    }
   };
 
   return (
@@ -197,6 +202,38 @@ export default function Header() {
                         >
                           <ShoppingBag className="h-4 w-4" />
                           Siparişlerim
+                        </Link>
+                        <Link
+                          href="/account/favorites"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <Heart className="h-4 w-4" />
+                          Favorilerim
+                        </Link>
+                        <Link
+                          href="/account/reviews"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Yorumlarım
+                        </Link>
+                        <Link
+                          href="/account/addresses"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <MapPin className="h-4 w-4" />
+                          Adreslerim
+                        </Link>
+                        <Link
+                          href="/account/settings"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <Settings className="h-4 w-4" />
+                          Ayarlar
                         </Link>
                         <button
                           onClick={handleLogout}

@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -17,6 +18,7 @@ describe('Orders & Payments (e2e)', () => {
   let staffUser: { id: number; phone: string };
   let otherBusinessAdmin: { id: number; phone: string };
   let customer1: { id: number };
+  let category1: { id: number };
   let product1: { id: number };
   let product2: { id: number };
   let adminOrder: { id: number };
@@ -24,9 +26,12 @@ describe('Orders & Payments (e2e)', () => {
   let otherBusinessOrder: { id: number };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9700000${RUN_ID}1`;
-  const STAFF_PHONE = `+9700000${RUN_ID}2`;
-  const OTHER_BUS_ADMIN_PHONE = `+9700000${RUN_ID}3`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
+  const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
+  const CUSTOMER_PHONE_1 = `+905${PHONE_BASE}11`;
+  const OTHER_BUS_CUSTOMER_PHONE = `+905${PHONE_BASE}21`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,6 +42,8 @@ describe('Orders & Payments (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business1 = await prisma.business.create({
       data: {
@@ -55,6 +62,7 @@ describe('Orders & Payments (e2e)', () => {
         businessId: business1.id,
         name: 'Orders Admin',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -65,6 +73,7 @@ describe('Orders & Payments (e2e)', () => {
         businessId: business1.id,
         name: 'Orders Staff',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -75,6 +84,7 @@ describe('Orders & Payments (e2e)', () => {
         businessId: business2.id,
         name: 'Other Business Admin (Orders)',
         phone: OTHER_BUS_ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -85,15 +95,27 @@ describe('Orders & Payments (e2e)', () => {
         businessId: business1.id,
         createdByUserId: adminUser.id,
         name: 'Orders Customer 1',
-        phone: `+9800000${RUN_ID}1`,
+        phone: CUSTOMER_PHONE_1,
         balance: 0,
       },
+    });
+
+    category1 = await prisma.category.create({
+      data: {
+        businessId: business1.id,
+        createdByUserId: adminUser.id,
+        name: 'Orders Category 1',
+        slug: `orders-cat-1-${RUN_ID}`,
+        isActive: true,
+      },
+      select: { id: true },
     });
 
     product1 = await prisma.product.create({
       data: {
         businessId: business1.id,
         createdByUserId: adminUser.id,
+        categoryId: category1.id,
         name: 'Orders Product 1',
         sku: `ORD-P1-${RUN_ID}`,
         type: 'PHYSICAL',
@@ -105,6 +127,7 @@ describe('Orders & Payments (e2e)', () => {
       data: {
         businessId: business1.id,
         createdByUserId: adminUser.id,
+        categoryId: category1.id,
         name: 'Orders Product 2',
         sku: `ORD-P2-${RUN_ID}`,
         type: 'PHYSICAL',
@@ -152,12 +175,23 @@ describe('Orders & Payments (e2e)', () => {
     });
 
     // Seed order for other business for cross-tenant tests
+    const otherCategory = await prisma.category.create({
+      data: {
+        businessId: business2.id,
+        createdByUserId: otherBusinessAdmin.id,
+        name: 'Other Orders Category',
+        slug: `orders-other-cat-${RUN_ID}`,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
     const otherCustomer = await prisma.customer.create({
       data: {
         businessId: business2.id,
         createdByUserId: otherBusinessAdmin.id,
         name: 'Other Orders Customer',
-        phone: `+9800000${RUN_ID}9`,
+        phone: OTHER_BUS_CUSTOMER_PHONE,
         balance: 0,
       },
     });
@@ -166,6 +200,7 @@ describe('Orders & Payments (e2e)', () => {
       data: {
         businessId: business2.id,
         createdByUserId: otherBusinessAdmin.id,
+        categoryId: otherCategory.id,
         name: 'Other Orders Product',
         sku: `ORD-OP-${RUN_ID}`,
         type: 'PHYSICAL',
@@ -220,6 +255,16 @@ describe('Orders & Payments (e2e)', () => {
 
       expect(res.body.totalAmountCents).toBe(1000 + 2 * 500);
       expect(res.body.statusKey).toBe('CREATED');
+      const firstItem = res.body.items.find(
+        (i: { productId: number }) => i.productId === product1.id,
+      );
+      const secondItem = res.body.items.find(
+        (i: { productId: number }) => i.productId === product2.id,
+      );
+      expect(firstItem?.unitPriceCents).toBe(1000);
+      expect(firstItem?.productName).toBe('Orders Product 1');
+      expect(secondItem?.unitPriceCents).toBe(500);
+      expect(secondItem?.productName).toBe('Orders Product 2');
       adminOrder = res.body;
     });
 
@@ -238,6 +283,53 @@ describe('Orders & Payments (e2e)', () => {
       staffOrder = res.body;
     });
 
+    it('rejects order creation when client cart price is stale', async () => {
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          customerId: customer1.id,
+          items: [
+            {
+              productId: product1.id,
+              quantity: 1,
+              expectedUnitPriceCents: 999, // actual is 1000
+            },
+          ],
+        })
+        .expect(400)
+        .expect((res) => {
+          expect(String(res.body?.message ?? '')).toContain('fiyat');
+        });
+    });
+
+    it('Order item keeps price and name snapshot after product changes', async () => {
+      await prisma.product.update({
+        where: { id: product1.id },
+        data: { name: 'Orders Product 1 Updated', priceCents: 7777 },
+      });
+      await prisma.product.update({
+        where: { id: product2.id },
+        data: { name: 'Orders Product 2 Updated', priceCents: 8888 },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/orders/${adminOrder.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const firstItem = res.body.items.find(
+        (i: { productId: number }) => i.productId === product1.id,
+      );
+      const secondItem = res.body.items.find(
+        (i: { productId: number }) => i.productId === product2.id,
+      );
+      expect(firstItem?.unitPriceCents).toBe(1000);
+      expect(firstItem?.productName).toBe('Orders Product 1');
+      expect(secondItem?.unitPriceCents).toBe(500);
+      expect(secondItem?.productName).toBe('Orders Product 2');
+    });
+
     it('ADMIN lists all orders in business, STAFF lists only own orders', async () => {
       const adminRes = await request(app.getHttpServer())
         .get('/orders')
@@ -245,7 +337,9 @@ describe('Orders & Payments (e2e)', () => {
         .expect(200);
 
       const adminOrderIds = adminRes.body.map((o: { id: number }) => o.id);
-      expect(adminOrderIds).toEqual(expect.arrayContaining([adminOrder.id, staffOrder.id]));
+      expect(adminOrderIds).toEqual(
+        expect.arrayContaining([adminOrder.id, staffOrder.id]),
+      );
 
       const staffRes = await request(app.getHttpServer())
         .get('/orders')

@@ -6,4 +6,5 @@ export type StaffSelfCheck =
   | { type: 'id'; param: string }
   | { type: 'phone'; param: string };
 
-export const StaffSelf = (check: StaffSelfCheck) => SetMetadata(STAFF_SELF_KEY, check);
+export const StaffSelf = (check: StaffSelfCheck) =>
+  SetMetadata(STAFF_SELF_KEY, check);

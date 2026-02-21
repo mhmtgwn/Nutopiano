@@ -2,13 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { ForbiddenException } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload';
-import type { UserRole } from '../../core/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 export interface UserSummary {
   id: number;
   name: string;
   phone?: string;
-  role: UserRole;
+  role: Role;
   isActive: boolean;
 }
 
@@ -60,7 +60,10 @@ export class UsersService {
     return user;
   }
 
-  async findByPhone(currentUser: JwtPayload, phone: string): Promise<UserSummary> {
+  async findByPhone(
+    currentUser: JwtPayload,
+    phone: string,
+  ): Promise<UserSummary> {
     const businessId = Number(currentUser.businessId);
     const user = await this.prisma.user.findFirst({
       where: {
@@ -81,7 +84,11 @@ export class UsersService {
     return user;
   }
 
-  async updateRole(currentUser: JwtPayload, id: number, role: UserRole): Promise<UserSummary> {
+  async updateRole(
+    currentUser: JwtPayload,
+    id: number,
+    role: string,
+  ): Promise<UserSummary> {
     const businessId = Number(currentUser.businessId);
     const currentUserId = Number(currentUser.userId);
     if (!Number.isFinite(businessId)) {
@@ -89,7 +96,9 @@ export class UsersService {
     }
 
     if (Number.isFinite(currentUserId) && id === currentUserId) {
-      throw new ForbiddenException('Kendi rolünüzü bu ekrandan değiştiremezsiniz.');
+      throw new ForbiddenException(
+        'Kendi rolünüzü bu ekrandan değiştiremezsiniz.',
+      );
     }
 
     const existing = await this.prisma.user.findFirst({
@@ -108,7 +117,7 @@ export class UsersService {
 
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { role },
+      data: { role: role as Role },
       select: {
         id: true,
         name: true,
@@ -121,7 +130,11 @@ export class UsersService {
     return updated;
   }
 
-  async updateActive(currentUser: JwtPayload, id: number, isActive: boolean): Promise<UserSummary> {
+  async updateActive(
+    currentUser: JwtPayload,
+    id: number,
+    isActive: boolean,
+  ): Promise<UserSummary> {
     const businessId = Number(currentUser.businessId);
     const currentUserId = Number(currentUser.userId);
     if (!Number.isFinite(businessId)) {
@@ -129,7 +142,9 @@ export class UsersService {
     }
 
     if (Number.isFinite(currentUserId) && id === currentUserId) {
-      throw new ForbiddenException('Kendi hesabınızı bu ekrandan pasife alamazsınız.');
+      throw new ForbiddenException(
+        'Kendi hesabınızı bu ekrandan pasife alamazsınız.',
+      );
     }
 
     const existing = await this.prisma.user.findFirst({

@@ -1,7 +1,22 @@
 {
+  "name": "nutopiano",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "dev:backend": "npm run start:dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "security:audit": "npm audit --workspaces --omit=dev --audit-level=high",
+    "security:audit:all": "npm audit --workspaces --audit-level=high",
+    "loadtest:k6": "k6 run scripts/loadtest/k6-api-smoke.js"
+  },
   "dependencies": {
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
+    "helmet": "^8.1.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1"
   }

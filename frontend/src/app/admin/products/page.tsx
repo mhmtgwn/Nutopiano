@@ -55,6 +55,18 @@ interface ProductRow {
   updatedAt?: string;
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface PaginatedProducts {
+  data: ProductRow[];
+  meta: PaginationMeta;
+}
+
 const formatType = (type: ProductType) => {
   switch (type) {
     case 'PHYSICAL':
@@ -72,6 +84,9 @@ const formatType = (type: ProductType) => {
 
 export default function AdminProductsPage() {
   const queryClient = useQueryClient();
+
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
 
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -169,16 +184,24 @@ export default function AdminProductsPage() {
   }, [categoriesTree]);
 
   const {
-    data: products,
+    data: productsPayload,
     isLoading,
     isError,
-  } = useQuery<ProductRow[]>({
-    queryKey: ['admin-products'],
+  } = useQuery<PaginatedProducts>({
+    queryKey: ['admin-products', { page, pageSize }],
     queryFn: async () => {
-      const res = await api.get<ProductRow[]>('/products');
+      const res = await api.get<PaginatedProducts>('/products', {
+        params: {
+          page,
+          pageSize,
+        },
+      });
       return res.data;
     },
   });
+
+  const products = productsPayload?.data ?? [];
+  const meta = productsPayload?.meta;
 
   const lowStockCount = useMemo(() => {
     if (!products) return 0;
@@ -599,7 +622,7 @@ export default function AdminProductsPage() {
                 Ürünler
               </h2>
               <p className="mt-2 text-sm text-[#5C5C5C]">
-                Toplam: {products?.length ?? 0}
+                Toplam: {meta?.total ?? products?.length ?? 0}
               </p>
             </div>
           </div>
@@ -856,6 +879,32 @@ export default function AdminProductsPage() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {!isLoading && !isError && meta && meta.totalPages > 1 && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E5E0] pt-4 text-xs text-[#5C5C5C]">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
+                Sayfa {meta.page} / {meta.totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={meta.page <= 1}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Önceki
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  disabled={meta.page >= meta.totalPages}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#1A3C34]/10 bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sonraki
+                </button>
               </div>
             </div>
           )}

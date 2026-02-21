@@ -10,9 +10,12 @@ export class PublicCategoriesController {
   @Get()
   @ApiOperation({
     summary: 'List public categories',
-    description: 'Public endpoint to list active categories for the default business.',
+    description:
+      'Public endpoint to list active categories for the default business.',
   })
-  @ApiOkResponse({ description: 'Array of active categories for the default business.' })
+  @ApiOkResponse({
+    description: 'Array of active categories for the default business.',
+  })
   findAll() {
     return this.categoriesService.findAllPublic();
   }
@@ -20,7 +23,8 @@ export class PublicCategoriesController {
   @Get('tree')
   @ApiOperation({
     summary: 'Get category tree',
-    description: 'Public endpoint to fetch the hierarchical category tree for the default business.',
+    description:
+      'Public endpoint to fetch the hierarchical category tree for the default business.',
   })
   @ApiOkResponse({ description: 'Hierarchical category tree structure.' })
   getTree(): Promise<PublicCategoryTree[]> {
@@ -30,7 +34,8 @@ export class PublicCategoriesController {
   @Get(':slug')
   @ApiOperation({
     summary: 'Get public category by slug',
-    description: 'Public endpoint to fetch an active category (and its active products) by slug.',
+    description:
+      'Public endpoint to fetch an active category (and its active products) by slug.',
   })
   @ApiOkResponse({ description: 'Active category with active products.' })
   findOne(@Param('slug') slug: string) {

@@ -2,13 +2,35 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
 
+type MailInfo = {
+  messageId?: string;
+};
+
+type SendMailOptions = {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+type Transporter = {
+  sendMail: (options: SendMailOptions) => Promise<MailInfo>;
+};
+
+type NodemailerModule = {
+  createTransport: (options: Record<string, unknown>) => Transporter;
+};
+
+const nm = nodemailer as unknown as NodemailerModule;
+
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
+  private transporter: Transporter | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
-  private getTransporter(): nodemailer.Transporter {
+  private getTransporter(): Transporter {
     if (this.transporter) {
       return this.transporter;
     }
@@ -17,16 +39,17 @@ export class EmailService {
     const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
     const user = this.config.get<string>('SMTP_USER');
     const pass = this.config.get<string>('SMTP_PASS');
-    const secure = (this.config.get<string>('SMTP_SECURE') ?? 'false') === 'true';
+    const secure =
+      (this.config.get<string>('SMTP_SECURE') ?? 'false') === 'true';
 
     if (!host || !user || !pass) {
       // Allow local/dev to run without SMTP configured.
-      // eslint-disable-next-line no-console
+
       console.warn(
         'SMTP is not configured. Password reset emails will be logged to console. Set SMTP_HOST, SMTP_USER, SMTP_PASS to enable real sending.',
       );
 
-      this.transporter = nodemailer.createTransport({
+      this.transporter = nm.createTransport({
         streamTransport: true,
         newline: 'unix',
         buffer: true,
@@ -35,7 +58,7 @@ export class EmailService {
       return this.transporter;
     }
 
-    this.transporter = nodemailer.createTransport({
+    this.transporter = nm.createTransport({
       host,
       port,
       secure,
@@ -53,7 +76,10 @@ export class EmailService {
     resetUrl: string;
     siteName: string;
   }): Promise<void> {
-    const from = this.config.get<string>('SMTP_FROM') ?? this.config.get<string>('SMTP_USER') ?? 'no-reply@localhost';
+    const from =
+      this.config.get<string>('SMTP_FROM') ??
+      this.config.get<string>('SMTP_USER') ??
+      'no-reply@localhost';
 
     const transporter = this.getTransporter();
 
@@ -72,11 +98,10 @@ export class EmailService {
       `,
     });
 
-    // eslint-disable-next-line no-console
     console.log('Password reset email queued:', {
       to: params.to,
       resetUrl: params.resetUrl,
-      messageId: info.messageId,
+      messageId: info.messageId ?? null,
     });
   }
 }

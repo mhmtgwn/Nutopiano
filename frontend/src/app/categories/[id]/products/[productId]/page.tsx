@@ -31,12 +31,8 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? process.env.VERCEL === '1' ||
-      process.env.VERCEL === 'true' ||
-      process.env.NETLIFY === 'true'
-      ? 'https://api.nutopiano.com/api'
-      : 'http://localhost:3001/api'
-    : 'http://localhost:3001/api');
+    ? 'https://api.nutopiano.com/api/v1'
+    : 'http://localhost:3001/api/v1');
 
 const unwrapResponse = <T,>(payload: unknown): T | null => {
   if (!payload) return null;
@@ -64,22 +60,26 @@ const normalizeProduct = (product: ProductResponse): ProductDetail => ({
 });
 
 const getProduct = async (id: string): Promise<ProductDetail | null> => {
-  const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-    cache: 'no-store',
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      cache: 'no-store',
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    const data = unwrapResponse<ProductResponse>(payload);
+
+    if (!data) {
+      return null;
+    }
+
+    return normalizeProduct(data);
+  } catch {
     return null;
   }
-
-  const payload = await response.json();
-  const data = unwrapResponse<ProductResponse>(payload);
-
-  if (!data) {
-    return null;
-  }
-
-  return normalizeProduct(data);
 };
 
 export async function generateMetadata({

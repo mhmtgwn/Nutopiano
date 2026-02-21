@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -20,9 +21,10 @@ describe('OrderStatus (e2e)', () => {
   let otherBusinessStatus: { id: number; key: string; isDefault: boolean };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9500000${RUN_ID}1`;
-  const STAFF_PHONE = `+9500000${RUN_ID}2`;
-  const OTHER_BUS_ADMIN_PHONE = `+9500000${RUN_ID}3`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
+  const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -33,6 +35,8 @@ describe('OrderStatus (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business1 = await prisma.business.create({
       data: {
@@ -51,6 +55,7 @@ describe('OrderStatus (e2e)', () => {
         businessId: business1.id,
         name: 'OrderStatus Admin',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -61,6 +66,7 @@ describe('OrderStatus (e2e)', () => {
         businessId: business1.id,
         name: 'OrderStatus Staff',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -71,6 +77,7 @@ describe('OrderStatus (e2e)', () => {
         businessId: business2.id,
         name: 'Other Business Admin (OrderStatus)',
         phone: OTHER_BUS_ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -154,7 +161,9 @@ describe('OrderStatus (e2e)', () => {
         .expect(200);
 
       const adminKeys = adminRes.body.map((s: { key: string }) => s.key);
-      expect(adminKeys).toEqual(expect.arrayContaining(['CREATED', 'IN_PROGRESS']));
+      expect(adminKeys).toEqual(
+        expect.arrayContaining(['CREATED', 'IN_PROGRESS']),
+      );
       expect(adminKeys).not.toContain('OTHER_CREATED');
 
       const staffRes = await request(app.getHttpServer())
@@ -163,7 +172,9 @@ describe('OrderStatus (e2e)', () => {
         .expect(200);
 
       const staffKeys = staffRes.body.map((s: { key: string }) => s.key);
-      expect(staffKeys).toEqual(expect.arrayContaining(['CREATED', 'IN_PROGRESS']));
+      expect(staffKeys).toEqual(
+        expect.arrayContaining(['CREATED', 'IN_PROGRESS']),
+      );
       expect(staffKeys).not.toContain('OTHER_CREATED');
     });
 
@@ -200,7 +211,9 @@ describe('OrderStatus (e2e)', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      const defaults = listRes.body.filter((s: { isDefault: boolean }) => s.isDefault);
+      const defaults = listRes.body.filter(
+        (s: { isDefault: boolean }) => s.isDefault,
+      );
       expect(defaults).toHaveLength(1);
       expect(defaults[0].id).toBe(newDefaultId);
     });

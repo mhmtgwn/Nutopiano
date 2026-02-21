@@ -8,7 +8,6 @@ import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { getAuthToken, setAuthToken } from '@/utils/helpers';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -38,23 +37,17 @@ interface AdminGuardProps {
   children: ReactNode;
 }
 
-const isAdminRole = (role?: string) => role === 'ADMIN';
+const isAdminRole = (role?: string) =>
+  role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SELLER' || role === 'STAFF';
 
 export default function AdminGuard({ children }: AdminGuardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, status } = useAppSelector((state) => state.user);
-
-  const token = useMemo(() => getAuthToken(), []);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const isLoading = isLoadingProfile || status === 'authenticating';
 
   useEffect(() => {
-    if (!token) {
-      router.replace('/login');
-      return;
-    }
-
     if (user) {
       if (!isAdminRole(user.role)) {
         router.replace('/');
@@ -80,7 +73,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
               role: profile.role,
               businessId: profile.businessId,
             },
-            token,
+            token: null,
           }),
         );
 
@@ -92,7 +85,6 @@ export default function AdminGuard({ children }: AdminGuardProps) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');
 
         dispatch(setAuthError(message));
-        setAuthToken(null);
         dispatch(logout());
         router.replace('/login');
       } finally {
@@ -101,17 +93,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     };
 
     fetchProfile();
-  }, [token, user, dispatch, router]);
-
-  if (!token) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <Spinner fullscreen label="Yönlendiriliyor..." />
-        </div>
-      </div>
-    );
-  }
+  }, [user, dispatch, router]);
 
   if (isLoading && !user) {
     return (

@@ -22,12 +22,8 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? process.env.VERCEL === '1' ||
-      process.env.VERCEL === 'true' ||
-      process.env.NETLIFY === 'true'
-      ? 'https://api.nutopiano.com/api'
-      : 'http://localhost:3001/api'
-    : 'http://localhost:3001/api');
+    ? 'https://api.nutopiano.com/api/v1'
+    : 'http://localhost:3001/api/v1');
 const OG_IMAGE_PATH = '/nutopiano-logo.png';
 const SITE_NAME = 'Nutopiano';
 
@@ -50,17 +46,21 @@ const buildOgImage = (siteUrl: string) =>
   `${siteUrl}${OG_IMAGE_PATH.startsWith('/') ? '' : '/'}${OG_IMAGE_PATH}`;
 
 const getCategory = async (slug: string): Promise<ApiCategoryDetail | null> => {
-  const response = await fetch(`${API_BASE_URL}/public/categories/${slug}`, {
-    cache: 'no-store',
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/public/categories/${slug}`, {
+      cache: 'no-store',
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    const data = unwrapResponse<ApiCategoryDetail>(payload);
+    return data;
+  } catch {
     return null;
   }
-
-  const payload = await response.json();
-  const data = unwrapResponse<ApiCategoryDetail>(payload);
-  return data;
 };
 
 export async function generateMetadata({

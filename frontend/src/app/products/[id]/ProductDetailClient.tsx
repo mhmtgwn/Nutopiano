@@ -6,13 +6,31 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Search, ShoppingBag, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/services/api';
 import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
 import { addItem } from '@/store/cartSlice';
-import { formatPrice } from '@/utils/helpers';
+import { formatDate, formatPrice } from '@/utils/helpers';
 import Button from '@/components/common/Button';
+import Spinner from '@/components/common/Spinner';
+
+const resolveApiErrorMessage = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== 'object') return fallback;
+  if (!('response' in error)) return fallback;
+  const response = (error as { response?: unknown }).response;
+  if (!response || typeof response !== 'object') return fallback;
+  if (!('data' in response)) return fallback;
+  const data = (response as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return fallback;
+  if (!('message' in data)) return fallback;
+  const message = (data as { message?: unknown }).message;
+  if (Array.isArray(message)) {
+    return message.map(String).join(', ');
+  }
+  if (typeof message === 'string') return message;
+  return fallback;
+};
 
 interface ProductDetail {
   id: string;
@@ -32,6 +50,15 @@ export interface ProductDetailClientProps {
   product: ProductDetail;
   categoryId?: string;
 }
+
+type PublicProductReview = {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  customerName: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export default function ProductDetailClient({
   product,
@@ -150,6 +177,51 @@ export default function ProductDetailClient({
   const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
   const [isDraggingZoom, setIsDraggingZoom] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const user = useAppSelector((state) => state.user.user);
+  const queryClient = useQueryClient();
+
+  const { data: reviews, isLoading: isLoadingReviews } = useQuery<PublicProductReview[]>({
+    queryKey: ['public-product-reviews', product.id],
+    enabled: activeTab === 'reviews',
+    queryFn: async () => {
+      const res = await api.get<PublicProductReview[]>(`/products/${product.id}/reviews`);
+      return res.data;
+    },
+  });
+
+  const avgRating = useMemo(() => {
+    const list = reviews ?? [];
+    if (list.length === 0) return 0;
+    const sum = list.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
+    return sum / list.length;
+  }, [reviews]);
+
+  const myExistingReview = useMemo(() => {
+    return null;
+  }, []);
+
+  const upsertReviewMutation = useMutation({
+    mutationFn: async (payload: { rating: number; comment?: string }) => {
+      const res = await api.post('/customer/reviews', {
+        productId: Number(product.id),
+        rating: payload.rating,
+        comment: payload.comment,
+      });
+      return res.data;
+    },
+    onSuccess: async () => {
+      toast.success('Yorum kaydedildi.');
+      await queryClient.invalidateQueries({ queryKey: ['public-product-reviews', product.id] });
+      await queryClient.invalidateQueries({ queryKey: ['account-reviews'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveApiErrorMessage(err, 'Yorum kaydedilemedi.'));
+    },
+  });
+
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
 
   const variationOptions = useMemo(() => {
     const tags = product.tags ?? [];
@@ -613,23 +685,114 @@ export default function ProductDetailClient({
             )}
 
             {activeTab === 'reviews' && (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-[var(--primary-800)]">
-                    Henüz yorum yok
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--neutral-600)]">
-                    İlk yorumu sen bırak.
-                  </p>
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-[var(--primary-800)]">Yorumlar</h2>
+                    <p className="mt-1 text-sm text-[var(--neutral-600)]">
+                      {reviews && reviews.length > 0
+                        ? `${reviews.length} değerlendirme`
+                        : 'Henüz yorum yok'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 text-[var(--accent-600)]">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <Star
+                        key={`star-${index}`}
+                        className={`h-5 w-5 ${index < Math.round(avgRating) ? 'fill-current' : ''}`}
+                      />
+                    ))}
+                    <span className="ml-2 text-sm font-semibold text-[var(--neutral-700)]">
+                      {avgRating ? avgRating.toFixed(1) : '0.0'}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-[var(--accent-600)]">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Star key={`star-${index}`} className="h-5 w-5" />
-                  ))}
-                  <span className="ml-2 text-sm font-semibold text-[var(--neutral-700)]">
-                    0.0
-                  </span>
-                </div>
+
+                {user && (
+                  <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                          Yorum yaz
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[var(--primary-800)]">Bu ürünü değerlendir</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                          Puan (1-5)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          value={reviewRating}
+                          onChange={(e) => setReviewRating(Number(e.target.value))}
+                          className="h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 text-sm outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                          Yorum
+                        </label>
+                        <textarea
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          className="min-h-[110px] w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 py-3 text-sm outline-none"
+                          placeholder="Deneyiminizi yazın..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          upsertReviewMutation.mutate({
+                            rating: Math.max(1, Math.min(5, Number(reviewRating) || 5)),
+                            comment: reviewComment.trim() || undefined,
+                          })
+                        }
+                        disabled={upsertReviewMutation.isPending}
+                        className="inline-flex h-11 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Kaydet
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {isLoadingReviews ? (
+                  <div className="py-8">
+                    <Spinner fullscreen />
+                  </div>
+                ) : reviews && reviews.length > 0 ? (
+                  <section className="grid gap-3">
+                    {reviews.map((r) => (
+                      <article
+                        key={r.id}
+                        className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-5 shadow-[var(--shadow-md)] md:px-6"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--primary-800)]">{r.customerName}</p>
+                            <p className="mt-1 text-xs text-[var(--neutral-500)]">{formatDate(r.createdAt)}</p>
+                          </div>
+                          <span className="rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-1 text-xs font-semibold text-[var(--primary-800)]">
+                            {r.rating}/5
+                          </span>
+                        </div>
+                        {r.comment && (
+                          <p className="mt-3 text-sm leading-relaxed text-[var(--neutral-700)]">{r.comment}</p>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+                ) : (
+                  <p className="text-sm text-[var(--neutral-600)]">İlk yorumu sen bırak.</p>
+                )}
               </div>
             )}
           </div>

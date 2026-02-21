@@ -52,8 +52,35 @@ interface FlatCategory {
   archivedAt?: string | null;
 }
 
+interface CategoryRow {
+  id: number;
+  name: string;
+  slug: string;
+  parentId?: number | null;
+  isActive: boolean;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string | null;
+}
+
+interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface PaginatedCategories {
+  data: CategoryRow[];
+  meta: PaginationMeta;
+}
+
 export default function AdminCategoriesPage() {
   const queryClient = useQueryClient();
+
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
 
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -62,6 +89,26 @@ export default function AdminCategoriesPage() {
     orderIndex: '0',
     isActive: true,
   });
+
+  const {
+    data: categoriesPayload,
+    isLoading: isListLoading,
+    isError: isListError,
+  } = useQuery<PaginatedCategories>({
+    queryKey: ['admin-categories', { page, pageSize }],
+    queryFn: async () => {
+      const res = await api.get<PaginatedCategories>('/categories', {
+        params: {
+          page,
+          pageSize,
+        },
+      });
+      return res.data;
+    },
+  });
+
+  const categories = categoriesPayload?.data ?? [];
+  const meta = categoriesPayload?.meta;
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
@@ -111,6 +158,14 @@ export default function AdminCategoriesPage() {
     return flattenCategories(categoriesTree || []);
   }, [categoriesTree]);
 
+  const categoryById = useMemo(() => {
+    const map = new Map<number, FlatCategory>();
+    for (const c of flatCategories) {
+      map.set(c.id, c);
+    }
+    return map;
+  }, [flatCategories]);
+
   // For parent selectors, create list excluding current category if editing
   const availableParents = useMemo(() => {
     const categories = flatCategories.filter(
@@ -150,6 +205,7 @@ export default function AdminCategoriesPage() {
       toast.success('Kategori oluşturuldu.');
       setCreateForm({ name: '', slug: '', parentId: '', orderIndex: '0', isActive: true });
       await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori oluşturulamadı.'));
@@ -183,6 +239,7 @@ export default function AdminCategoriesPage() {
       toast.success('Kategori güncellendi.');
       setEditingId(null);
       await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori güncellenemedi.'));
@@ -196,13 +253,14 @@ export default function AdminCategoriesPage() {
     onSuccess: async () => {
       toast.success('Kategori arşivlendi.');
       await queryClient.invalidateQueries({ queryKey: ['admin-categories-tree'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
     },
     onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Kategori arşivlenemedi.'));
     },
   });
 
-  const beginEdit = (category: FlatCategory) => {
+  const beginEdit = (category: CategoryRow) => {
     setEditingId(category.id);
     setEditForm({
       name: category.name,
@@ -240,7 +298,7 @@ export default function AdminCategoriesPage() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/10 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
             <LayoutGrid className="h-4 w-4" />
-            Toplam: {flatCategories?.length ?? 0}
+            Toplam: {meta?.total ?? flatCategories?.length ?? 0}
           </div>
         </div>
       </section>
@@ -376,26 +434,28 @@ export default function AdminCategoriesPage() {
               <span className="text-right">Aksiyon</span>
             </div>
             <div className="divide-y divide-[#F0F0EA]">
-              {isLoading && (
+              {(isLoading || isListLoading) && (
                 <div className="px-4 py-8">
                   <Spinner fullscreen />
                 </div>
               )}
 
-              {isError && !isLoading && (
+              {(isError || isListError) && !(isLoading || isListLoading) && (
                 <div className="px-4 py-4 text-sm text-red-700">
                   Kategoriler yüklenemedi.
                 </div>
               )}
 
-              {!isLoading && !isError && (!flatCategories || flatCategories.length === 0) && (
+              {!(isLoading || isListLoading) && !(isError || isListError) && (!categories || categories.length === 0) && (
                 <div className="px-4 py-4 text-sm text-[#5C5C5C]">
                   Kategori bulunamadı.
                 </div>
               )}
 
-              {!isLoading && !isError && flatCategories?.map((c) => {
+              {!(isLoading || isListLoading) && !(isError || isListError) && categories?.map((c) => {
                 const isEditing = editingId === c.id;
+                const flat = categoryById.get(c.id);
+                const level = flat?.level ?? 0;
                 return (
                   <div
                     key={c.id}
@@ -404,8 +464,8 @@ export default function AdminCategoriesPage() {
                     <div className="min-w-0">
                       {!isEditing ? (
                         <div>
-                          <p className="truncate font-semibold" style={{ paddingLeft: `${c.level * 12}px` }}>
-                            {c.level > 0 && (
+                          <p className="truncate font-semibold" style={{ paddingLeft: `${level * 12}px` }}>
+                            {level > 0 && (
                               <ChevronRight className="inline h-3 w-3 mr-1" />
                             )}
                             {c.name}
@@ -461,7 +521,7 @@ export default function AdminCategoriesPage() {
                     <div>
                       {!isEditing ? (
                         <span className="text-sm text-[#5C5C5C]">
-                          {c.parentId ? flatCategories.find(cat => cat.id === c.parentId)?.name || '-' : '-'}
+                          {c.parentId ? categoryById.get(c.parentId)?.name || '-' : '-'}
                         </span>
                       ) : (
                         <select
@@ -533,6 +593,32 @@ export default function AdminCategoriesPage() {
               })}
             </div>
           </div>
+
+          {!(isLoading || isListLoading) && !(isError || isListError) && meta && meta.totalPages > 1 && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E5E0] pt-4 text-xs text-[#5C5C5C]">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
+                Sayfa {meta.page} / {meta.totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={meta.page <= 1}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Önceki
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  disabled={meta.page >= meta.totalPages}
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#1A3C34]/10 bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sonraki
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </section>
     </div>

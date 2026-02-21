@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AppointmentStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
@@ -59,7 +63,10 @@ export class AppointmentsService {
     };
   }
 
-  async create(currentUser: JwtPayload, payload: CreateAppointmentDto): Promise<AppointmentSummary> {
+  async create(
+    currentUser: JwtPayload,
+    payload: CreateAppointmentDto,
+  ): Promise<AppointmentSummary> {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
 
@@ -78,7 +85,7 @@ export class AppointmentsService {
     }
 
     const customer = await this.prisma.customer.findFirst({
-      where: { id: payload.customerId, businessId },
+      where: { id: payload.customerId, businessId, deletedAt: null },
       select: { id: true },
     });
 
@@ -103,7 +110,9 @@ export class AppointmentsService {
       }
 
       if (currentUser.role === 'STAFF' && staffUser.id !== createdByUserId) {
-        throw new ForbiddenException('Staff cannot create appointments for other staff');
+        throw new ForbiddenException(
+          'Staff cannot create appointments for other staff',
+        );
       }
 
       staffUserId = staffUser.id;
@@ -142,7 +151,9 @@ export class AppointmentsService {
         businessId,
         APPOINTMENT_AUTO_CONFIRM_KEY,
       );
-      status = autoConfirm ? AppointmentStatus.CONFIRMED : AppointmentStatus.SCHEDULED;
+      status = autoConfirm
+        ? AppointmentStatus.CONFIRMED
+        : AppointmentStatus.SCHEDULED;
     }
 
     const appointment = await this.prisma.appointment.create({
@@ -229,10 +240,13 @@ export class AppointmentsService {
     return appointment;
   }
 
-  async findOne(currentUser: JwtPayload, id: number): Promise<AppointmentSummary> {
+  async findOne(
+    currentUser: JwtPayload,
+    id: number,
+  ): Promise<AppointmentSummary> {
     const appointment = await this.findAccessibleAppointment(currentUser, id);
 
-    return this.mapToSummary(appointment as any);
+    return this.mapToSummary(appointment);
   }
 
   async update(

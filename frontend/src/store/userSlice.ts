@@ -35,7 +35,7 @@ const userSlice = createSlice({
       state,
       action: PayloadAction<{
         user: User;
-        token: string;
+        token: string | null;
       }>,
     ) {
       state.user = action.payload.user;

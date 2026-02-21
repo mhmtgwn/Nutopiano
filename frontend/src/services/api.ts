@@ -1,25 +1,43 @@
 import axios from 'axios';
-import { getAuthToken } from '@/utils/helpers';
+import type { InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? 'https://api.nutopiano.com/api'
-    : 'http://localhost:3001/api');
+    ? 'https://api.nutopiano.com/api/v1'
+    : 'http://localhost:3001/api/v1');
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
 });
+
+type RetriableRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+const getCookieValue = (name: string) => {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+};
 
 api.interceptors.request.use(
   (config) => {
-    if (typeof window !== 'undefined') {
-      const token = getAuthToken();
-
-      if (token) {
-        config.headers = config.headers ?? {};
-        config.headers.Authorization = `Bearer ${token}`;
+    const method = (config.method ?? 'get').toLowerCase();
+    const isUnsafe = ['post', 'put', 'patch', 'delete'].includes(method);
+    if (isUnsafe) {
+      const csrfToken = getCookieValue('__csrf');
+      if (csrfToken) {
+        if (config.headers && typeof (config.headers as any).set === 'function') {
+          (config.headers as any).set('X-CSRF-Token', csrfToken);
+        } else {
+          config.headers = {
+            ...(config.headers ?? {}),
+            'X-CSRF-Token': csrfToken,
+          } as any;
+        }
       }
     }
 
@@ -51,7 +69,30 @@ api.interceptors.response.use(
 
     return response;
   },
-  (error) => Promise.reject(error),
+  async (error) => {
+    const originalRequest = error?.config as RetriableRequestConfig | undefined;
+    const statusCode = error?.response?.status as number | undefined;
+    const requestUrl = originalRequest?.url ?? '';
+    const isRefreshRequest = requestUrl.includes('/auth/refresh');
+
+    if (
+      statusCode !== 401 ||
+      !originalRequest ||
+      originalRequest._retry ||
+      isRefreshRequest
+    ) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    try {
+      await api.post('/auth/refresh');
+      return api(originalRequest);
+    } catch (refreshError) {
+      return Promise.reject(refreshError);
+    }
+  },
 );
 
 export default api;

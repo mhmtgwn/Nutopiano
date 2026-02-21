@@ -16,7 +16,7 @@ import { EmailModule } from '../email/email.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => ({
         secret: config.get<string>('JWT_SECRET') ?? 'NUTOPIANO_SECRET_KEY',
-        signOptions: { expiresIn: config.get<number>('JWT_EXPIRES_IN_SECONDS') ?? 86400 },
+        signOptions: { expiresIn: '15m' }, // Default to 15 minutes for access token
       }),
     }),
   ],

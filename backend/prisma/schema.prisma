@@ -21,13 +21,30 @@ model Business {
   users         User[]
   customers     Customer[]
   products      Product[]
+  productVariants ProductVariant[]
+  productImages ProductImage[]
   categories    Category[]
   orders        Order[]
   orderStatuses OrderStatus[]
   orderItems    OrderItem[]
   settings      Settings[]
+  coupons       Coupon[]
   payments      Payment[]
   appointments  Appointment[]
+  customerAddresses CustomerAddress[]
+  customerFavorites CustomerFavorite[]
+  productReviews ProductReview[]
+  customerPreferences CustomerPreference[]
+  commissions Commission[]
+  payouts Payout[]
+  sellers Seller[]
+  plans Plan[]
+
+  refreshTokens RefreshToken[]
+
+  paymentWebhookEvents PaymentWebhookEvent[]
+
+  paymentSessions PaymentSession[]
 }
 
 model User {
@@ -51,6 +68,68 @@ model User {
   createdOrders    Order[]     @relation("OrderCreatedBy")
   staffAppointments   Appointment[] @relation("StaffAppointments")
   createdAppointments Appointment[] @relation("CreatedAppointments")
+
+  commissionEntries Commission[] @relation("CommissionBeneficiary")
+  payoutRequests Payout[] @relation("PayoutBeneficiary")
+
+  sellerProfile Seller?
+
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  userId Int
+
+  // JWT ID; used to identify the token record even if the raw token is not stored.
+  jti String @unique
+
+  // Hash of the raw refresh JWT (sha256). Useful for constant-time lookups and token revocation.
+  tokenHash String @unique
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  // Token rotation tracking
+  replacedByTokenId Int?
+  replacedByToken RefreshToken? @relation("RefreshTokenRotation", fields: [replacedByTokenId], references: [id])
+  replacedTokens RefreshToken[] @relation("RefreshTokenRotation")
+
+  createdAt DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, userId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model Seller {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  userId Int @unique
+
+  slug String
+  displayName String
+  description String?
+  logoUrl String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+  @@index([businessId, isActive])
 }
 
 model Category {
@@ -87,6 +166,7 @@ model Customer {
   name            String
   phone           String
   balance         Int      @default(0)
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -95,10 +175,65 @@ model Customer {
   user      User?    @relation("UserCustomer", fields: [userId], references: [id])
   orders    Order[]
   appointments Appointment[]
+  addresses CustomerAddress[]
+  favorites CustomerFavorite[]
+  reviews ProductReview[]
+  preferences CustomerPreference?
 
   @@unique([businessId, phone])
   @@index([businessId])
+  @@index([businessId, deletedAt])
   @@index([userId])
+}
+
+model CustomerPreference {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  customerId Int      @unique
+
+  allowSms      Boolean @default(true)
+  allowEmail    Boolean @default(true)
+  allowMarketing Boolean @default(false)
+  kvkkConsent    Boolean @default(false)
+  kvkkConsentAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, customerId])
+}
+
+model CustomerAddress {
+  id        Int      @id @default(autoincrement())
+  businessId Int
+  customerId Int
+
+  title    String
+  fullName String
+  phone    String
+
+  line1      String
+  line2      String?
+  city       String
+  district   String
+  postalCode String?
+  country    String  @default("TR")
+
+  isDefaultShipping Boolean @default(false)
+  isDefaultBilling  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, customerId])
 }
 
 enum Role {
@@ -107,11 +242,65 @@ enum Role {
   CUSTOMER
 }
 
+ enum PlanInterval {
+  MONTHLY
+  YEARLY
+ }
+
 enum ProductType {
   PHYSICAL
   SERVICE
   WEIGHT
   CUSTOM
+}
+
+enum PayoutStatus {
+  pending
+  approved
+  completed
+}
+
+model Commission {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  beneficiaryUserId Int
+  orderId Int @unique
+
+  rate Float
+  grossAmountCents Int
+  commissionAmountCents Int
+  netAmountCents Int
+
+  createdAt DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  beneficiaryUser User @relation("CommissionBeneficiary", fields: [beneficiaryUserId], references: [id])
+  order Order @relation("OrderCommission", fields: [orderId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, beneficiaryUserId])
+}
+
+model Payout {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  beneficiaryUserId Int
+
+  amountCents Int
+  status PayoutStatus @default(pending)
+
+  requestedAt DateTime @default(now())
+  approvedAt DateTime?
+  completedAt DateTime?
+
+  business Business @relation(fields: [businessId], references: [id])
+  beneficiaryUser User @relation("PayoutBeneficiary", fields: [beneficiaryUserId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, beneficiaryUserId])
+  @@index([businessId, status])
 }
 
 model Product {
@@ -141,10 +330,55 @@ model Product {
   createdBy User    @relation("ProductCreatedBy", fields: [createdByUserId], references: [id])
   category Category @relation(fields: [categoryId], references: [id])
   items     OrderItem[]
+  variants  ProductVariant[]
+  galleryImages ProductImage[]
+  favoritedBy CustomerFavorite[]
+  reviews ProductReview[]
 
   @@index([businessId])
   @@index([businessId, categoryId])
   // @@unique([businessId, sku]) // enable when SKU uniqueness per business is required
+}
+
+model ProductVariant {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  productId  Int
+
+  name       String
+  sku        String?
+  color      String?
+  size       String?
+  material   String?
+  priceCents Int
+  stock      Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+  items    OrderItem[]
+
+  @@index([businessId, productId])
+  @@index([businessId, productId, isActive])
+  @@unique([businessId, productId, sku])
+}
+
+model ProductImage {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  productId  Int
+  url        String
+  orderIndex Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([businessId, productId])
+  @@index([businessId, productId, orderIndex])
 }
 
 model OrderStatus {
@@ -172,15 +406,26 @@ enum OrderSource {
   API
 }
 
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
 model Order {
   id               Int      @id @default(autoincrement())
   businessId       Int
   customerId       Int
   createdByUserId  Int
   statusId         Int
+  subtotalAmountCents Int      @default(0)
+  taxAmountCents      Int      @default(0)
+  taxRateBps          Int      @default(0)
+  discountAmountCents Int      @default(0)
+  couponCode          String?
   totalAmountCents Int      @default(0)
   source           OrderSource @default(POS)
   notes            String?
+  deletedAt        DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -190,9 +435,35 @@ model Order {
   status   OrderStatus @relation(fields: [statusId], references: [id])
   items    OrderItem[]
   payments Payment[]
+  commission Commission? @relation("OrderCommission")
+
+  paymentSessions PaymentSession[]
 
   @@index([businessId])
   @@index([businessId, customerId])
+  @@index([businessId, deletedAt])
+}
+
+model Coupon {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  code       String
+  type       CouponType
+  value      Int
+  usageLimit Int?
+  usedCount  Int      @default(0)
+  minOrderAmountCents Int?
+  maxDiscountCents Int?
+  startsAt   DateTime?
+  endsAt     DateTime?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, code])
+  @@index([businessId, isActive])
 }
 
 model OrderItem {
@@ -200,17 +471,24 @@ model OrderItem {
   businessId       Int
   orderId          Int
   productId        Int
+  variantId        Int?
+  productName      String
   quantity         Int
   unitPriceCents   Int
+  subtotalAmountCents Int
+  taxAmountCents      Int      @default(0)
+  taxRateBps          Int      @default(0)
   totalAmountCents Int
   createdAt        DateTime @default(now())
 
   business Business @relation(fields: [businessId], references: [id])
   order    Order    @relation(fields: [orderId], references: [id])
   product  Product  @relation(fields: [productId], references: [id])
+  variant  ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@index([businessId, orderId])
   @@index([businessId, productId])
+  @@index([businessId, variantId])
 }
 
 enum PaymentMethod {
@@ -218,6 +496,16 @@ enum PaymentMethod {
   CARD
   TRANSFER
   OTHER
+}
+
+enum PaymentProvider {
+  IYZICO
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
 }
 
 model Payment {
@@ -235,6 +523,64 @@ model Payment {
   @@index([businessId, orderId])
 }
 
+model PaymentWebhookEvent {
+  id Int @id @default(autoincrement())
+
+  businessId Int?
+  provider   PaymentProvider
+
+  // Provider specific unique identifier for idempotency
+  eventId String
+
+  eventType String?
+  payload   Json
+  signature String?
+
+  status      WebhookEventStatus @default(RECEIVED)
+  receivedAt  DateTime           @default(now())
+  processedAt DateTime?
+  error       String?
+
+  business Business? @relation(fields: [businessId], references: [id])
+
+  @@unique([provider, eventId])
+  @@index([businessId])
+  @@index([provider, status])
+  @@index([receivedAt])
+}
+
+model PaymentSession {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  provider   PaymentProvider
+
+  // Token returned by provider on initialize (used for retrieve)
+  token String
+
+  orderId Int
+
+  // Amount snapshot used when session was created
+  amountCents Int
+
+  // INITIATED | COMPLETED | FAILED
+  status String @default("INITIATED")
+
+  conversationId String?
+  paymentId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  order    Order    @relation(fields: [orderId], references: [id])
+
+  @@unique([provider, token])
+  @@index([businessId])
+  @@index([businessId, orderId])
+  @@index([provider, status])
+}
+
 model Settings {
   id         Int      @id @default(autoincrement())
   businessId Int
@@ -247,6 +593,67 @@ model Settings {
 
   @@unique([businessId, key])
   @@index([businessId])
+}
+
+ model Plan {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+
+  name String
+  interval PlanInterval
+  priceCents Int
+  currency String @default("TRY")
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, name, interval])
+  @@index([businessId])
+  @@index([businessId, interval])
+  @@index([businessId, isActive])
+ }
+
+model CustomerFavorite {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  customerId Int
+  productId  Int
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([businessId, customerId, productId])
+  @@index([businessId])
+  @@index([businessId, customerId])
+  @@index([businessId, productId])
+}
+
+model ProductReview {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  customerId Int
+  productId  Int
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([businessId, customerId, productId])
+  @@index([businessId])
+  @@index([businessId, productId])
+  @@index([businessId, customerId])
 }
 
 enum AppointmentStatus {

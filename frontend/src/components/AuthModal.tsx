@@ -6,7 +6,6 @@ import { X } from 'lucide-react';
 import { useAppDispatch } from '@/store';
 import { setCredentials, startAuth, setAuthError } from '@/store/userSlice';
 import api from '@/services/api';
-import { setAuthToken, getAuthToken } from '@/utils/helpers';
 import Button from '@/components/common/Button';
 
 type AuthScreen = 'login' | 'register' | 'forgot';
@@ -91,7 +90,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       );
 
       const token = loginResponse.data.accessToken;
-      setAuthToken(token);
 
       const profileResponse = await api.get<ProfileResponse>('/auth/profile');
       const profile = profileResponse.data;
@@ -106,7 +104,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             role: profile.role,
             businessId: profile.businessId,
           },
-          token,
+          token: null,
         }),
       );
 
@@ -170,8 +168,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         },
       );
 
-      const token = registerResponse.data.accessToken;
-      setAuthToken(token);
+      void registerResponse.data.accessToken;
 
       const profileResponse = await api.get<ProfileResponse>('/auth/profile');
       const profile = profileResponse.data;
@@ -186,7 +183,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             role: profile.role,
             businessId: profile.businessId,
           },
-          token,
+          token: null,
         }),
       );
 

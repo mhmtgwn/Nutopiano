@@ -1,5 +1,15 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { OrderSource } from '@prisma/client';
 import { CreateOrderItemDto } from './create-order-item.dto';
 
@@ -14,7 +24,14 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
+  @Matches(/^[^<>]*$/, { message: 'HTML tag kullanılamaz' })
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  couponCode?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

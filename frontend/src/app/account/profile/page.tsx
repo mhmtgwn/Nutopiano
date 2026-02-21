@@ -8,7 +8,6 @@ import Button from '@/components/common/Button';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
-import { getAuthToken, setAuthToken } from '@/utils/helpers';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -57,9 +56,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) return;
 
-    const token = getAuthToken();
-    if (!token) return;
-
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
@@ -78,7 +74,7 @@ export default function ProfilePage() {
               role: profile.role,
               businessId: profile.businessId,
             },
-            token,
+            token: null,
           }),
         );
       } catch (error: unknown) {
@@ -101,41 +97,19 @@ export default function ProfilePage() {
     setEmail(user.email ?? '');
   }, [user]);
 
-  const handleLogout = () => {
-    setAuthToken(null);
-    dispatch(logout());
-    toast.success('Çıkış yapıldı.');
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore
+    } finally {
+      dispatch(logout());
+      toast.success('Çıkış yapıldı.');
+      router.push('/');
+    }
   };
 
-  const hasToken = !!getAuthToken();
   const isLoading = isLoadingProfile || status === 'authenticating';
-
-  if (!hasToken && !user) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
-          <header className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-              Hesap
-            </p>
-            <h1 className="text-3xl font-serif leading-tight text-[var(--primary-800)] md:text-4xl">
-              Profil
-            </h1>
-            <p className="text-sm text-[var(--neutral-600)]">
-              Profil bilgilerinizi görüntülemek için giriş yapmanız gerekir.
-            </p>
-          </header>
-
-          <section className="border-t border-[var(--neutral-200)] pt-6">
-            <Button onClick={() => router.push('/login')} className="w-fit" variant="primary">
-              Giriş yap
-            </Button>
-          </section>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading && !user) {
     return (
@@ -176,22 +150,19 @@ export default function ProfilePage() {
 
       const profile = response.data;
 
-      const token = getAuthToken();
-      if (token) {
-        dispatch(
-          setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              businessId: profile.businessId,
-            },
-            token,
-          }),
-        );
-      }
+      dispatch(
+        setCredentials({
+          user: {
+            id: profile.userId,
+            name: profile.name,
+            phone: profile.phone,
+            email: profile.email,
+            role: profile.role,
+            businessId: profile.businessId,
+          },
+          token: null,
+        }),
+      );
 
       toast.success('Profil güncellendi.');
     } catch (error: unknown) {

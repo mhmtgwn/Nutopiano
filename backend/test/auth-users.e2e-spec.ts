@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -16,8 +17,9 @@ describe('Auth & Users (e2e)', () => {
   let business: { id: number };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9000000${RUN_ID}1`;
-  const STAFF_PHONE = `+9000000${RUN_ID}2`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -28,6 +30,8 @@ describe('Auth & Users (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business = await prisma.business.create({
       data: {
@@ -40,6 +44,7 @@ describe('Auth & Users (e2e)', () => {
         businessId: business.id,
         name: 'Admin User',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -50,6 +55,7 @@ describe('Auth & Users (e2e)', () => {
         businessId: business.id,
         name: 'Staff User',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -99,7 +105,9 @@ describe('Auth & Users (e2e)', () => {
 
       expect(Array.isArray(res.body)).toBe(true);
       const phones = res.body.map((u: { phone: string }) => u.phone);
-      expect(phones).toEqual(expect.arrayContaining([ADMIN_PHONE, STAFF_PHONE]));
+      expect(phones).toEqual(
+        expect.arrayContaining([ADMIN_PHONE, STAFF_PHONE]),
+      );
     });
 
     it('STAFF cannot list all users (403)', async () => {
@@ -176,6 +184,22 @@ describe('Auth & Users (e2e)', () => {
         .get('/users/by-phone/+900000099999')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(404);
+    });
+  });
+
+  describe('/auth/register', () => {
+    it('rejects duplicate phone number (User.phone unique)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          name: 'Duplicate Phone User',
+          email: `dup-${RUN_ID}@example.com`,
+          phone: ADMIN_PHONE,
+          password: 'password123',
+        })
+        .expect(400);
+
+      expect(String(res.body?.message ?? '')).toContain('zaten kayıtlı');
     });
   });
 });

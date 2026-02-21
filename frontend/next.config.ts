@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
+import path from 'path';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  outputFileTracingRoot: path.join(__dirname, '..'),
+  turbopack: {
+    root: path.join(__dirname, '..'),
+  },
   images: {
     remotePatterns: [
       {
@@ -34,4 +40,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: true,
+});

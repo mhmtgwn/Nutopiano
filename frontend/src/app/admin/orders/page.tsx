@@ -73,6 +73,18 @@ interface OrderStatusRow {
   isDefault: boolean;
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface PaginatedOrders {
+  data: OrderRow[];
+  meta: PaginationMeta;
+}
+
 const statusBadgeClassName = (statusKey: string) => {
   const key = statusKey.trim().toUpperCase();
   if (key.includes('NEW')) return 'bg-[#E8F1FF] text-[#0B3B91]';
@@ -102,18 +114,30 @@ const buildKpis = (orders: OrderRow[]) => {
 export default function AdminOrdersPage() {
   const queryClient = useQueryClient();
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [source, setSource] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
 
   const {
-    data: orders,
+    data: ordersPayload,
     isLoading,
     isError,
-  } = useQuery<OrderRow[]>({
-    queryKey: ['admin-orders'],
+  } = useQuery<PaginatedOrders>({
+    queryKey: ['admin-orders', { page, pageSize, source }],
     queryFn: async () => {
-      const res = await api.get<OrderRow[]>('/orders');
+      const res = await api.get<PaginatedOrders>('/platform/orders', {
+        params: {
+          source: source || undefined,
+          page,
+          pageSize,
+        },
+      });
       return res.data;
     },
   });
+
+  const orders = ordersPayload?.data ?? [];
+  const meta = ordersPayload?.meta;
 
   const {
     data: statuses,
@@ -289,8 +313,29 @@ export default function AdminOrdersPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-serif text-[#1A3C34]">Siparişler</h2>
           <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/60">
-            Toplam: {orders?.length ?? 0}
+            Toplam: {meta?.total ?? orders?.length ?? 0}
           </span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
+            Filtre
+          </div>
+          <div className="w-full max-w-xs">
+            <select
+              value={source}
+              onChange={(e) => {
+                setSource(e.target.value);
+                setPage(1);
+              }}
+              className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm outline-none"
+            >
+              <option value="">Tümü</option>
+              <option value="POS">POS</option>
+              <option value="MOBILE">MOBILE</option>
+              <option value="WEB">WEB</option>
+            </select>
+          </div>
         </div>
 
         {isLoading && (
@@ -350,6 +395,32 @@ export default function AdminOrdersPage() {
                   <div className="text-sm text-[#5C5C5C]">{order.source}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && meta && meta.totalPages > 1 && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E5E0] pt-4 text-xs text-[#5C5C5C]">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
+              Sayfa {meta.page} / {meta.totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={meta.page <= 1}
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Önceki
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                disabled={meta.page >= meta.totalPages}
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#1A3C34]/10 bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sonraki
+              </button>
             </div>
           </div>
         )}

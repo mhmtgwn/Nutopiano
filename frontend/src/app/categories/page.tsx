@@ -11,19 +11,12 @@ interface PublicCategoryTreeNode {
   children?: PublicCategoryTreeNode[];
 }
 
-const isHostedProduction =
-  process.env.VERCEL === '1' ||
-  process.env.VERCEL === 'true' ||
-  process.env.NETLIFY === 'true';
-
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? isHostedProduction
-      ? 'https://api.nutopiano.com/api'
-      : 'http://localhost:3001/api'
-    : 'http://localhost:3001/api');
+    ? 'https://api.nutopiano.com/api/v1'
+    : 'http://localhost:3001/api/v1');
 
 const unwrapResponse = <T,>(payload: unknown): T | null => {
   if (!payload) return null;
@@ -39,15 +32,19 @@ const unwrapResponse = <T,>(payload: unknown): T | null => {
 };
 
 const getCategoryTree = async (): Promise<PublicCategoryTreeNode[]> => {
-  const response = await fetch(`${API_BASE_URL}/public/categories/tree`, {
-    cache: 'no-store',
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/public/categories/tree`, {
+      cache: 'no-store',
+    });
 
-  if (!response.ok) return [];
+    if (!response.ok) return [];
 
-  const payload = await response.json();
-  const data = unwrapResponse<PublicCategoryTreeNode[]>(payload);
-  return Array.isArray(data) ? data : [];
+    const payload = await response.json();
+    const data = unwrapResponse<PublicCategoryTreeNode[]>(payload);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 };
 
 const heroImages = [
@@ -117,3 +114,4 @@ export default async function CategoriesLandingPage() {
     </div>
   );
 }
+

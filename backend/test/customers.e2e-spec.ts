@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -21,12 +22,13 @@ describe('Customers (e2e)', () => {
   let otherBusinessCustomer: { id: number; phone: string };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9100000${RUN_ID}1`;
-  const STAFF_PHONE = `+9100000${RUN_ID}2`;
-  const OTHER_BUS_ADMIN_PHONE = `+9100000${RUN_ID}3`;
-  const ADMIN_CUSTOMER_PHONE = `+9200000${RUN_ID}1`;
-  const STAFF_CUSTOMER_PHONE = `+9200000${RUN_ID}2`;
-  const OTHER_BUS_CUSTOMER_PHONE = `+9300000${RUN_ID}1`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
+  const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
+  const ADMIN_CUSTOMER_PHONE = `+905${PHONE_BASE}11`;
+  const STAFF_CUSTOMER_PHONE = `+905${PHONE_BASE}12`;
+  const OTHER_BUS_CUSTOMER_PHONE = `+905${PHONE_BASE}21`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,6 +39,8 @@ describe('Customers (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business1 = await prisma.business.create({
       data: {
@@ -55,6 +59,7 @@ describe('Customers (e2e)', () => {
         businessId: business1.id,
         name: 'Customers Admin',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -65,6 +70,7 @@ describe('Customers (e2e)', () => {
         businessId: business1.id,
         name: 'Customers Staff',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -75,6 +81,7 @@ describe('Customers (e2e)', () => {
         businessId: business2.id,
         name: 'Other Business Admin',
         phone: OTHER_BUS_ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -177,6 +184,32 @@ describe('Customers (e2e)', () => {
         .get(`/customers/${nonExistingId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(404);
+    });
+
+    it('ADMIN soft deletes customer; deleted customer is hidden from API lists/details', async () => {
+      await request(app.getHttpServer())
+        .delete(`/customers/${adminCustomer.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/customers/${adminCustomer.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+
+      const listRes = await request(app.getHttpServer())
+        .get('/customers')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const phones = listRes.body.map((c: { phone: string }) => c.phone);
+      expect(phones).not.toContain(ADMIN_CUSTOMER_PHONE);
+
+      const dbCustomer = await prisma.customer.findUnique({
+        where: { id: adminCustomer.id },
+        select: { deletedAt: true },
+      });
+      expect(dbCustomer?.deletedAt).toBeTruthy();
     });
   });
 });

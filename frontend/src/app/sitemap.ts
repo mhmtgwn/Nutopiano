@@ -5,12 +5,8 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
   (process.env.NODE_ENV === 'production'
-    ? process.env.VERCEL === '1' ||
-      process.env.VERCEL === 'true' ||
-      process.env.NETLIFY === 'true'
-      ? 'https://api.nutopiano.com/api'
-      : 'http://localhost:3001/api'
-    : 'http://localhost:3001/api');
+    ? 'https://api.nutopiano.com/api/v1'
+    : 'http://localhost:3001/api/v1');
 
 const unwrapResponse = <T,>(payload: unknown): T | null => {
   if (!payload) return null;
@@ -37,6 +33,11 @@ interface ApiProduct {
   name: string;
 }
 
+interface PaginatedPayload<T> {
+  data: T[];
+  meta?: unknown;
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = await getSiteUrl();
   const now = new Date();
@@ -46,7 +47,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .then(async (res) => (res.ok ? unwrapResponse<ApiCategory[]>(await res.json()) : null))
       .catch(() => null),
     fetch(`${API_BASE_URL}/products`, { cache: 'no-store' })
-      .then(async (res) => (res.ok ? unwrapResponse<ApiProduct[]>(await res.json()) : null))
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const payload = unwrapResponse<unknown>(await res.json());
+        if (Array.isArray(payload)) return payload as ApiProduct[];
+        const paginated = payload as PaginatedPayload<ApiProduct>;
+        if (Array.isArray(paginated?.data)) return paginated.data;
+        return null;
+      })
       .catch(() => null),
   ]);
 
@@ -81,3 +89,4 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...base, ...categoryEntries, ...productEntries];
 }
+

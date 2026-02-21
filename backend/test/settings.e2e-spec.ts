@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -16,9 +17,10 @@ describe('Settings (e2e)', () => {
   let otherBusinessAdmin: { id: number; phone: string };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9600000${RUN_ID}1`;
-  const STAFF_PHONE = `+9600000${RUN_ID}2`;
-  const OTHER_BUS_ADMIN_PHONE = `+9600000${RUN_ID}3`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
+  const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
   const SETTING_KEY = 'order.defaultStatusKey';
 
   beforeAll(async () => {
@@ -30,6 +32,8 @@ describe('Settings (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business1 = await prisma.business.create({
       data: {
@@ -48,6 +52,7 @@ describe('Settings (e2e)', () => {
         businessId: business1.id,
         name: 'Settings Admin',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -58,6 +63,7 @@ describe('Settings (e2e)', () => {
         businessId: business1.id,
         name: 'Settings Staff',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -68,6 +74,7 @@ describe('Settings (e2e)', () => {
         businessId: business2.id,
         name: 'Other Business Admin (Settings)',
         phone: OTHER_BUS_ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -157,7 +164,10 @@ describe('Settings (e2e)', () => {
         .expect(200);
 
       // Just to be explicit, fetch with other business admin and ensure it sees its own value
-      const otherBusinessToken = await loginAndGetToken(app, OTHER_BUS_ADMIN_PHONE);
+      const otherBusinessToken = await loginAndGetToken(
+        app,
+        OTHER_BUS_ADMIN_PHONE,
+      );
       const otherRes = await request(app.getHttpServer())
         .get(`/settings/${SETTING_KEY}`)
         .set('Authorization', `Bearer ${otherBusinessToken}`)

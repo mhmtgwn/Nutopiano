@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -23,9 +24,13 @@ describe('Appointments (e2e)', () => {
   let otherBusinessAppointment: { id: number };
 
   const RUN_ID = Date.now().toString();
-  const ADMIN_PHONE = `+9600000${RUN_ID}1`;
-  const STAFF_PHONE = `+9600000${RUN_ID}2`;
-  const OTHER_BUS_ADMIN_PHONE = `+9600000${RUN_ID}3`;
+  const PHONE_BASE = RUN_ID.slice(-7);
+  const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const STAFF_PHONE = `+905${PHONE_BASE}02`;
+  const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
+  const OTHER_STAFF_PHONE = `+905${PHONE_BASE}04`;
+  const CUSTOMER_PHONE_1 = `+905${PHONE_BASE}11`;
+  const OTHER_BUS_CUSTOMER_PHONE = `+905${PHONE_BASE}21`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -36,6 +41,8 @@ describe('Appointments (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+
+    const passwordHash = await bcrypt.hash('password123', 10);
 
     business1 = await prisma.business.create({
       data: {
@@ -54,6 +61,7 @@ describe('Appointments (e2e)', () => {
         businessId: business1.id,
         name: 'Appointments Admin',
         phone: ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -64,6 +72,7 @@ describe('Appointments (e2e)', () => {
         businessId: business1.id,
         name: 'Appointments Staff',
         phone: STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -73,7 +82,8 @@ describe('Appointments (e2e)', () => {
       data: {
         businessId: business1.id,
         name: 'Appointments Other Staff',
-        phone: `+9600000${RUN_ID}4`,
+        phone: OTHER_STAFF_PHONE,
+        passwordHash,
         role: 'STAFF',
         isActive: true,
       },
@@ -84,6 +94,7 @@ describe('Appointments (e2e)', () => {
         businessId: business2.id,
         name: 'Other Business Admin (Appointments)',
         phone: OTHER_BUS_ADMIN_PHONE,
+        passwordHash,
         role: 'ADMIN',
         isActive: true,
       },
@@ -94,7 +105,7 @@ describe('Appointments (e2e)', () => {
         businessId: business1.id,
         createdByUserId: adminUser.id,
         name: 'Appointments Customer 1',
-        phone: `+9900000${RUN_ID}1`,
+        phone: CUSTOMER_PHONE_1,
         balance: 0,
       },
     });
@@ -126,7 +137,7 @@ describe('Appointments (e2e)', () => {
         businessId: business2.id,
         createdByUserId: otherBusinessAdmin.id,
         name: 'Other Appointments Customer',
-        phone: `+9900000${RUN_ID}9`,
+        phone: OTHER_BUS_CUSTOMER_PHONE,
         balance: 0,
       },
     });
@@ -211,7 +222,9 @@ describe('Appointments (e2e)', () => {
         .expect(200);
 
       const adminIds = adminRes.body.map((a: { id: number }) => a.id);
-      expect(adminIds).toEqual(expect.arrayContaining([adminAppointment.id, staffAppointment.id]));
+      expect(adminIds).toEqual(
+        expect.arrayContaining([adminAppointment.id, staffAppointment.id]),
+      );
 
       const staffRes = await request(app.getHttpServer())
         .get('/appointments')

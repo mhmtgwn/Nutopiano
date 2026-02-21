@@ -1,7 +1,23 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AdminOrStaffSelf, Roles } from '@core/decorators';
-import { JwtAuthGuard, RolesGuard, StaffSelfGuard } from '@core/guards';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { AdminOrStaffSelf, Roles } from '@common/decorators';
+import { JwtAuthGuard, RolesGuard, StaffSelfGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { UsersService } from './users.service';
 
@@ -16,10 +32,13 @@ export class UsersController {
   @Get()
   @ApiOperation({
     summary: 'List users (ADMIN only)',
-    description: 'ADMIN can list all users within their business. STAFF is forbidden.',
+    description:
+      'ADMIN can list all users within their business. STAFF is forbidden.',
   })
   @ApiOkResponse({ description: 'Array of users in the current business.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for STAFF or missing ADMIN role.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for STAFF or missing ADMIN role.',
+  })
   findAll(@Req() req: { user: JwtPayload }) {
     return this.usersService.findAll(req.user);
   }
@@ -31,9 +50,16 @@ export class UsersController {
     description:
       'ADMIN can fetch any user by phone within their business. STAFF can only access their own user by phone (self-only).',
   })
-  @ApiOkResponse({ description: 'User matching the given phone in the current business.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to access another user by phone.' })
-  @ApiNotFoundResponse({ description: 'User with the given phone does not exist in the current business.' })
+  @ApiOkResponse({
+    description: 'User matching the given phone in the current business.',
+  })
+  @ApiForbiddenResponse({
+    description: 'STAFF trying to access another user by phone.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'User with the given phone does not exist in the current business.',
+  })
   findByPhone(@Req() req: { user: JwtPayload }, @Param('phone') phone: string) {
     return this.usersService.findByPhone(req.user, phone);
   }
@@ -45,10 +71,20 @@ export class UsersController {
     description:
       'ADMIN can fetch any user by id within their business. STAFF can only access their own user by id (self-only).',
   })
-  @ApiOkResponse({ description: 'User matching the given id in the current business.' })
-  @ApiForbiddenResponse({ description: 'STAFF trying to access another user by id.' })
-  @ApiNotFoundResponse({ description: 'User with the given id does not exist in the current business.' })
-  findById(@Req() req: { user: JwtPayload }, @Param('id', ParseIntPipe) id: number) {
+  @ApiOkResponse({
+    description: 'User matching the given id in the current business.',
+  })
+  @ApiForbiddenResponse({
+    description: 'STAFF trying to access another user by id.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'User with the given id does not exist in the current business.',
+  })
+  findById(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return this.usersService.findById(req.user, id);
   }
 
@@ -59,7 +95,9 @@ export class UsersController {
     description: 'ADMIN can change role of a user within their business.',
   })
   @ApiOkResponse({ description: 'Updated user summary.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN.',
+  })
   @ApiNotFoundResponse({ description: 'User not found in current business.' })
   updateRole(
     @Req() req: { user: JwtPayload },
@@ -76,7 +114,9 @@ export class UsersController {
     description: 'ADMIN can activate/deactivate a user within their business.',
   })
   @ApiOkResponse({ description: 'Updated user summary.' })
-  @ApiForbiddenResponse({ description: 'Forbidden for roles other than ADMIN.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN.',
+  })
   @ApiNotFoundResponse({ description: 'User not found in current business.' })
   updateActive(
     @Req() req: { user: JwtPayload },
