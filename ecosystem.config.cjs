@@ -3,8 +3,8 @@ module.exports = {
     {
       name: process.env.BACKEND_PM2_NAME || 'nutopiano-api',
       cwd: process.env.BACKEND_DIR || '/var/www/nutopiano_app/backend',
-      script: 'npm',
-      args: 'run start:prod',
+      script: 'node',
+      args: '-r tsconfig-paths/register dist/main.js',
       instances: 'max',
       exec_mode: 'cluster',
       env: {

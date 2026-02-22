@@ -65,20 +65,10 @@ ensure_pm2_apps() {
     return 1
   fi
 
-  local backend_exists=false
-  local frontend_exists=false
-
-  if pm2 describe "$BACKEND_PM2_NAME" >/dev/null 2>&1; then backend_exists=true; fi
-  if pm2 describe "$FRONTEND_PM2_NAME" >/dev/null 2>&1; then frontend_exists=true; fi
-
-  if [[ "$backend_exists" == "true" && "$frontend_exists" == "true" ]]; then
-    return 0
-  fi
-
-  log "PM2 apps missing; starting ecosystem"
+  log "PM2: (re)load ecosystem"
   BACKEND_DIR="$BACKEND_DIR" FRONTEND_DIR="$FRONTEND_DIR" \
     BACKEND_PM2_NAME="$BACKEND_PM2_NAME" FRONTEND_PM2_NAME="$FRONTEND_PM2_NAME" \
-    pm2 start "$ecosystem"
+    pm2 startOrReload "$ecosystem" --update-env
   return 0
 }
 
