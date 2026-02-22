@@ -60,7 +60,7 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ auth: { ttl: 15 * 60_000, limit: 5 } })
+  @Throttle({ auth: { ttl: 60_000, limit: 30 } })
   @ApiOperation({
     summary: 'Login with phone number',
     description:

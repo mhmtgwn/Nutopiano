@@ -113,10 +113,10 @@ export default function HomeClient() {
 	} = useQuery<Product[]>({
 		queryKey: ['products', { featured: true }],
 		queryFn: async () => {
-			const res = await api.get<ApiProduct[]>('/products', {
-				params: { featured: true },
+			const res = await api.get<{ data: ApiProduct[] }>('/marketplace/search', {
+				params: { page: 1, pageSize: 12, sort: 'newest' },
 			});
-			return res.data.map((p) => ({
+			return res.data.data.map((p) => ({
 				id: String(p.id),
 				name: p.name,
 				subtitle: p.subtitle ?? null,
