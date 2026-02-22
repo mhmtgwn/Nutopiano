@@ -11,9 +11,13 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   outputFileTracingRoot: path.join(__dirname, '..'),
-  turbopack: {
-    root: path.join(__dirname, '..'),
-  },
+  ...(process.env.NODE_ENV === 'development'
+    ? {
+        turbopack: {
+          root: path.join(__dirname, '..'),
+        },
+      }
+    : {}),
   images: {
     remotePatterns: [
       {
