@@ -34,7 +34,11 @@ export function csrfMiddleware() {
       }
 
       // Auth endpoints (login/register/refresh/logout/forgot/reset) must work without CSRF.
-      if (url.startsWith('/api/auth/') || url.startsWith('/api/v1/auth/')) {
+      if (
+        url.includes('/auth/') ||
+        url.startsWith('/api/auth/') ||
+        url.startsWith('/api/v1/auth/')
+      ) {
         return next();
       }
 
