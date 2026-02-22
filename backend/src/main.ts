@@ -48,29 +48,6 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (typeof origin === 'string' && origin.length > 0) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, X-CSRF-Token',
-      );
-      res.setHeader(
-        'Access-Control-Allow-Methods',
-        'GET,POST,PATCH,DELETE,PUT,OPTIONS',
-      );
-
-      if (req.method === 'OPTIONS') {
-        res.status(204).end();
-        return;
-      }
-    }
-    next();
-  });
-
   // Backward compatibility: map legacy /api/* routes to /api/v1/*.
   app.use('/api', (req, _res, next) => {
     const url = req.url ?? '';
@@ -100,6 +77,29 @@ async function bootstrap() {
 
   // Enable CORS with config
   app.enableCors(getCorsConfig());
+
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (typeof origin === 'string' && origin.length > 0) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-CSRF-Token',
+      );
+      res.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET,POST,PATCH,DELETE,PUT,OPTIONS',
+      );
+
+      if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+      }
+    }
+    next();
+  });
 
   // Global pipes and interceptors
   app.useGlobalPipes(
