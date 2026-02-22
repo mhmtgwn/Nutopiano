@@ -10,6 +10,29 @@ export function getCorsConfig() {
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 
+  const normalizeOrigin = (value: string) => {
+    const trimmed = value.trim().toLowerCase().replace(/\/+$/, '');
+    try {
+      const url = new URL(trimmed);
+      const isDefaultPort =
+        (url.protocol === 'https:' && url.port === '443') ||
+        (url.protocol === 'http:' && url.port === '80');
+
+      if (isDefaultPort) {
+        url.port = '';
+      }
+
+      url.hash = '';
+      url.search = '';
+      url.pathname = '';
+      return url.toString().replace(/\/+$/, '');
+    } catch {
+      return trimmed;
+    }
+  };
+
+  const allowedOriginSet = new Set(allowedOrigins.map(normalizeOrigin));
+
   const isProd = process.env.NODE_ENV === 'production';
   if (isProd && allowedOrigins.includes('*')) {
     throw new Error('ALLOWED_ORIGINS cannot contain "*" in production');
@@ -25,7 +48,8 @@ export function getCorsConfig() {
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (allowedOriginSet.has(normalizedOrigin)) {
         callback(null, true);
         return;
       }
