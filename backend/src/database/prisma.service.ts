@@ -63,6 +63,16 @@ export class PrismaService
             const ctx = requestContext.get();
             const businessId = ctx.businessId;
 
+            const delegateKey =
+              typeof model === 'string' && model.length > 0
+                ? `${model.charAt(0).toLowerCase()}${model.slice(1)}`
+                : null;
+
+            const delegate =
+              delegateKey && Object.prototype.hasOwnProperty.call(this, delegateKey)
+                ? (this as any)[delegateKey]
+                : null;
+
             if (!Number.isFinite(businessId) || !model) {
               return query(args);
             }
@@ -122,14 +132,20 @@ export class PrismaService
               const nextArgs = { ...(args ?? {}) };
               ensureWhereBusinessId(nextArgs);
               ensureWhereNotDeleted(nextArgs);
-              return this[model].findFirst(nextArgs);
+              if (!delegate) {
+                return query(args);
+              }
+              return delegate.findFirst(nextArgs);
             }
 
             if (operation === 'findUniqueOrThrow') {
               const nextArgs = { ...(args ?? {}) };
               ensureWhereBusinessId(nextArgs);
               ensureWhereNotDeleted(nextArgs);
-              return this[model].findFirstOrThrow(nextArgs);
+              if (!delegate) {
+                return query(args);
+              }
+              return delegate.findFirstOrThrow(nextArgs);
             }
 
             if (
