@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -37,14 +39,24 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Create order',
     description:
-      'Creates an order for a customer in the current business. Status is resolved via Settings (order.defaultStatusKey) and OrderStatus. Products are priced via snapshot from Product.priceCents.',
+      'Creates an order for a customer in the current business. Status is resolved via Settings (order.defaultStatusKey) and OrderStatus. Products are priced via snapshot from Product.priceCents. Optional Idempotency-Key header prevents duplicate order creation on retries.',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description:
+      'Optional unique key to make order creation idempotent. Reusing the same key with the same payload returns the same order.',
   })
   @ApiOkResponse({ description: 'The created order with items.' })
   @ApiForbiddenResponse({
     description: 'Forbidden for roles other than CUSTOMER, ADMIN or STAFF.',
   })
-  create(@Req() req: { user: JwtPayload }, @Body() payload: CreateOrderDto) {
-    return this.ordersService.create(req.user, payload);
+  create(
+    @Req() req: { user: JwtPayload },
+    @Body() payload: CreateOrderDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.ordersService.create(req.user, payload, idempotencyKey);
   }
 
   @Get()

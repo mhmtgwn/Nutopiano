@@ -784,6 +784,13 @@ Proje başlamasından önce:
    - [ ] Test summary
    - [ ] Next week planning
 
+4. **Daha Sonra Yapılacak (Ertelendi) — Cloudflare CDN (D-03):**
+   - [ ] Cloudflare zone + registrar nameserver erişimi hazır
+   - [ ] Origin server SSH erişimi ve public IP net
+   - [ ] Mail DNS kayıtları (MX/SPF/DKIM/DMARC) envanteri çıkarıldı
+   - [ ] `CLOUDFLARE.md` runbook adımlarıyla cutover uygulanacak
+   - [ ] Cutover sonrası doğrulama: `https://nutopiano.com` ve `https://api.nutopiano.com/api/v1/health`
+
 ---
 
 **Son Güncelleme:** 21 Şubat 2026  

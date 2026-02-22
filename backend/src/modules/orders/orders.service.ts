@@ -4,10 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { SettingsService } from '../settings/settings.service';
 import { FinanceService } from '../finance/finance.service';
+import { EmailService } from '../../email/email.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -36,6 +38,8 @@ export interface OrderSummary {
 
 export interface OrderDetail extends OrderSummary {
   notes?: string | null;
+  shipmentCarrier?: string | null;
+  shipmentTrackingNumber?: string | null;
   items: Array<{
     id: number;
     productId: number;
@@ -68,6 +72,17 @@ export interface ReturnRequestSummary {
 }
 
 const ORDER_DEFAULT_STATUS_KEY = 'order.defaultStatusKey';
+const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['IN_PROGRESS', 'PAID', 'COMPLETED', 'CANCELLED'],
+  CREATED: ['IN_PROGRESS', 'PAID', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
+  IN_PROGRESS: ['PAID', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
+  PAID: ['IN_PROGRESS', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
+  SHIPPED: ['DELIVERED', 'COMPLETED', 'RETURN_REQUESTED', 'CANCELLED'],
+  DELIVERED: ['COMPLETED', 'RETURN_REQUESTED'],
+  RETURN_REQUESTED: ['RETURNED', 'RETURN_REJECTED', 'CANCELLED', 'COMPLETED'],
+  RETURN_REJECTED: ['DELIVERED', 'COMPLETED'],
+};
 type VariantRow = {
   id: number;
   productId: number;
@@ -83,6 +98,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     private readonly financeService: FinanceService,
+    private readonly emailService: EmailService,
   ) {}
 
   private aggregateStockLines(lines: OrderItemStockLine[]) {
@@ -103,6 +119,191 @@ export class OrdersService {
     }
 
     return { byProduct, byVariant };
+  }
+
+  private normalizeIdempotencyKey(rawKey?: string): string | null {
+    if (!rawKey || typeof rawKey !== 'string') {
+      return null;
+    }
+
+    const normalized = rawKey.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    if (normalized.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Idempotency-Key en fazla ${IDEMPOTENCY_KEY_MAX_LENGTH} karakter olabilir.`,
+      );
+    }
+
+    return normalized;
+  }
+
+  private buildOrderCreateIdempotencyHash(
+    currentUser: JwtPayload,
+    payload: CreateOrderDto,
+  ): string {
+    const normalizedPayload = {
+      actor: {
+        userId: Number(currentUser.userId),
+        role: String(currentUser.role),
+      },
+      customerId: Number(payload.customerId),
+      source: payload.source ?? null,
+      notes: payload.notes?.trim() ?? null,
+      couponCode: payload.couponCode?.trim().toUpperCase() ?? null,
+      cartDiscountAmountCents: Number(payload.cartDiscountAmountCents ?? 0),
+      items: (payload.items ?? []).map((item) => ({
+        productId: Number(item.productId),
+        variantId:
+          typeof item.variantId === 'number' ? Number(item.variantId) : null,
+        quantity: Number(item.quantity),
+        expectedUnitPriceCents:
+          typeof item.expectedUnitPriceCents === 'number'
+            ? Number(item.expectedUnitPriceCents)
+            : null,
+        discountAmountCents: Number(item.discountAmountCents ?? 0),
+      })),
+    };
+
+    return createHash('sha256')
+      .update(JSON.stringify(normalizedPayload))
+      .digest('hex');
+  }
+
+  private isPrismaUniqueConstraintError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const maybeCode = (error as { code?: unknown }).code;
+    return typeof maybeCode === 'string' && maybeCode === 'P2002';
+  }
+
+  private async resolveOrderEmailRecipient(
+    businessId: number,
+    orderId: number,
+  ): Promise<{ email: string; customerName: string } | null> {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        businessId,
+      },
+      select: {
+        customer: {
+          select: {
+            name: true,
+            user: {
+              select: {
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return null;
+    }
+
+    const email = order.customer.user?.email?.trim();
+    if (!email) {
+      return null;
+    }
+
+    return {
+      email,
+      customerName: order.customer.name,
+    };
+  }
+
+  private async sendOrderCreatedNotification(
+    businessId: number,
+    orderId: number,
+    totalAmountCents: number,
+  ): Promise<void> {
+    try {
+      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      if (!recipient) return;
+
+      await this.emailService.sendOrderCreatedEmail({
+        to: recipient.email,
+        customerName: recipient.customerName,
+        orderId,
+        totalAmountCents,
+        siteName: 'Nutopiano',
+      });
+    } catch (error) {
+      console.warn('Order created email failed:', {
+        businessId,
+        orderId,
+        error: (error as { message?: string })?.message ?? String(error),
+      });
+    }
+  }
+
+  private async sendOrderStatusChangedNotification(
+    businessId: number,
+    orderId: number,
+    previousStatusKey: string,
+    nextStatusKey: string,
+  ): Promise<void> {
+    if (previousStatusKey === nextStatusKey) {
+      return;
+    }
+
+    try {
+      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      if (!recipient) return;
+
+      await this.emailService.sendOrderStatusChangedEmail({
+        to: recipient.email,
+        customerName: recipient.customerName,
+        orderId,
+        previousStatusKey,
+        nextStatusKey,
+        siteName: 'Nutopiano',
+      });
+    } catch (error) {
+      console.warn('Order status email failed:', {
+        businessId,
+        orderId,
+        previousStatusKey,
+        nextStatusKey,
+        error: (error as { message?: string })?.message ?? String(error),
+      });
+    }
+  }
+
+  private async sendOrderPaymentNotification(
+    businessId: number,
+    orderId: number,
+    amountCents: number,
+    method: string,
+  ): Promise<void> {
+    try {
+      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      if (!recipient) return;
+
+      await this.emailService.sendOrderPaymentReceivedEmail({
+        to: recipient.email,
+        customerName: recipient.customerName,
+        orderId,
+        amountCents,
+        method,
+        siteName: 'Nutopiano',
+      });
+    } catch (error) {
+      console.warn('Order payment email failed:', {
+        businessId,
+        orderId,
+        amountCents,
+        method,
+        error: (error as { message?: string })?.message ?? String(error),
+      });
+    }
   }
 
   private async resolveCustomerIdForUser(
@@ -324,9 +525,41 @@ export class OrdersService {
   async create(
     currentUser: JwtPayload,
     payload: CreateOrderDto,
+    idempotencyKeyHeader?: string,
   ): Promise<OrderDetail> {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
+    const normalizedIdempotencyKey =
+      this.normalizeIdempotencyKey(idempotencyKeyHeader);
+    const idempotencyHash = normalizedIdempotencyKey
+      ? this.buildOrderCreateIdempotencyHash(currentUser, payload)
+      : null;
+
+    if (normalizedIdempotencyKey && idempotencyHash) {
+      const existingOrder = await this.prisma.order.findFirst({
+        where: {
+          businessId,
+          idempotencyKey: normalizedIdempotencyKey,
+        },
+        select: {
+          id: true,
+          idempotencyHash: true,
+        },
+      });
+
+      if (existingOrder) {
+        if (
+          existingOrder.idempotencyHash &&
+          existingOrder.idempotencyHash !== idempotencyHash
+        ) {
+          throw new BadRequestException(
+            'Bu Idempotency-Key farkli bir siparis istegiyle kullanildi.',
+          );
+        }
+
+        return this.findOne(currentUser, existingOrder.id);
+      }
+    }
 
     const customer = await this.prisma.customer.findFirst({
       where: { id: payload.customerId, businessId, deletedAt: null },
@@ -449,7 +682,23 @@ export class OrdersService {
 
     const source: OrderSource = payload.source ?? OrderSource.POS;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    let result: {
+      order: {
+        id: number;
+        customerId: number;
+        totalAmountCents: number;
+        source: OrderSource;
+        createdByUserId: number;
+        createdAt: Date;
+        notes?: string | null;
+        shipmentCarrier?: string | null;
+        shipmentTrackingNumber?: string | null;
+      };
+      items: OrderDetail['items'];
+    };
+
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
       // Fetch products with row-level locking (SELECT ... FOR UPDATE NOWAIT)
       // This prevents concurrent requests from reading stale stock values
       const productsLocked = await tx.$queryRaw<
@@ -540,6 +789,7 @@ export class OrdersService {
       let totalAmountCents = 0;
       let subtotalAmountCents = 0;
       let taxAmountCents = 0;
+      let lineDiscountAmountCents = 0;
       const itemData: Array<{
         businessId: number;
         orderId?: number;
@@ -564,12 +814,19 @@ export class OrdersService {
             ? variantMapLocked.get(item.variantId)
             : undefined;
         const unitPriceCents = variant ? variant.priceCents : product.priceCents;
-        const lineSubtotal = unitPriceCents * item.quantity;
+        const lineSubtotalRaw = unitPriceCents * item.quantity;
+        const requestedLineDiscount = Number(item.discountAmountCents ?? 0);
+        const lineDiscount = Math.min(
+          Math.max(requestedLineDiscount, 0),
+          lineSubtotalRaw,
+        );
+        const lineSubtotal = lineSubtotalRaw - lineDiscount;
         const lineTax = Math.round((lineSubtotal * taxRateBps) / 10_000);
         const lineTotal = lineSubtotal + lineTax;
         subtotalAmountCents += lineSubtotal;
         taxAmountCents += lineTax;
         totalAmountCents += lineTotal;
+        lineDiscountAmountCents += lineDiscount;
         itemData.push({
           businessId,
           productId: item.productId,
@@ -613,9 +870,22 @@ export class OrdersService {
         }
       }
 
-      let discountAmountCents = 0;
+      let discountAmountCents = lineDiscountAmountCents;
+      const requestedCartDiscountAmount = Number(
+        payload.cartDiscountAmountCents ?? 0,
+      );
+      const cartDiscountAmountCents = Math.min(
+        Math.max(requestedCartDiscountAmount, 0),
+        totalAmountCents,
+      );
+      if (cartDiscountAmountCents > 0) {
+        discountAmountCents += cartDiscountAmountCents;
+        totalAmountCents -= cartDiscountAmountCents;
+      }
+
       let couponToConsume: { id: number; code: string } | null = null;
       if (normalizedCouponCode) {
+        let couponDiscountAmountCents = 0;
         const rows = await tx.$queryRaw<
           Array<{
             id: number;
@@ -666,27 +936,30 @@ export class OrdersService {
         }
 
         if (String(coupon.type).toUpperCase() === 'PERCENT') {
-          discountAmountCents = Math.round((subtotalAmountCents * Number(coupon.value)) / 10_000);
+          couponDiscountAmountCents = Math.round(
+            (subtotalAmountCents * Number(coupon.value)) / 10_000,
+          );
         } else {
-          discountAmountCents = Number(coupon.value);
+          couponDiscountAmountCents = Number(coupon.value);
         }
 
         if (
           coupon.maxDiscountCents !== null &&
           coupon.maxDiscountCents !== undefined &&
-          discountAmountCents > coupon.maxDiscountCents
+          couponDiscountAmountCents > coupon.maxDiscountCents
         ) {
-          discountAmountCents = coupon.maxDiscountCents;
+          couponDiscountAmountCents = coupon.maxDiscountCents;
         }
 
-        if (discountAmountCents > totalAmountCents) {
-          discountAmountCents = totalAmountCents;
+        if (couponDiscountAmountCents > totalAmountCents) {
+          couponDiscountAmountCents = totalAmountCents;
         }
-        if (discountAmountCents < 0) {
-          discountAmountCents = 0;
+        if (couponDiscountAmountCents < 0) {
+          couponDiscountAmountCents = 0;
         }
 
-        totalAmountCents -= discountAmountCents;
+        discountAmountCents += couponDiscountAmountCents;
+        totalAmountCents -= couponDiscountAmountCents;
         couponToConsume = { id: coupon.id, code: coupon.code };
       }
 
@@ -704,6 +977,8 @@ export class OrdersService {
           totalAmountCents,
           source,
           notes: payload.notes ?? null,
+          idempotencyKey: normalizedIdempotencyKey,
+          idempotencyHash,
         },
         select: {
           id: true,
@@ -713,6 +988,8 @@ export class OrdersService {
           createdByUserId: true,
           createdAt: true,
           notes: true,
+          shipmentCarrier: true,
+          shipmentTrackingNumber: true,
         },
       });
 
@@ -752,10 +1029,43 @@ export class OrdersService {
         },
       });
 
-      return { order, items };
-    });
+        return { order, items };
+      });
+    } catch (error) {
+      if (
+        normalizedIdempotencyKey &&
+        idempotencyHash &&
+        this.isPrismaUniqueConstraintError(error)
+      ) {
+        const existingOrder = await this.prisma.order.findFirst({
+          where: {
+            businessId,
+            idempotencyKey: normalizedIdempotencyKey,
+          },
+          select: {
+            id: true,
+            idempotencyHash: true,
+          },
+        });
 
-    return {
+        if (existingOrder) {
+          if (
+            existingOrder.idempotencyHash &&
+            existingOrder.idempotencyHash !== idempotencyHash
+          ) {
+            throw new BadRequestException(
+              'Bu Idempotency-Key farkli bir siparis istegiyle kullanildi.',
+            );
+          }
+
+          return this.findOne(currentUser, existingOrder.id);
+        }
+      }
+
+      throw error;
+    }
+
+    const createdOrderDetail: OrderDetail = {
       id: result.order.id,
       customerId: result.order.customerId,
       totalAmountCents: result.order.totalAmountCents,
@@ -764,8 +1074,18 @@ export class OrdersService {
       createdByUserId: result.order.createdByUserId,
       createdAt: result.order.createdAt,
       notes: result.order.notes ?? undefined,
+      shipmentCarrier: result.order.shipmentCarrier ?? undefined,
+      shipmentTrackingNumber: result.order.shipmentTrackingNumber ?? undefined,
       items: result.items,
     };
+
+    void this.sendOrderCreatedNotification(
+      businessId,
+      createdOrderDetail.id,
+      createdOrderDetail.totalAmountCents,
+    );
+
+    return createdOrderDetail;
   }
 
   async findAll(currentUser: JwtPayload): Promise<OrderSummary[]> {
@@ -919,6 +1239,12 @@ export class OrdersService {
       throw new NotFoundException('Order status not found');
     }
 
+    this.assertOrderStatusTransitionAllowed({
+      fromStatusKey: order.status?.key,
+      fromIsFinal: order.status?.isFinal,
+      toStatusKey: nextStatusKey,
+    });
+
     const updated = await this.prisma.order.update({
       where: { id: order.id },
       data: { statusId: status.id },
@@ -941,7 +1267,7 @@ export class OrdersService {
       },
     });
 
-    return {
+    const orderDetail: OrderDetail = {
       id: updated.id,
       customerId: updated.customerId,
       totalAmountCents: updated.totalAmountCents,
@@ -950,8 +1276,19 @@ export class OrdersService {
       createdByUserId: updated.createdByUserId,
       createdAt: updated.createdAt,
       notes: updated.notes ?? undefined,
+      shipmentCarrier: (updated as any).shipmentCarrier ?? undefined,
+      shipmentTrackingNumber: (updated as any).shipmentTrackingNumber ?? undefined,
       items,
     };
+
+    void this.sendOrderStatusChangedNotification(
+      updated.businessId,
+      updated.id,
+      order.status.key,
+      updated.status.key,
+    );
+
+    return orderDetail;
   }
 
   async requestCancelCustomerOrder(currentUser: JwtPayload, id: number) {
@@ -980,6 +1317,12 @@ export class OrdersService {
     if (!returnRequestedStatus) {
       throw new NotFoundException('Order status not found: RETURN_REQUESTED');
     }
+
+    this.assertOrderStatusTransitionAllowed({
+      fromStatusKey: order.status?.key,
+      fromIsFinal: order.status?.isFinal,
+      toStatusKey: 'RETURN_REQUESTED',
+    });
 
     const existing = await (this.prisma as any).returnRequest.findFirst({
       where: {
@@ -1026,6 +1369,13 @@ export class OrdersService {
         });
       }
     });
+
+    void this.sendOrderStatusChangedNotification(
+      order.businessId,
+      order.id,
+      order.status.key,
+      'RETURN_REQUESTED',
+    );
 
     return this.findOne(currentUser, id);
   }
@@ -1085,6 +1435,16 @@ export class OrdersService {
         businessId: true,
         orderId: true,
         status: true,
+        order: {
+          select: {
+            status: {
+              select: {
+                key: true,
+                isFinal: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1112,6 +1472,16 @@ export class OrdersService {
       select: { id: true, key: true },
     });
     const statusMap = new Map(statusRows.map((s) => [s.key, s.id]));
+    const nextOrderStatusKey =
+      targetOrderStatusKeys.find((key) => statusMap.has(key)) ?? null;
+
+    if (nextOrderStatusKey) {
+      this.assertOrderStatusTransitionAllowed({
+        fromStatusKey: request.order?.status?.key,
+        fromIsFinal: request.order?.status?.isFinal,
+        toStatusKey: nextOrderStatusKey,
+      });
+    }
 
     const resolved = await this.prisma.$transaction(async (tx) => {
       if (isApprove) {
@@ -1174,6 +1544,15 @@ export class OrdersService {
       });
     });
 
+    if (nextOrderStatusKey) {
+      void this.sendOrderStatusChangedNotification(
+        businessId,
+        request.orderId,
+        request.order?.status?.key ?? '',
+        nextOrderStatusKey,
+      );
+    }
+
     return resolved as ReturnRequestSummary;
   }
 
@@ -1204,6 +1583,8 @@ export class OrdersService {
       createdByUserId: order.createdByUserId,
       createdAt: order.createdAt,
       notes: order.notes ?? undefined,
+      shipmentCarrier: (order as any).shipmentCarrier ?? undefined,
+      shipmentTrackingNumber: (order as any).shipmentTrackingNumber ?? undefined,
       items,
     };
   }
@@ -1212,6 +1593,39 @@ export class OrdersService {
    * Detect if a status key indicates a cancelled order
    * Based on convention: status keys containing "CANCEL" (case-insensitive)
    */
+  private assertOrderStatusTransitionAllowed(params: {
+    fromStatusKey?: string | null;
+    fromIsFinal?: boolean | null;
+    toStatusKey?: string | null;
+  }) {
+    const from = String(params.fromStatusKey ?? '')
+      .trim()
+      .toUpperCase();
+    const to = String(params.toStatusKey ?? '')
+      .trim()
+      .toUpperCase();
+
+    if (!from || !to || from === to) {
+      return;
+    }
+
+    if (params.fromIsFinal) {
+      throw new BadRequestException(
+        `Final durumdan gecis yapilamaz: ${from} -> ${to}`,
+      );
+    }
+
+    const allowedNext = ORDER_STATUS_TRANSITIONS[from];
+    if (!allowedNext) {
+      // Unknown/custom status keys stay permissive to avoid blocking tenant-specific flows.
+      return;
+    }
+
+    if (!allowedNext.includes(to)) {
+      throw new BadRequestException(`Gecersiz durum gecisi: ${from} -> ${to}`);
+    }
+  }
+
   private isCancelledStatus(statusKey?: string): boolean {
     return statusKey?.toUpperCase().includes('CANCEL') ?? false;
   }
@@ -1225,10 +1639,22 @@ export class OrdersService {
     const wasCancelled = this.isCancelledStatus(order.status?.key);
     const wasFinal = Boolean(order.status?.isFinal);
 
-    const data: Partial<{ notes: string | null; statusId: number }> = {};
+    const data: Partial<{
+      notes: string | null;
+      statusId: number;
+      shipmentCarrier: string | null;
+      shipmentTrackingNumber: string | null;
+    }> = {};
 
     if (payload.notes !== undefined) {
       data.notes = payload.notes;
+    }
+    if (payload.shipmentCarrier !== undefined) {
+      data.shipmentCarrier = payload.shipmentCarrier?.trim() || null;
+    }
+    if (payload.shipmentTrackingNumber !== undefined) {
+      data.shipmentTrackingNumber =
+        payload.shipmentTrackingNumber?.trim() || null;
     }
 
     let newStatusKey: string | undefined;
@@ -1246,6 +1672,14 @@ export class OrdersService {
       }
       data.statusId = status.id;
       newStatusKey = status.key;
+    }
+
+    if (newStatusKey) {
+      this.assertOrderStatusTransitionAllowed({
+        fromStatusKey: order.status?.key,
+        fromIsFinal: order.status?.isFinal,
+        toStatusKey: newStatusKey,
+      });
     }
 
     const isCancellingNow = newStatusKey && this.isCancelledStatus(newStatusKey);
@@ -1312,7 +1746,7 @@ export class OrdersService {
       },
     });
 
-    return {
+    const orderDetail: OrderDetail = {
       id: result.id,
       customerId: result.customerId,
       totalAmountCents: result.totalAmountCents,
@@ -1321,8 +1755,19 @@ export class OrdersService {
       createdByUserId: result.createdByUserId,
       createdAt: result.createdAt,
       notes: result.notes ?? undefined,
+      shipmentCarrier: (result as any).shipmentCarrier ?? undefined,
+      shipmentTrackingNumber: (result as any).shipmentTrackingNumber ?? undefined,
       items,
     };
+
+    void this.sendOrderStatusChangedNotification(
+      result.businessId,
+      result.id,
+      order.status.key,
+      result.status.key,
+    );
+
+    return orderDetail;
   }
 
   async listPayments(
@@ -1370,29 +1815,62 @@ export class OrdersService {
       throw new BadRequestException('Tutar pozitif olmalı');
     }
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        businessId: order.businessId,
-        orderId: order.id,
-        amountCents,
-        method: payload.method,
-        reference: payload.reference ?? null,
-      },
-      select: {
-        id: true,
-        amountCents: true,
-        method: true,
-        reference: true,
-        createdAt: true,
-      },
+    const payment = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "Order" WHERE "id" = ${order.id} FOR UPDATE`;
+
+      const paymentAggregate = await tx.payment.aggregate({
+        where: {
+          businessId: order.businessId,
+          orderId: order.id,
+        },
+        _sum: { amountCents: true },
+      });
+
+      const paidNet = Number(paymentAggregate._sum.amountCents ?? 0);
+      const remainingDue = Math.max(order.totalAmountCents - paidNet, 0);
+
+      if (remainingDue <= 0) {
+        throw new BadRequestException('Siparisin kalan borcu yok');
+      }
+      if (amountCents > remainingDue) {
+        throw new BadRequestException(
+          `Odeme tutari kalan borcu asamaz. Kalan: ${remainingDue}`,
+        );
+      }
+
+      return tx.payment.create({
+        data: {
+          businessId: order.businessId,
+          orderId: order.id,
+          amountCents,
+          method: payload.method,
+          reference: payload.reference ?? null,
+        },
+        select: {
+          id: true,
+          amountCents: true,
+          method: true,
+          reference: true,
+          createdAt: true,
+        },
+      });
     });
 
-    return {
+    const paymentSummary: PaymentSummary = {
       id: payment.id,
       amountCents: payment.amountCents,
       method: payment.method,
       reference: payment.reference ?? undefined,
       createdAt: payment.createdAt,
     };
+
+    void this.sendOrderPaymentNotification(
+      order.businessId,
+      order.id,
+      paymentSummary.amountCents,
+      paymentSummary.method,
+    );
+
+    return paymentSummary;
   }
 }

@@ -36,6 +36,13 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const generateIdempotencyKey = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 interface CreateOrderItemPayload {
   productId: number;
   quantity: number;
@@ -86,6 +93,7 @@ export default function CheckoutPage() {
   const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [orderIdempotencyKey, setOrderIdempotencyKey] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState<{
     orderId?: number;
     total?: number;
@@ -128,6 +136,10 @@ export default function CheckoutPage() {
 
     fetchCustomer();
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    setOrderIdempotencyKey(null);
+  }, [customerId, notes, items]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -172,7 +184,18 @@ export default function CheckoutPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await api.post('/orders', payload);
+      const requestIdempotencyKey =
+        orderIdempotencyKey ?? generateIdempotencyKey();
+
+      if (!orderIdempotencyKey) {
+        setOrderIdempotencyKey(requestIdempotencyKey);
+      }
+
+      const response = await api.post('/orders', payload, {
+        headers: {
+          'Idempotency-Key': requestIdempotencyKey,
+        },
+      });
 
       const orderId = (response.data && (response.data.id as number | undefined)) ?? undefined;
 
@@ -181,6 +204,7 @@ export default function CheckoutPage() {
         orderId,
         total: totalPrice,
       });
+      setOrderIdempotencyKey(null);
       dispatch(clearCart());
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(

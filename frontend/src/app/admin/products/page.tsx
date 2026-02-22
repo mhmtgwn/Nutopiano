@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Archive, Pencil, Save, X } from 'lucide-react';
+import { AlertTriangle, Archive, Download, Pencil, Save, Upload, X } from 'lucide-react';
 
 import Button from '@/components/common/Button';
 import Spinner from '@/components/common/Spinner';
@@ -67,6 +67,14 @@ interface PaginatedProducts {
   meta: PaginationMeta;
 }
 
+interface ProductCsvImportReport {
+  totalRows: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ line: number; message: string }>;
+}
+
 const formatType = (type: ProductType) => {
   switch (type) {
     case 'PHYSICAL':
@@ -87,6 +95,8 @@ export default function AdminProductsPage() {
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [csvInput, setCsvInput] = useState('');
+  const [importReport, setImportReport] = useState<ProductCsvImportReport | null>(null);
 
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -308,6 +318,61 @@ export default function AdminProductsPage() {
     },
   });
 
+  const exportCsvMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.get<string>('/products/export/csv', {
+        responseType: 'text',
+      });
+      return res.data;
+    },
+    onSuccess: (csv) => {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Urun CSV indirildi.');
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErrorMessage(error, 'CSV export basarisiz.'));
+    },
+  });
+
+  const importCsvMutation = useMutation({
+    mutationFn: async () => {
+      const csv = csvInput.trim();
+      if (!csv) {
+        throw new Error('CSV metnini girin.');
+      }
+
+      const res = await api.post<ProductCsvImportReport>('/products/import/csv', {
+        csv,
+        upsertBy: 'sku',
+      });
+      return res.data;
+    },
+    onSuccess: async (report) => {
+      setImportReport(report);
+      await queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+      if (report.errors.length > 0) {
+        toast.error(
+          `Import tamamlandi: ${report.created} yeni, ${report.updated} guncel, ${report.errors.length} hata.`,
+        );
+      } else {
+        toast.success(
+          `Import tamamlandi: ${report.created} yeni, ${report.updated} guncellendi.`,
+        );
+      }
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErrorMessage(error, 'CSV import basarisiz.'));
+    },
+  });
+
   const beginEdit = (product: ProductRow) => {
     setEditingId(product.id);
     setEditForm({
@@ -371,6 +436,67 @@ export default function AdminProductsPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <section className="space-y-4 rounded-[28px] border border-[#E0D7C6] bg-white/90 px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)] lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+                SH-31
+              </p>
+              <h2 className="mt-2 text-2xl font-serif text-[#1A3C34]">
+                CSV Import / Export
+              </h2>
+              <p className="mt-2 text-sm text-[#5C5C5C]">
+                Export ile urunleri indirip duzenleyin, import ile toplu guncelleyin.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => exportCsvMutation.mutate()}
+                disabled={exportCsvMutation.isPending}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {exportCsvMutation.isPending ? 'Indiriliyor...' : 'CSV Export'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => importCsvMutation.mutate()}
+                disabled={importCsvMutation.isPending}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {importCsvMutation.isPending ? 'Import ediliyor...' : 'CSV Import'}
+              </Button>
+            </div>
+          </div>
+
+          <textarea
+            value={csvInput}
+            onChange={(e) => setCsvInput(e.target.value)}
+            className="min-h-[180px] w-full rounded-2xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34] shadow-sm outline-none focus-visible:border-[#1A3C34] focus-visible:ring-2 focus-visible:ring-[#C5A059]/20"
+            placeholder="id,categoryId,name,sku,type,priceCents,stock,isActive&#10;,12,Ornek Urun,SKU-ORNEK,PHYSICAL,9900,5,true"
+          />
+
+          {importReport ? (
+            <div className="rounded-2xl border border-[#E5E5E0] bg-[#F8FAF8] px-4 py-3 text-sm text-[#1A3C34]">
+              <p>
+                Toplam satir: {importReport.totalRows} | Yeni: {importReport.created} | Guncel:{' '}
+                {importReport.updated} | Bos satir: {importReport.skipped}
+              </p>
+              <p>Hata sayisi: {importReport.errors.length}</p>
+              {importReport.errors.length > 0 ? (
+                <div className="mt-2 max-h-36 overflow-auto rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-xs">
+                  {importReport.errors.map((error, index) => (
+                    <p key={`${error.line}-${index}`}>
+                      Satir {error.line}: {error.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
         <form
           onSubmit={handleCreate}
           className="space-y-4 rounded-[28px] border border-[#E0D7C6] bg-white/90 px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]"

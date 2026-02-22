@@ -847,17 +847,42 @@ export class CustomersService {
   }
 
   async remove(currentUser: JwtPayload, id: number): Promise<CustomerSummary> {
-    await this.findAccessibleCustomer(currentUser, id);
+    const customer = await this.findAccessibleCustomer(currentUser, id);
+    const deletedAt = new Date();
+    const anonymizedName = `Silinmis Musteri #${customer.id}`;
+    // Keep value unique under (businessId, phone) while removing personal data.
+    const anonymizedPhone = `deleted-${customer.id}-${deletedAt.getTime()}`;
 
-    const removed = await this.prisma.customer.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        balance: true,
-      },
+    const removed = await this.prisma.$transaction(async (tx) => {
+      await tx.customerAddress.deleteMany({
+        where: {
+          businessId: customer.businessId,
+          customerId: customer.id,
+        },
+      });
+
+      await tx.customerPreference.deleteMany({
+        where: {
+          businessId: customer.businessId,
+          customerId: customer.id,
+        },
+      });
+
+      return tx.customer.update({
+        where: { id },
+        data: {
+          deletedAt,
+          userId: null,
+          name: anonymizedName,
+          phone: anonymizedPhone,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          balance: true,
+        },
+      });
     });
 
     return removed;

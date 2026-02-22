@@ -71,10 +71,11 @@ export class EmailService {
     return this.transporter;
   }
 
-  async sendPasswordResetEmail(params: {
+  private async sendEmail(params: {
     to: string;
-    resetUrl: string;
-    siteName: string;
+    subject: string;
+    text: string;
+    html: string;
   }): Promise<void> {
     const from =
       this.config.get<string>('SMTP_FROM') ??
@@ -85,6 +86,25 @@ export class EmailService {
 
     const info = await transporter.sendMail({
       from,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+    });
+
+    console.log('Email queued:', {
+      to: params.to,
+      subject: params.subject,
+      messageId: info.messageId ?? null,
+    });
+  }
+
+  async sendPasswordResetEmail(params: {
+    to: string;
+    resetUrl: string;
+    siteName: string;
+  }): Promise<void> {
+    await this.sendEmail({
       to: params.to,
       subject: `${params.siteName} | Şifre Sıfırlama`,
       text: `Şifrenizi sıfırlamak için linke tıklayın: ${params.resetUrl}`,
@@ -97,11 +117,82 @@ export class EmailService {
         </div>
       `,
     });
+  }
 
-    console.log('Password reset email queued:', {
+  async sendOrderCreatedEmail(params: {
+    to: string;
+    customerName: string;
+    orderId: number;
+    totalAmountCents: number;
+    siteName: string;
+  }): Promise<void> {
+    const total = (params.totalAmountCents / 100).toFixed(2);
+
+    await this.sendEmail({
       to: params.to,
-      resetUrl: params.resetUrl,
-      messageId: info.messageId ?? null,
+      subject: `${params.siteName} | Siparis Alindi #${params.orderId}`,
+      text: `Merhaba ${params.customerName}, #${params.orderId} numarali siparisiniz alindi. Toplam: ${total} TRY.`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2 style="margin:0 0 12px">Siparisiniz Alindi</h2>
+          <p>Merhaba ${params.customerName},</p>
+          <p><strong>#${params.orderId}</strong> numarali siparisiniz basariyla olusturuldu.</p>
+          <p>Toplam tutar: <strong>${total} TRY</strong></p>
+        </div>
+      `,
+    });
+  }
+
+  async sendOrderStatusChangedEmail(params: {
+    to: string;
+    customerName: string;
+    orderId: number;
+    previousStatusKey: string;
+    nextStatusKey: string;
+    siteName: string;
+  }): Promise<void> {
+    await this.sendEmail({
+      to: params.to,
+      subject: `${params.siteName} | Siparis Durumu Guncellendi #${params.orderId}`,
+      text: `Merhaba ${params.customerName}, #${params.orderId} numarali siparisinizin durumu ${params.previousStatusKey} -> ${params.nextStatusKey} olarak guncellendi.`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2 style="margin:0 0 12px">Siparis Durumu Guncellendi</h2>
+          <p>Merhaba ${params.customerName},</p>
+          <p><strong>#${params.orderId}</strong> numarali siparisinizin durumu guncellendi.</p>
+          <p>
+            <strong>${params.previousStatusKey}</strong>
+            &rarr;
+            <strong>${params.nextStatusKey}</strong>
+          </p>
+        </div>
+      `,
+    });
+  }
+
+  async sendOrderPaymentReceivedEmail(params: {
+    to: string;
+    customerName: string;
+    orderId: number;
+    amountCents: number;
+    method: string;
+    siteName: string;
+  }): Promise<void> {
+    const amount = (params.amountCents / 100).toFixed(2);
+
+    await this.sendEmail({
+      to: params.to,
+      subject: `${params.siteName} | Odeme Alindi #${params.orderId}`,
+      text: `Merhaba ${params.customerName}, #${params.orderId} siparisiniz icin ${amount} TRY odeme alindi. Yontem: ${params.method}.`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2 style="margin:0 0 12px">Odeme Alindi</h2>
+          <p>Merhaba ${params.customerName},</p>
+          <p><strong>#${params.orderId}</strong> numarali siparisiniz icin odeme alindi.</p>
+          <p>Tutar: <strong>${amount} TRY</strong></p>
+          <p>Yontem: <strong>${params.method}</strong></p>
+        </div>
+      `,
     });
   }
 }

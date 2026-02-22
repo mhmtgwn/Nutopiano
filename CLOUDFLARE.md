@@ -1,83 +1,122 @@
 # Cloudflare CDN Cutover Guide
 
-This guide covers `D-03 Cloudflare CDN` rollout for Nutopiano.
+This runbook covers `D-03 Cloudflare CDN` rollout for Nutopiano.
 
 ## Scope
 
 - `nutopiano.com` and `www.nutopiano.com` (frontend)
 - `api.nutopiano.com` (backend API)
 
-## 1. Cloudflare Zone Setup
+## 0. Required Access (From You)
+
+You need these before cutover:
+
+1. Domain registrar access (to change nameservers).
+2. Cloudflare account access for the domain zone.
+3. SSH access to origin server (Nginx host).
+4. Current origin public IP address.
+5. Existing mail DNS records list (`MX`, SPF, DKIM, DMARC), if mail is active on this domain.
+
+## 1. Pre-Cutover Preparation
+
+1. Lower current DNS TTL to `300` (if provider allows), at least 15-30 minutes before nameserver switch.
+2. Take a snapshot of current DNS records.
+3. Confirm backend health from origin:
+   - `https://api.nutopiano.com/api/v1/health`
+4. Keep rollback note: current nameservers and current DNS records.
+
+## 2. Cloudflare Zone Setup
 
 1. Add domain to Cloudflare.
-2. Update registrar nameservers to Cloudflare-provided nameservers.
-3. Wait until zone status is active.
+2. Import DNS records.
+3. Update registrar nameservers to Cloudflare-provided nameservers.
+4. Wait until zone status is `Active`.
 
-## 2. DNS Records
-
-Create records (example):
-
-- `A @ -> <server_ip>` (Proxy: ON)
-- `A www -> <server_ip>` (Proxy: ON)
-- `A api -> <server_ip>` (Proxy: ON)
-
-Notes:
-
-- Keep mail-related records (`MX`, SPF, DKIM, DMARC) as required.
-- Use Proxy ON for WAF + DDoS + CDN benefits.
-
-## 3. SSL/TLS
-
-- Cloudflare SSL mode: `Full (strict)`
-- Origin cert:
-  - Option A: Let’s Encrypt on origin
-  - Option B: Cloudflare Origin Certificate on Nginx
-- Enable:
-  - Always Use HTTPS
-  - Automatic HTTPS Rewrites
-  - HTTP/2 and HTTP/3
-
-## 4. Caching Rules
+## 3. DNS Records (Cloudflare)
 
 Recommended baseline:
 
-- Bypass cache:
-  - `/api/*`
-  - `/api/v1/*`
-  - Auth/cart/account/dashboard paths
-- Cache static assets:
-  - `*.css`, `*.js`, `*.mjs`, `*.jpg`, `*.png`, `*.webp`, `*.svg`, `*.woff2`
-  - TTL: 1h-7d (depending on release cadence)
+- `A @ -> <origin_ip>` (Proxy: ON, orange cloud)
+- `A www -> <origin_ip>` (Proxy: ON)
+- `A api -> <origin_ip>` (Proxy: ON)
 
-## 5. Security Rules
+Notes:
 
-- Enable WAF managed rules.
-- Enable Bot Fight Mode (or Super Bot Fight if available).
-- Add rate limiting for API auth routes:
-  - `/api/v1/auth/login`
-  - `/api/v1/auth/forgot-password`
-- Restrict origin access to Cloudflare IP ranges where possible (firewall/Nginx).
+- Keep all required mail records exactly as-is.
+- If a service must bypass Cloudflare, set that record to Proxy OFF (gray cloud).
 
-## 6. Origin (Nginx) Alignment
+## 4. SSL/TLS Settings
 
-- Use `scripts/nginx.example.conf` as base.
-- Important:
-  - Preserve real client IP via `CF-Connecting-IP` (already noted in config).
-  - Keep API responses non-cacheable.
+Cloudflare dashboard:
 
-## 7. Validation Checklist
+1. SSL/TLS mode: `Full (strict)`.
+2. Enable `Always Use HTTPS`.
+3. Enable `Automatic HTTPS Rewrites`.
+4. HTTP: keep HTTP/2 and HTTP/3 enabled.
 
-After enabling proxy:
+Origin certificate on server:
 
-1. `https://nutopiano.com` opens and login works.
-2. `https://api.nutopiano.com/api/v1/health` returns healthy.
-3. Checkout/order flow works end-to-end.
-4. `/uploads/*` and static assets return expected cache headers.
-5. Origin logs show real client IP (not only Cloudflare edges).
-6. No CSRF/cookie regressions.
+- Option A: Let's Encrypt certs on origin.
+- Option B: Cloudflare Origin Certificate on Nginx.
 
-## 8. Rollback Plan
+## 5. Origin Hardening (Nginx + Real IP)
 
-- Set critical DNS records to Proxy OFF (gray cloud) temporarily.
-- Revert problematic Cloudflare cache/rate rules.
-- Keep origin certificates valid during rollback window.
+Do not trust `CF-Connecting-IP` without trusted Cloudflare CIDRs.
+
+1. Generate real IP snippet:
+   - Linux/macOS:
+     - `bash scripts/update-cloudflare-realip.sh`
+   - Windows/PowerShell:
+     - `powershell -File scripts/update-cloudflare-realip.ps1`
+2. Place generated file at:
+   - `/etc/nginx/snippets/cloudflare-realip.conf`
+3. Include it in Nginx config:
+   - `include /etc/nginx/snippets/cloudflare-realip.conf;`
+4. Validate and reload:
+   - `nginx -t`
+   - `sudo systemctl reload nginx`
+
+Reference config: `scripts/nginx.example.conf`
+
+## 6. Cloudflare Rules (Recommended Baseline)
+
+### Cache
+
+1. Bypass cache for API:
+   - Hostname `api.nutopiano.com` OR path starts with `/api/`.
+2. Cache static assets aggressively:
+   - Extensions: `css, js, mjs, jpg, jpeg, png, gif, webp, svg, ico, woff2`
+   - Edge TTL: 1d-7d (based on release cadence).
+
+### Security
+
+1. Enable WAF managed rules.
+2. Enable Bot Fight Mode.
+3. Add rate limit rules:
+   - `/api/v1/auth/login`
+   - `/api/v1/auth/forgot-password`
+4. Optional but recommended:
+   - Restrict origin firewall inbound to Cloudflare IP ranges + SSH admin IP.
+
+## 7. Validation
+
+After proxy is enabled:
+
+1. Site loads and auth works:
+   - `https://nutopiano.com`
+2. API health works:
+   - `https://api.nutopiano.com/api/v1/health`
+3. CDN headers exist:
+   - `curl -I https://nutopiano.com`
+   - `curl -I https://api.nutopiano.com/api/v1/health`
+   - Expect Cloudflare headers like `cf-ray`.
+4. Critical flows:
+   - login, checkout, order create, POS API calls.
+5. Verify origin logs have real visitor IP (not only Cloudflare edge IPs).
+
+## 8. Rollback
+
+1. Set affected DNS records to Proxy OFF temporarily.
+2. Revert problematic cache/WAF/rate-limit rules.
+3. If needed, switch registrar nameservers back to previous provider.
+4. Keep origin certs valid during rollback window.

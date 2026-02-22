@@ -6,7 +6,22 @@ This document covers migration from current PostgreSQL to a managed provider (RD
 
 - Linux/macOS migrate: `scripts/migrate-to-managed-postgres.sh`
 - Windows migrate: `scripts/migrate-to-managed-postgres.ps1`
-- Verification: `scripts/verify-managed-postgres.sh`
+- Linux/macOS verification: `scripts/verify-managed-postgres.sh`
+- Windows verification: `scripts/verify-managed-postgres.ps1`
+
+## Managed Service Baseline (Backup/Failover/Monitoring)
+
+Before cutover, ensure these are enabled in your provider console:
+
+1. Automated backups enabled (minimum 7 days retention, recommended 14-30 days).
+2. Point-in-time recovery enabled.
+3. High availability / automatic failover enabled (for example Multi-AZ in AWS RDS).
+4. Monitoring and alerts configured for CPU, storage, connections and replication lag.
+5. SSL/TLS enforced for connections (`sslmode=require` in `DATABASE_URL`).
+
+Optional but recommended:
+
+- Keep application-level logical backups with `scripts/backup-postgres.sh` or `scripts/backup-postgres.ps1` as a second recovery path.
 
 ## 1. Prepare Target Database
 
@@ -51,6 +66,13 @@ npx prisma migrate deploy --schema backend/prisma/schema.prisma
 ```bash
 TARGET_DATABASE_URL="postgresql://managed_user:managed_pass@managed-host:5432/nutopiano?sslmode=require" \
 bash scripts/verify-managed-postgres.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\verify-managed-postgres.ps1 `
+  -TargetDatabaseUrl "postgresql://managed_user:managed_pass@managed-host:5432/nutopiano?sslmode=require"
 ```
 
 ## 5. Cutover

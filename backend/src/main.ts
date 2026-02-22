@@ -9,12 +9,14 @@ import path from 'path';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
+import { HttpMetricsInterceptor } from './common/interceptors/http-metrics.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { getCorsConfig } from './common/config/cors.config';
 import { validateEnv } from './common/config/app.config';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
 import { JsonLoggerService } from './common/logger/json-logger.service';
 import * as Sentry from '@sentry/nestjs';
+import { AppService } from './app.service';
 
 async function bootstrap() {
   const logger = new JsonLoggerService();
@@ -107,6 +109,7 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
   );
   app.useGlobalInterceptors(
+    new HttpMetricsInterceptor(app.get(AppService)),
     new RequestContextInterceptor(),
     new ResponseInterceptor(),
   );

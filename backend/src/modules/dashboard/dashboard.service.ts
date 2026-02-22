@@ -34,7 +34,11 @@ export class DashboardService {
   async getSellerSummary(
     currentUser: JwtPayload,
   ): Promise<SellerDashboardSummary> {
-    if (currentUser.role !== 'SELLER' && currentUser.role !== 'STAFF') {
+    if (
+      currentUser.role !== 'ADMIN' &&
+      currentUser.role !== 'SELLER' &&
+      currentUser.role !== 'STAFF'
+    ) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -105,7 +109,11 @@ export class DashboardService {
   async getSellerReportsSummary(
     currentUser: JwtPayload,
   ): Promise<SellerReportsSummary> {
-    if (currentUser.role !== 'SELLER' && currentUser.role !== 'STAFF') {
+    if (
+      currentUser.role !== 'ADMIN' &&
+      currentUser.role !== 'SELLER' &&
+      currentUser.role !== 'STAFF'
+    ) {
       throw new ForbiddenException('Access denied');
     }
 

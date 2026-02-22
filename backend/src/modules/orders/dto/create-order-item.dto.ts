@@ -18,4 +18,9 @@ export class CreateOrderItemDto {
   @IsInt()
   @Min(0)
   expectedUnitPriceCents?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discountAmountCents?: number;
 }

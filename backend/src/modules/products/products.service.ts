@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, ProductType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
+import { ImportProductsCsvDto } from './dto/import-products-csv.dto';
 import {
   buildPaginationMeta,
   clampPage,
@@ -56,9 +57,125 @@ export interface PublicProductReviewSummary {
   updatedAt: Date;
 }
 
+type CsvImportError = {
+  line: number;
+  message: string;
+};
+
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private csvEscape(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    const text = String(value);
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+
+  private parseCsvRows(csvText: string): Array<Record<string, string>> {
+    const input = String(csvText ?? '').replace(/^\uFEFF/, '');
+    const rows: string[][] = [];
+    let currentField = '';
+    let currentRow: string[] = [];
+    let inQuotes = false;
+
+    for (let i = 0; i < input.length; i += 1) {
+      const char = input[i];
+
+      if (inQuotes) {
+        if (char === '"') {
+          if (input[i + 1] === '"') {
+            currentField += '"';
+            i += 1;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          currentField += char;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inQuotes = true;
+        continue;
+      }
+
+      if (char === ',') {
+        currentRow.push(currentField);
+        currentField = '';
+        continue;
+      }
+
+      if (char === '\n') {
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = '';
+        continue;
+      }
+
+      if (char === '\r') {
+        continue;
+      }
+
+      currentField += char;
+    }
+
+    currentRow.push(currentField);
+    rows.push(currentRow);
+
+    if (!rows.length) {
+      return [];
+    }
+
+    const headerRow = rows[0].map((value) => value.trim().toLowerCase());
+    if (!headerRow.length || headerRow.every((h) => !h)) {
+      return [];
+    }
+
+    const output: Array<Record<string, string>> = [];
+    for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+      const raw = rows[rowIndex];
+      const record: Record<string, string> = {};
+      for (let col = 0; col < headerRow.length; col += 1) {
+        const key = headerRow[col];
+        if (!key) continue;
+        record[key] = (raw[col] ?? '').trim();
+      }
+      output.push(record);
+    }
+
+    return output;
+  }
+
+  private parseOptionalInt(value?: string): number | null {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.trunc(parsed);
+  }
+
+  private parsePipeList(value?: string): string[] {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return [];
+    return normalized
+      .split('|')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private parseOptionalBoolean(value?: string): boolean | null {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (['1', 'true', 'yes', 'evet'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'hayir', 'hayır'].includes(normalized)) return false;
+    return null;
+  }
 
   private normalizeImageUrls(images?: string[], imageUrl?: string) {
     const seen = new Set<string>();
@@ -106,6 +223,279 @@ export class ProductsService {
         isPrimary: params.primaryUrl ? params.primaryUrl === url : index === 0,
       })),
     });
+  }
+
+  async exportProductsCsv(currentUser: JwtPayload): Promise<string> {
+    const businessId = Number(currentUser.businessId);
+
+    const rows = await this.prisma.product.findMany({
+      where: { businessId },
+      select: {
+        id: true,
+        categoryId: true,
+        name: true,
+        subtitle: true,
+        sku: true,
+        type: true,
+        priceCents: true,
+        description: true,
+        features: true,
+        imageUrl: true,
+        images: true,
+        stock: true,
+        tags: true,
+        seoTitle: true,
+        seoDescription: true,
+        isActive: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const headers = [
+      'id',
+      'categoryId',
+      'name',
+      'subtitle',
+      'sku',
+      'type',
+      'priceCents',
+      'description',
+      'features',
+      'imageUrl',
+      'images',
+      'stock',
+      'tags',
+      'seoTitle',
+      'seoDescription',
+      'isActive',
+    ];
+
+    const lines = [headers.join(',')];
+
+    for (const row of rows) {
+      const lineValues = [
+        row.id,
+        row.categoryId,
+        row.name,
+        row.subtitle ?? '',
+        row.sku ?? '',
+        row.type,
+        row.priceCents,
+        row.description ?? '',
+        (row.features ?? []).join('|'),
+        row.imageUrl ?? '',
+        (row.images ?? []).join('|'),
+        row.stock ?? '',
+        (row.tags ?? []).join('|'),
+        row.seoTitle ?? '',
+        row.seoDescription ?? '',
+        row.isActive ? 'true' : 'false',
+      ];
+      lines.push(lineValues.map((value) => this.csvEscape(value)).join(','));
+    }
+
+    return lines.join('\n');
+  }
+
+  async importProductsCsv(
+    currentUser: JwtPayload,
+    payload: ImportProductsCsvDto,
+  ): Promise<{
+    totalRows: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: CsvImportError[];
+  }> {
+    const businessId = Number(currentUser.businessId);
+    const createdByUserId = Number(currentUser.userId);
+
+    if (!payload?.csv || !String(payload.csv).trim()) {
+      throw new BadRequestException('CSV icerigi zorunludur.');
+    }
+
+    const upsertBy = payload.upsertBy ?? 'sku';
+    const rows = this.parseCsvRows(payload.csv);
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors: CsvImportError[] = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const line = index + 2;
+      const row = rows[index];
+
+      const hasData = Object.values(row).some((value) => String(value).trim().length > 0);
+      if (!hasData) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        const rowId = this.parseOptionalInt(row.id);
+        const rowSku = String(row.sku ?? '').trim();
+
+        let existing: { id: number } | null = null;
+        if (upsertBy === 'id' && rowId && rowId > 0) {
+          existing = await this.prisma.product.findFirst({
+            where: {
+              id: rowId,
+              businessId,
+            },
+            select: { id: true },
+          });
+        } else if (upsertBy === 'sku' && rowSku) {
+          existing = await this.prisma.product.findFirst({
+            where: {
+              businessId,
+              sku: rowSku,
+            },
+            select: { id: true },
+          });
+        }
+
+        const rawCategoryId = this.parseOptionalInt(row.categoryid ?? row.category_id);
+        const rawName = String(row.name ?? '').trim();
+        const rawType = String(row.type ?? '')
+          .trim()
+          .toUpperCase();
+        const rawPrice = this.parseOptionalInt(row.pricecents ?? row.price);
+        const rawStock = this.parseOptionalInt(row.stock);
+        const rawIsActive = this.parseOptionalBoolean(row.isactive ?? row.active);
+
+        const categoryId =
+          rawCategoryId && rawCategoryId > 0 ? Math.trunc(rawCategoryId) : null;
+        const priceCents =
+          rawPrice !== null && rawPrice >= 0 ? Math.trunc(rawPrice) : null;
+        const stock =
+          rawStock !== null && rawStock >= 0 ? Math.trunc(rawStock) : null;
+        const productType = rawType
+          ? (rawType as ProductType)
+          : null;
+
+        if (productType && !(Object.values(ProductType) as string[]).includes(productType)) {
+          throw new BadRequestException(`Gecersiz type degeri: ${rawType}`);
+        }
+
+        if (categoryId) {
+          const category = await this.prisma.category.findFirst({
+            where: {
+              id: categoryId,
+              businessId,
+            },
+            select: { id: true },
+          });
+          if (!category) {
+            throw new NotFoundException(`Kategori bulunamadi: ${categoryId}`);
+          }
+        }
+
+        if (existing) {
+          const data: Prisma.ProductUncheckedUpdateInput = {};
+
+          if (categoryId) data.categoryId = categoryId;
+          if (Object.prototype.hasOwnProperty.call(row, 'name') && rawName) {
+            data.name = rawName;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'subtitle')) {
+            data.subtitle = String(row.subtitle ?? '').trim() || null;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'sku')) {
+            data.sku = rowSku || null;
+          }
+          if (productType) data.type = productType;
+          if (priceCents !== null) data.priceCents = priceCents;
+          if (Object.prototype.hasOwnProperty.call(row, 'description')) {
+            data.description = String(row.description ?? '').trim() || null;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'features')) {
+            data.features = this.parsePipeList(row.features);
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'imageurl')) {
+            data.imageUrl = String(row.imageurl ?? '').trim() || null;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'images')) {
+            data.images = this.parsePipeList(row.images);
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'stock')) {
+            data.stock = stock;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'tags')) {
+            data.tags = this.parsePipeList(row.tags);
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'seotitle')) {
+            data.seoTitle = String(row.seotitle ?? '').trim() || null;
+          }
+          if (Object.prototype.hasOwnProperty.call(row, 'seodescription')) {
+            data.seoDescription = String(row.seodescription ?? '').trim() || null;
+          }
+          if (rawIsActive !== null) {
+            data.isActive = rawIsActive;
+          }
+
+          await this.prisma.product.update({
+            where: { id: existing.id },
+            data,
+          });
+          updated += 1;
+          continue;
+        }
+
+        if (!categoryId) {
+          throw new BadRequestException('Yeni urun icin categoryId zorunludur.');
+        }
+        if (!rawName) {
+          throw new BadRequestException('Yeni urun icin name zorunludur.');
+        }
+        if (!productType) {
+          throw new BadRequestException('Yeni urun icin type zorunludur.');
+        }
+        if (priceCents === null) {
+          throw new BadRequestException('Yeni urun icin priceCents zorunludur.');
+        }
+
+        await this.prisma.product.create({
+          data: {
+            businessId,
+            createdByUserId,
+            categoryId,
+            name: rawName,
+            subtitle: String(row.subtitle ?? '').trim() || undefined,
+            sku: rowSku || undefined,
+            type: productType,
+            priceCents,
+            description: String(row.description ?? '').trim() || undefined,
+            features: this.parsePipeList(row.features),
+            imageUrl: String(row.imageurl ?? '').trim() || undefined,
+            images: this.parsePipeList(row.images),
+            stock,
+            tags: this.parsePipeList(row.tags),
+            seoTitle: String(row.seotitle ?? '').trim() || undefined,
+            seoDescription: String(row.seodescription ?? '').trim() || undefined,
+            isActive: rawIsActive ?? true,
+          },
+        });
+
+        created += 1;
+      } catch (error) {
+        errors.push({
+          line,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Bilinmeyen import hatasi',
+        });
+      }
+    }
+
+    return {
+      totalRows: rows.length,
+      created,
+      updated,
+      skipped,
+      errors,
+    };
   }
 
   private async assertCategoryScoped(

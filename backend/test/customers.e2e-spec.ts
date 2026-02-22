@@ -186,7 +186,7 @@ describe('Customers (e2e)', () => {
         .expect(404);
     });
 
-    it('ADMIN soft deletes customer; deleted customer is hidden from API lists/details', async () => {
+    it('ADMIN anonymizes + soft deletes customer; record is hidden from API lists/details', async () => {
       await request(app.getHttpServer())
         .delete(`/customers/${adminCustomer.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -207,9 +207,13 @@ describe('Customers (e2e)', () => {
 
       const dbCustomer = await prisma.customer.findUnique({
         where: { id: adminCustomer.id },
-        select: { deletedAt: true },
+        select: { deletedAt: true, name: true, phone: true, userId: true },
       });
       expect(dbCustomer?.deletedAt).toBeTruthy();
+      expect(dbCustomer?.name).toContain('Silinmis Musteri');
+      expect(dbCustomer?.phone).toContain(`deleted-${adminCustomer.id}-`);
+      expect(dbCustomer?.phone).not.toBe(ADMIN_CUSTOMER_PHONE);
+      expect(dbCustomer?.userId).toBeNull();
     });
   });
 });

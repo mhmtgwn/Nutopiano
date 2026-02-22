@@ -19,30 +19,30 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @Roles('SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'STAFF')
   @ApiOperation({
-    summary: 'Seller dashboard summary',
+    summary: 'Dashboard summary',
     description:
-      'Returns KPI summary for seller portal (scoped by role and business).',
+      'Returns KPI summary for admin/seller/staff dashboard (scoped by role and business).',
   })
   @ApiOkResponse({ description: 'Dashboard summary KPI payload.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than SELLER/STAFF.',
+    description: 'Forbidden for roles other than ADMIN/SELLER/STAFF.',
   })
   summary(@Req() req: { user: JwtPayload }) {
     return this.dashboardService.getSellerSummary(req.user);
   }
 
   @Get('reports/summary')
-  @Roles('SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'STAFF')
   @ApiOperation({
-    summary: 'Seller reports summary',
+    summary: 'Dashboard reports summary',
     description:
-      'Returns basic sales/report metrics for seller portal (last 30 days + top products).',
+      'Returns basic sales/report metrics for admin/seller/staff dashboard (last 30 days + top products).',
   })
   @ApiOkResponse({ description: 'Reports summary payload.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than SELLER/STAFF.',
+    description: 'Forbidden for roles other than ADMIN/SELLER/STAFF.',
   })
   reportsSummary(@Req() req: { user: JwtPayload }) {
     return this.dashboardService.getSellerReportsSummary(req.user);

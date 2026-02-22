@@ -120,6 +120,7 @@ describe('Orders & Payments (e2e)', () => {
         sku: `ORD-P1-${RUN_ID}`,
         type: 'PHYSICAL',
         priceCents: 1000,
+        stock: 10,
       },
     });
 
@@ -132,6 +133,7 @@ describe('Orders & Payments (e2e)', () => {
         sku: `ORD-P2-${RUN_ID}`,
         type: 'PHYSICAL',
         priceCents: 500,
+        stock: 20,
       },
     });
 
@@ -268,6 +270,22 @@ describe('Orders & Payments (e2e)', () => {
       adminOrder = res.body;
     });
 
+    it('decrements product stock when order is created', async () => {
+      const [currentProduct1, currentProduct2] = await Promise.all([
+        prisma.product.findUnique({
+          where: { id: product1.id },
+          select: { stock: true },
+        }),
+        prisma.product.findUnique({
+          where: { id: product2.id },
+          select: { stock: true },
+        }),
+      ]);
+
+      expect(currentProduct1?.stock).toBe(9);
+      expect(currentProduct2?.stock).toBe(18);
+    });
+
     it('STAFF can create own order', async () => {
       const res = await request(app.getHttpServer())
         .post('/orders')
@@ -281,6 +299,78 @@ describe('Orders & Payments (e2e)', () => {
       expect(res.body.totalAmountCents).toBe(1000);
       expect(res.body.statusKey).toBe('CREATED');
       staffOrder = res.body;
+    });
+
+    it('supports Idempotency-Key and returns the same order on duplicate requests', async () => {
+      const idemKey = `orders-idem-${RUN_ID}-1`;
+      const stockBefore = await prisma.product.findUnique({
+        where: { id: product2.id },
+        select: { stock: true },
+      });
+
+      const first = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idemKey)
+        .send({
+          customerId: customer1.id,
+          items: [{ productId: product2.id, quantity: 1 }],
+        })
+        .expect(201);
+
+      const second = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idemKey)
+        .send({
+          customerId: customer1.id,
+          items: [{ productId: product2.id, quantity: 1 }],
+        })
+        .expect(201);
+
+      expect(second.body.id).toBe(first.body.id);
+
+      const matchingOrders = await prisma.order.findMany({
+        where: {
+          businessId: business1.id,
+          idempotencyKey: idemKey,
+        },
+        select: { id: true },
+      });
+      expect(matchingOrders).toHaveLength(1);
+
+      const stockAfter = await prisma.product.findUnique({
+        where: { id: product2.id },
+        select: { stock: true },
+      });
+      expect(stockAfter?.stock).toBe((stockBefore?.stock ?? 0) - 1);
+    });
+
+    it('rejects reusing Idempotency-Key with a different payload', async () => {
+      const idemKey = `orders-idem-${RUN_ID}-2`;
+
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idemKey)
+        .send({
+          customerId: customer1.id,
+          items: [{ productId: product1.id, quantity: 1 }],
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idemKey)
+        .send({
+          customerId: customer1.id,
+          items: [{ productId: product1.id, quantity: 2 }],
+        })
+        .expect(400)
+        .expect((res) => {
+          expect(String(res.body?.message ?? '')).toContain('Idempotency-Key');
+        });
     });
 
     it('rejects order creation when client cart price is stale', async () => {
@@ -301,6 +391,37 @@ describe('Orders & Payments (e2e)', () => {
         .expect((res) => {
           expect(String(res.body?.message ?? '')).toContain('fiyat');
         });
+    });
+
+    it('applies line and cart discounts in order totals', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          customerId: customer1.id,
+          cartDiscountAmountCents: 200,
+          items: [
+            {
+              productId: product1.id,
+              quantity: 2,
+              discountAmountCents: 300,
+            },
+          ],
+        })
+        .expect(201);
+
+      expect(res.body.totalAmountCents).toBe(1500);
+      const discountedItem = res.body.items.find(
+        (i: { productId: number }) => i.productId === product1.id,
+      );
+      expect(discountedItem?.totalAmountCents).toBe(1700);
+
+      const storedOrder = await prisma.order.findUnique({
+        where: { id: Number(res.body.id) },
+        select: { discountAmountCents: true, subtotalAmountCents: true },
+      });
+      expect(storedOrder?.discountAmountCents).toBe(500);
+      expect(storedOrder?.subtotalAmountCents).toBe(1700);
     });
 
     it('Order item keeps price and name snapshot after product changes', async () => {
@@ -373,6 +494,17 @@ describe('Orders & Payments (e2e)', () => {
         .expect(200);
 
       expect(res.body.statusKey).toBe('COMPLETED');
+    });
+
+    it('blocks invalid state transition from final status', async () => {
+      await request(app.getHttpServer())
+        .patch(`/orders/${adminOrder.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ statusKey: 'IN_PROGRESS' })
+        .expect(400)
+        .expect((res) => {
+          expect(String(res.body?.message ?? '')).toContain('Final');
+        });
     });
   });
 

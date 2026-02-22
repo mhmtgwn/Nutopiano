@@ -5,9 +5,10 @@ import { PlatformOrdersController } from './platform-orders.controller';
 import { OrderStatusModule } from '../order-status/order-status.module';
 import { SettingsModule } from '../settings/settings.module';
 import { FinanceModule } from '../finance/finance.module';
+import { EmailModule } from '../../email/email.module';
 
 @Module({
-  imports: [OrderStatusModule, SettingsModule, FinanceModule],
+  imports: [OrderStatusModule, SettingsModule, FinanceModule, EmailModule],
   controllers: [OrdersController, PlatformOrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

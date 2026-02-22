@@ -20,6 +20,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PosModule } from './modules/pos/pos.module';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { HealthModule } from './modules/health/health.module';
@@ -71,6 +72,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     PlansModule,
     DashboardModule,
     PaymentsModule,
+    PosModule,
   ],
 
   controllers: [AppController, DevController],

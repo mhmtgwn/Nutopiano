@@ -30,6 +30,7 @@ describe('Products (e2e)', () => {
   const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
   const ADMIN_PRODUCT_SKU = `SKU-ADMIN-${RUN_ID}`;
   const OTHER_BUS_PRODUCT_SKU = `SKU-OTHER-${RUN_ID}`;
+  const IMPORT_NEW_SKU = `SKU-IMPORT-${RUN_ID}`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -201,6 +202,54 @@ describe('Products (e2e)', () => {
 
       expect(skus).toContain(ADMIN_PRODUCT_SKU);
       expect(skus).not.toContain(OTHER_BUS_PRODUCT_SKU);
+    });
+
+    it('can export products as CSV', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/products/export/csv')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .expect(200);
+
+      expect(String(res.header['content-type'] ?? '')).toContain('text/csv');
+      expect(res.text).toContain('id,categoryId,name,subtitle,sku,type,priceCents');
+      expect(res.text).toContain(ADMIN_PRODUCT_SKU);
+    });
+
+    it('can import products from CSV with sku upsert', async () => {
+      const csv = [
+        'id,categoryId,name,sku,type,priceCents,stock,isActive',
+        `,${category1.id},Imported Product,${IMPORT_NEW_SKU},PHYSICAL,7777,4,true`,
+        `,${category1.id},Admin Product CSV Updated,${ADMIN_PRODUCT_SKU},PHYSICAL,2222,6,true`,
+      ].join('\n');
+
+      const importRes = await request(app.getHttpServer())
+        .post('/products/import/csv')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          csv,
+          upsertBy: 'sku',
+        })
+        .expect(201);
+
+      expect(importRes.body.created).toBe(1);
+      expect(importRes.body.updated).toBe(1);
+      expect(importRes.body.errors).toHaveLength(0);
+
+      const listRes = await request(app.getHttpServer())
+        .get('/products/manage')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .expect(200);
+
+      const imported = listRes.body.data.find(
+        (p: { sku?: string | null }) => p.sku === IMPORT_NEW_SKU,
+      );
+      expect(imported).toBeTruthy();
+
+      const updated = listRes.body.data.find(
+        (p: { sku?: string | null }) => p.sku === ADMIN_PRODUCT_SKU,
+      );
+      expect(updated?.name).toBe('Admin Product CSV Updated');
+      expect(updated?.priceCents).toBe(2222);
     });
 
     it('STAFF cannot update product (403)', async () => {

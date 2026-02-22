@@ -39,6 +39,7 @@ interface OrderRow {
 interface OrderItemRow {
   id: number;
   productId: number;
+  productName?: string;
   quantity: number;
   unitPriceCents: number;
   totalAmountCents: number;
@@ -186,45 +187,7 @@ export default function AdminOrdersPage() {
       if (!selectedOrderId) return;
       await api.patch(`/orders/${selectedOrderId}`, { statusKey: nextStatusKey });
     },
-    onMutate: async (nextStatusKey: string) => {
-      if (!selectedOrderId) return;
-
-      await queryClient.cancelQueries({ queryKey: ['admin-orders'] });
-      await queryClient.cancelQueries({ queryKey: ['admin-order-detail', selectedOrderId] });
-
-      const prevOrders = queryClient.getQueryData<OrderRow[]>(['admin-orders']);
-      const prevDetail = queryClient.getQueryData<OrderDetail>([
-        'admin-order-detail',
-        selectedOrderId,
-      ]);
-
-      if (prevOrders) {
-        queryClient.setQueryData<OrderRow[]>(['admin-orders'],
-          prevOrders.map((order) =>
-            order.id === selectedOrderId
-              ? { ...order, statusKey: nextStatusKey }
-              : order,
-          ),
-        );
-      }
-
-      if (prevDetail) {
-        queryClient.setQueryData<OrderDetail>(['admin-order-detail', selectedOrderId], {
-          ...prevDetail,
-          statusKey: nextStatusKey,
-        });
-      }
-
-      return { prevOrders, prevDetail };
-    },
-    onError: (error: unknown, _nextStatusKey, context) => {
-      if (context?.prevOrders) {
-        queryClient.setQueryData(['admin-orders'], context.prevOrders);
-      }
-      if (context?.prevDetail && selectedOrderId) {
-        queryClient.setQueryData(['admin-order-detail', selectedOrderId], context.prevDetail);
-      }
-
+    onError: (error: unknown) => {
       toast.error(resolveApiErrorMessage(error, 'Sipariş durumu güncellenemedi.'));
     },
     onSuccess: async () => {
@@ -388,7 +351,11 @@ export default function AdminOrdersPage() {
                     {formatPrice(order.totalAmountCents / 100)}
                   </div>
                   <div>
-                    <span className="inline-flex rounded-full bg-[#F3EEE3] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#3E2723]">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadgeClassName(
+                        order.statusKey,
+                      )}`}
+                    >
                       {order.statusKey}
                     </span>
                   </div>
@@ -547,7 +514,9 @@ export default function AdminOrdersPage() {
                           className="flex items-center justify-between rounded-xl border border-[#1A3C34]/10 bg-white px-3 py-2 text-sm"
                         >
                           <div>
-                            <p className="font-semibold text-[#1A3C34]">Ürün #{item.productId}</p>
+                            <p className="font-semibold text-[#1A3C34]">
+                              {item.productName || `Ürün #${item.productId}`}
+                            </p>
                             <p className="text-xs text-[#5C5C5C]">Adet: {item.quantity}</p>
                           </div>
                           <div className="text-right">

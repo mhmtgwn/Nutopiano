@@ -38,14 +38,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function ProductsPage({
+export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const qRaw = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const qRaw = typeof resolvedSearchParams?.q === 'string' ? resolvedSearchParams.q : undefined;
   const q = qRaw;
-  const categoryRaw = typeof searchParams?.category === 'string' ? searchParams.category : undefined;
+  const categoryRaw =
+    typeof resolvedSearchParams?.category === 'string' ? resolvedSearchParams.category : undefined;
   const categoryId = categoryRaw && /^[0-9]+$/.test(categoryRaw) ? Number(categoryRaw) : undefined;
   return <ProductsClient query={q} categoryId={categoryId} />;
 }

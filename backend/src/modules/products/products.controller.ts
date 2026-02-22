@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -26,6 +27,8 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
 import { ProductsService } from './products.service';
+import { ImportProductsCsvDto } from './dto/import-products-csv.dto';
+import type { Response } from 'express';
 
 @ApiTags('products')
 @Controller('products')
@@ -53,6 +56,51 @@ export class ProductsController {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });
+  }
+
+  @Get('export/csv')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'STAFF')
+  @ApiOperation({
+    summary: 'Export products as CSV',
+    description:
+      'Exports products for the current business as CSV for Excel-compatible bulk edits.',
+  })
+  @ApiOkResponse({
+    description: 'CSV document containing product rows.',
+  })
+  async exportCsv(
+    @Req() req: { user: JwtPayload },
+    @Res() res: Response,
+  ) {
+    const csv = await this.productsService.exportProductsCsv(req.user);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="products-${dateStamp}.csv"`,
+    );
+    res.send(csv);
+  }
+
+  @Post('import/csv')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'STAFF')
+  @ApiOperation({
+    summary: 'Import products from CSV',
+    description:
+      'Imports/updates product rows in bulk using CSV text. Matching is done by id or sku.',
+  })
+  @ApiOkResponse({
+    description: 'Bulk import result with created/updated/error counts.',
+  })
+  importCsv(
+    @Req() req: { user: JwtPayload },
+    @Body() payload: ImportProductsCsvDto,
+  ) {
+    return this.productsService.importProductsCsv(req.user, payload);
   }
 
   @Post()

@@ -33,8 +33,14 @@ export class CreateOrderDto {
   @MaxLength(64)
   couponCode?: string;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  cartDiscountAmountCents?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];
 }
+
