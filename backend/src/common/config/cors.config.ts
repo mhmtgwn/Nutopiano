@@ -26,7 +26,7 @@ export function getCorsConfig() {
       }
 
       if (allowedOrigins.includes(origin)) {
-        callback(null, origin);
+        callback(null, true);
         return;
       }
 
