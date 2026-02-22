@@ -464,11 +464,46 @@ export class CategoriesService {
 
   async remove(currentUser: JwtPayload, id: number): Promise<CategorySummary> {
     const category = await this.findByIdScoped(currentUser, id);
+    const businessId = Number(currentUser.businessId);
+
+    const allCategories = await this.prisma.category.findMany({
+      where: {
+        businessId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        parentId: true,
+      },
+    });
+
+    const childrenByParent = new Map<number, number[]>();
+    for (const c of allCategories) {
+      if (typeof c.parentId === 'number') {
+        const arr = childrenByParent.get(c.parentId) ?? [];
+        arr.push(c.id);
+        childrenByParent.set(c.parentId, arr);
+      }
+    }
+
+    const cascadeIds: number[] = [];
+    const stack = [id];
+    const visited = new Set<number>();
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (typeof current !== 'number' || visited.has(current)) continue;
+      visited.add(current);
+      cascadeIds.push(current);
+      const children = childrenByParent.get(current) ?? [];
+      for (const childId of children) {
+        stack.push(childId);
+      }
+    }
 
     const linkedActiveProductsCount = await this.prisma.product.count({
       where: {
         businessId: category.businessId,
-        categoryId: id,
+        categoryId: { in: cascadeIds },
         isActive: true,
       },
     });
@@ -479,16 +514,21 @@ export class CategoriesService {
       );
     }
 
-    return this.prisma.category.update({
-      where: { id },
+    await this.prisma.category.updateMany({
+      where: { id: { in: cascadeIds } },
       data: {
         isActive: false,
         archivedAt: new Date(),
       },
+    });
+
+    return this.prisma.category.findFirstOrThrow({
+      where: { id },
       select: {
         id: true,
         name: true,
         slug: true,
+        parentId: true,
         isActive: true,
         orderIndex: true,
         createdAt: true,

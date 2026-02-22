@@ -27,6 +27,7 @@ import { SetDefaultAddressDto } from './dto/set-default-address.dto';
 import { AddCustomerFavoriteDto } from './dto/add-customer-favorite.dto';
 import { UpsertProductReviewDto } from './dto/upsert-product-review.dto';
 import { UpdateCustomerPreferencesDto } from './dto/update-customer-preferences.dto';
+import { CreateReturnRequestDto } from '../orders/dto/create-return-request.dto';
 
 @ApiTags('customer-portal')
 @ApiBearerAuth()
@@ -104,11 +105,19 @@ export class CustomerPortalController {
   @ApiOperation({
     summary: 'Request order return',
     description:
-      'Sets order status to RETURN_REQUESTED if allowed and the order belongs to the authenticated customer.',
+      'Creates a return request and sets order status to RETURN_REQUESTED if allowed.',
   })
   @ApiOkResponse({ description: 'Updated customer order detail payload.' })
-  async returnOrder(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.ordersService.requestReturnCustomerOrder(req.user, Number(id));
+  async returnOrder(
+    @Req() req: { user: JwtPayload },
+    @Param('id') id: string,
+    @Body() payload: CreateReturnRequestDto,
+  ) {
+    return this.ordersService.requestReturnCustomerOrder(
+      req.user,
+      Number(id),
+      payload?.reason,
+    );
   }
 
   @Get('addresses')

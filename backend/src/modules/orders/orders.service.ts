@@ -13,6 +13,10 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { OrderSource } from '@prisma/client';
 import {
+  ResolveReturnRequestAction,
+  ResolveReturnRequestDto,
+} from './dto/resolve-return-request.dto';
+import {
   buildPaginationMeta,
   clampPage,
   clampPageSize,
@@ -51,6 +55,18 @@ export interface PaymentSummary {
   createdAt: Date;
 }
 
+export interface ReturnRequestSummary {
+  id: number;
+  orderId: number;
+  customerId: number;
+  status: string;
+  reason?: string | null;
+  responseNote?: string | null;
+  requestedAt: Date;
+  decidedAt?: Date | null;
+  decidedByUserId?: number | null;
+}
+
 const ORDER_DEFAULT_STATUS_KEY = 'order.defaultStatusKey';
 type VariantRow = {
   id: number;
@@ -59,6 +75,7 @@ type VariantRow = {
   stock: number | null;
   name: string;
 };
+type OrderItemStockLine = { productId: number; variantId?: number | null; quantity: number };
 
 @Injectable()
 export class OrdersService {
@@ -67,6 +84,26 @@ export class OrdersService {
     private readonly settingsService: SettingsService,
     private readonly financeService: FinanceService,
   ) {}
+
+  private aggregateStockLines(lines: OrderItemStockLine[]) {
+    const byProduct = new Map<number, number>();
+    const byVariant = new Map<number, number>();
+
+    for (const line of lines) {
+      const qty = Number(line.quantity) || 0;
+      if (qty <= 0) continue;
+
+      if (line.variantId) {
+        const prev = byVariant.get(line.variantId) ?? 0;
+        byVariant.set(line.variantId, prev + qty);
+      } else {
+        const prev = byProduct.get(line.productId) ?? 0;
+        byProduct.set(line.productId, prev + qty);
+      }
+    }
+
+    return { byProduct, byVariant };
+  }
 
   private async resolveCustomerIdForUser(
     currentUser: JwtPayload,
@@ -547,24 +584,32 @@ export class OrdersService {
         });
       }
 
-      // Decrement stock for each item (inside transaction with locked rows)
-      for (const item of payload.items) {
-        if (item.variantId) {
-          const variant = variantMapLocked.get(item.variantId);
-          if (variant && variant.stock !== null && variant.stock !== undefined) {
-            await (tx as any).productVariant.update({
-              where: { id: item.variantId },
-              data: { stock: { decrement: item.quantity } },
-            });
-          }
-        } else {
-          const product = productMapLocked.get(item.productId);
-          if (product && product.stock !== null && product.stock !== undefined) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { decrement: item.quantity } },
-            });
-          }
+      // Decrement stock in aggregated form to avoid N+1 update pressure.
+      const aggregated = this.aggregateStockLines(
+        payload.items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
+      );
+
+      for (const [variantId, quantity] of aggregated.byVariant.entries()) {
+        const variant = variantMapLocked.get(variantId);
+        if (variant && variant.stock !== null && variant.stock !== undefined) {
+          await (tx as any).productVariant.update({
+            where: { id: variantId },
+            data: { stock: { decrement: quantity } },
+          });
+        }
+      }
+
+      for (const [productId, quantity] of aggregated.byProduct.entries()) {
+        const product = productMapLocked.get(productId);
+        if (product && product.stock !== null && product.stock !== undefined) {
+          await tx.product.update({
+            where: { id: productId },
+            data: { stock: { decrement: quantity } },
+          });
         }
       }
 
@@ -913,8 +958,223 @@ export class OrdersService {
     return this.setCustomerOrderStatus(currentUser, id, 'CANCELLED');
   }
 
-  async requestReturnCustomerOrder(currentUser: JwtPayload, id: number) {
-    return this.setCustomerOrderStatus(currentUser, id, 'RETURN_REQUESTED');
+  async requestReturnCustomerOrder(
+    currentUser: JwtPayload,
+    id: number,
+    reason?: string,
+  ) {
+    if (currentUser.role !== 'CUSTOMER') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const order = await this.findAccessibleOrder(currentUser, id);
+
+    const returnRequestedStatus = await this.prisma.orderStatus.findFirst({
+      where: {
+        businessId: order.businessId,
+        key: 'RETURN_REQUESTED',
+      },
+      select: { id: true },
+    });
+
+    if (!returnRequestedStatus) {
+      throw new NotFoundException('Order status not found: RETURN_REQUESTED');
+    }
+
+    const existing = await (this.prisma as any).returnRequest.findFirst({
+      where: {
+        businessId: order.businessId,
+        orderId: order.id,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (existing && String(existing.status).toUpperCase() === 'PENDING') {
+      throw new BadRequestException('Bu sipariş için aktif iade talebi zaten var.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await (tx as any).order.update({
+        where: { id: order.id },
+        data: { statusId: returnRequestedStatus.id },
+      });
+
+      if (existing) {
+        await (tx as any).returnRequest.update({
+          where: { id: existing.id },
+          data: {
+            status: 'PENDING',
+            reason: reason ?? null,
+            responseNote: null,
+            requestedAt: new Date(),
+            decidedAt: null,
+            decidedByUserId: null,
+          },
+        });
+      } else {
+        await (tx as any).returnRequest.create({
+          data: {
+            businessId: order.businessId,
+            orderId: order.id,
+            customerId: order.customerId,
+            status: 'PENDING',
+            reason: reason ?? null,
+          },
+        });
+      }
+    });
+
+    return this.findOne(currentUser, id);
+  }
+
+  async listReturnRequests(
+    currentUser: JwtPayload,
+    params?: { status?: string },
+  ): Promise<ReturnRequestSummary[]> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'STAFF') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const status = (params?.status ?? '').trim().toUpperCase();
+
+    const rows = await (this.prisma as any).returnRequest.findMany({
+      where: {
+        businessId,
+        ...(status.length > 0 ? { status } : {}),
+      },
+      orderBy: { requestedAt: 'desc' },
+      select: {
+        id: true,
+        orderId: true,
+        customerId: true,
+        status: true,
+        reason: true,
+        responseNote: true,
+        requestedAt: true,
+        decidedAt: true,
+        decidedByUserId: true,
+      },
+    });
+
+    return rows as ReturnRequestSummary[];
+  }
+
+  async resolveReturnRequest(
+    currentUser: JwtPayload,
+    requestId: number,
+    payload: ResolveReturnRequestDto,
+  ): Promise<ReturnRequestSummary> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'STAFF') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const decidedByUserId = Number(currentUser.userId);
+
+    const request = await (this.prisma as any).returnRequest.findFirst({
+      where: {
+        id: requestId,
+        businessId,
+      },
+      select: {
+        id: true,
+        businessId: true,
+        orderId: true,
+        status: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Return request not found');
+    }
+
+    if (String(request.status).toUpperCase() !== 'PENDING') {
+      throw new BadRequestException('Return request already resolved');
+    }
+
+    const isApprove = payload.action === ResolveReturnRequestAction.APPROVE;
+    const nextReturnStatus = isApprove ? 'APPROVED' : 'REJECTED';
+    const note = payload.note ?? null;
+
+    const targetOrderStatusKeys = isApprove
+      ? ['RETURNED', 'CANCELLED']
+      : ['RETURN_REJECTED', 'DELIVERED', 'COMPLETED'];
+
+    const statusRows = await this.prisma.orderStatus.findMany({
+      where: {
+        businessId,
+        key: { in: targetOrderStatusKeys },
+      },
+      select: { id: true, key: true },
+    });
+    const statusMap = new Map(statusRows.map((s) => [s.key, s.id]));
+
+    const resolved = await this.prisma.$transaction(async (tx) => {
+      if (isApprove) {
+        const items: Array<{ productId: number; variantId?: number | null; quantity: number }> =
+          await (tx as any).orderItem.findMany({
+            where: { orderId: request.orderId },
+            select: { productId: true, variantId: true, quantity: true },
+          });
+
+        const aggregated = this.aggregateStockLines(items);
+        for (const [variantId, quantity] of aggregated.byVariant.entries()) {
+          await (tx as any).productVariant.updateMany({
+            where: { id: variantId, stock: { not: null } },
+            data: { stock: { increment: quantity } },
+          });
+        }
+        for (const [productId, quantity] of aggregated.byProduct.entries()) {
+          await tx.product.updateMany({
+            where: { id: productId, stock: { not: null } },
+            data: { stock: { increment: quantity } },
+          });
+        }
+      }
+
+      const orderStatusId =
+        statusMap.get(targetOrderStatusKeys[0]) ??
+        statusMap.get(targetOrderStatusKeys[1]) ??
+        statusMap.get(targetOrderStatusKeys[2]);
+
+      if (orderStatusId) {
+        await (tx as any).order.update({
+          where: { id: request.orderId },
+          data: { statusId: orderStatusId },
+        });
+      }
+
+      await (tx as any).returnRequest.update({
+        where: { id: request.id },
+        data: {
+          status: nextReturnStatus,
+          responseNote: note,
+          decidedAt: new Date(),
+          decidedByUserId,
+        },
+      });
+
+      return (tx as any).returnRequest.findFirst({
+        where: { id: request.id },
+        select: {
+          id: true,
+          orderId: true,
+          customerId: true,
+          status: true,
+          reason: true,
+          responseNote: true,
+          requestedAt: true,
+          decidedAt: true,
+          decidedByUserId: true,
+        },
+      });
+    });
+
+    return resolved as ReturnRequestSummary;
   }
 
   async findOne(currentUser: JwtPayload, id: number): Promise<OrderDetail> {
@@ -1008,30 +1268,18 @@ export class OrdersService {
           select: { productId: true, variantId: true, quantity: true },
         });
 
-        for (const item of items) {
-          if (item.variantId) {
-            const variant = await (tx as any).productVariant.findFirst({
-              where: { id: item.variantId },
-              select: { stock: true },
-            });
-            if (variant && variant.stock !== null && variant.stock !== undefined) {
-              await (tx as any).productVariant.update({
-                where: { id: item.variantId },
-                data: { stock: { increment: item.quantity } },
-              });
-            }
-          } else {
-            const product = await tx.product.findFirst({
-              where: { id: item.productId },
-              select: { stock: true },
-            });
-            if (product && product.stock !== null && product.stock !== undefined) {
-              await tx.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
-              });
-            }
-          }
+        const aggregated = this.aggregateStockLines(items);
+        for (const [variantId, quantity] of aggregated.byVariant.entries()) {
+          await (tx as any).productVariant.updateMany({
+            where: { id: variantId, stock: { not: null } },
+            data: { stock: { increment: quantity } },
+          });
+        }
+        for (const [productId, quantity] of aggregated.byProduct.entries()) {
+          await tx.product.updateMany({
+            where: { id: productId, stock: { not: null } },
+            data: { stock: { increment: quantity } },
+          });
         }
       }
 

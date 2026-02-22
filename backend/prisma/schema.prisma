@@ -45,6 +45,7 @@ model Business {
   paymentWebhookEvents PaymentWebhookEvent[]
 
   paymentSessions PaymentSession[]
+  returnRequests ReturnRequest[]
 }
 
 model User {
@@ -71,6 +72,7 @@ model User {
 
   commissionEntries Commission[] @relation("CommissionBeneficiary")
   payoutRequests Payout[] @relation("PayoutBeneficiary")
+  decidedReturnRequests ReturnRequest[] @relation("ReturnRequestDecidedBy")
 
   sellerProfile Seller?
 
@@ -179,6 +181,7 @@ model Customer {
   favorites CustomerFavorite[]
   reviews ProductReview[]
   preferences CustomerPreference?
+  returnRequests ReturnRequest[]
 
   @@unique([businessId, phone])
   @@index([businessId])
@@ -337,6 +340,8 @@ model Product {
 
   @@index([businessId])
   @@index([businessId, categoryId])
+  @@index([businessId, isActive, createdAt])
+  @@index([businessId, isActive, name])
   // @@unique([businessId, sku]) // enable when SKU uniqueness per business is required
 }
 
@@ -406,6 +411,12 @@ enum OrderSource {
   API
 }
 
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CouponType {
   PERCENT
   FIXED
@@ -438,10 +449,39 @@ model Order {
   commission Commission? @relation("OrderCommission")
 
   paymentSessions PaymentSession[]
+  returnRequests ReturnRequest[]
 
   @@index([businessId])
   @@index([businessId, customerId])
   @@index([businessId, deletedAt])
+  @@index([businessId, statusId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+model ReturnRequest {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  orderId Int
+  customerId Int
+
+  status ReturnRequestStatus @default(PENDING)
+  reason String?
+  responseNote String?
+
+  requestedAt DateTime @default(now())
+  decidedAt DateTime?
+  decidedByUserId Int?
+
+  business Business @relation(fields: [businessId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  decidedBy User? @relation("ReturnRequestDecidedBy", fields: [decidedByUserId], references: [id])
+
+  @@unique([businessId, orderId])
+  @@index([businessId, status])
+  @@index([businessId, customerId])
+  @@index([businessId, requestedAt])
 }
 
 model Coupon {
@@ -521,6 +561,7 @@ model Payment {
   order    Order    @relation(fields: [orderId], references: [id])
 
   @@index([businessId, orderId])
+  @@index([businessId, createdAt])
 }
 
 model PaymentWebhookEvent {

@@ -274,20 +274,15 @@ export class FinanceService {
     beneficiaryUserId: number;
     grossAmountCents: number;
   }) {
-    const existing = await this.prisma.commission.findUnique({
-      where: { orderId: params.orderId },
-      select: { id: true },
-    });
-
-    if (existing) return;
-
     const rate = await this.getCommissionRate(params.businessId);
     const gross = Math.max(0, Math.floor(params.grossAmountCents));
     const commissionAmountCents = Math.max(0, Math.round(gross * rate));
     const netAmountCents = Math.max(0, gross - commissionAmountCents);
 
-    await this.prisma.commission.create({
-      data: {
+    await this.prisma.commission.upsert({
+      where: { orderId: params.orderId },
+      update: {},
+      create: {
         businessId: params.businessId,
         beneficiaryUserId: params.beneficiaryUserId,
         orderId: params.orderId,

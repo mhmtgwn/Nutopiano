@@ -1,3 +1,10 @@
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Mesafeli Satis Sozlesmesi | Nutopiano',
+  description: 'Nutopiano mesafeli satis sozlesmesi metni.',
+};
+
 export default function DistanceSalesPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">

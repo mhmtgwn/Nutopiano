@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/common/Breadcrumbs';
+import { getSiteUrl } from '@/utils/site';
 
 interface PublicCategoryTreeNode {
   id: number;
@@ -59,6 +61,22 @@ const heroImages = [
   'IMG_3973.JPG',
   'IMG_3975.JPG',
 ];
+
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl = await getSiteUrl();
+  return {
+    metadataBase: new URL(siteUrl),
+    title: 'Kategoriler | Nutopiano',
+    description: 'Nutopiano ürün kategorilerini keşfedin.',
+    alternates: { canonical: `${siteUrl}/categories` },
+    openGraph: {
+      type: 'website',
+      url: `${siteUrl}/categories`,
+      title: 'Kategoriler | Nutopiano',
+      description: 'Nutopiano ürün kategorilerini keşfedin.',
+    },
+  };
+}
 
 export default async function CategoriesLandingPage() {
   const categoriesTree = await getCategoryTree();

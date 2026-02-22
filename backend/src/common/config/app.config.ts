@@ -55,6 +55,11 @@ const envValidationSchema = Joi.object({
   REDIS_URL: Joi.string()
     .uri()
     .optional(),
+  MARKETPLACE_CACHE_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(1)
+    .max(600)
+    .optional(),
   SENTRY_DSN: Joi.string()
     .uri()
     .optional(),

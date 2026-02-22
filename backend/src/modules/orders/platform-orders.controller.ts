@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -10,6 +10,7 @@ import { Roles } from '@common/decorators';
 import { JwtAuthGuard, RolesGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { OrdersService } from './orders.service';
+import { ResolveReturnRequestDto } from './dto/resolve-return-request.dto';
 
 @ApiTags('orders')
 @ApiBearerAuth()
@@ -42,5 +43,42 @@ export class PlatformOrdersController {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });
+  }
+
+  @Get('platform/return-requests')
+  @Roles('ADMIN', 'STAFF')
+  @ApiOperation({
+    summary: 'List return requests (platform)',
+    description:
+      'Lists return requests for current business. Optional status filter: PENDING|APPROVED|REJECTED.',
+  })
+  @ApiOkResponse({ description: 'Array of return requests.' })
+  listPlatformReturnRequests(
+    @Req() req: { user: JwtPayload },
+    @Query('status') status?: string,
+  ) {
+    return this.ordersService.listReturnRequests(req.user, {
+      status: status || undefined,
+    });
+  }
+
+  @Patch('platform/return-requests/:id/resolve')
+  @Roles('ADMIN', 'STAFF')
+  @ApiOperation({
+    summary: 'Resolve return request (platform)',
+    description:
+      'Approves or rejects a return request. On approve, stock is restored transactionally.',
+  })
+  @ApiOkResponse({ description: 'Resolved return request.' })
+  resolvePlatformReturnRequest(
+    @Req() req: { user: JwtPayload },
+    @Param('id') id: string,
+    @Body() payload: ResolveReturnRequestDto,
+  ) {
+    return this.ordersService.resolveReturnRequest(
+      req.user,
+      Number(id),
+      payload,
+    );
   }
 }

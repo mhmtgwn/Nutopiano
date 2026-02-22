@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 const NAV_ITEMS = [
@@ -8,6 +9,11 @@ const NAV_ITEMS = [
   { href: '/account/profile', label: 'Profil' },
   { href: '/account/settings', label: 'Ayarlar' },
 ] as const;
+
+export const metadata: Metadata = {
+  title: 'Hesabım | Nutopiano',
+  robots: { index: false, follow: false },
+};
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   return (
