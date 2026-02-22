@@ -12,6 +12,9 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: process.env.BACKEND_PORT || '3001',
         PRISMA_CLIENT_ENGINE_TYPE: process.env.PRISMA_CLIENT_ENGINE_TYPE || 'binary',
+        ALLOWED_ORIGINS:
+          process.env.ALLOWED_ORIGINS ||
+          'https://nutopiano.com,https://www.nutopiano.com,http://localhost:3000',
       },
     },
     {
