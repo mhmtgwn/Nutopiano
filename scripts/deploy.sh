@@ -66,9 +66,11 @@ ensure_pm2_apps() {
   fi
 
   log "PM2: (re)load ecosystem"
+  pm2 delete "$BACKEND_PM2_NAME" >/dev/null 2>&1 || true
+  pm2 delete "$FRONTEND_PM2_NAME" >/dev/null 2>&1 || true
   BACKEND_DIR="$BACKEND_DIR" FRONTEND_DIR="$FRONTEND_DIR" \
     BACKEND_PM2_NAME="$BACKEND_PM2_NAME" FRONTEND_PM2_NAME="$FRONTEND_PM2_NAME" \
-    pm2 startOrReload "$ecosystem" --update-env
+    pm2 start "$ecosystem" --update-env
   return 0
 }
 
