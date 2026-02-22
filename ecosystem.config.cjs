@@ -6,8 +6,8 @@ module.exports = {
       script: 'dist/main.js',
       interpreter: 'node',
       node_args: ['-r', 'tsconfig-paths/register'],
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
         PORT: process.env.BACKEND_PORT || '3001',
@@ -19,8 +19,8 @@ module.exports = {
       cwd: process.env.FRONTEND_DIR || '/var/www/nutopiano_app/frontend',
       script: 'npm',
       args: 'run start',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
         PORT: process.env.FRONTEND_PORT || '3000',
