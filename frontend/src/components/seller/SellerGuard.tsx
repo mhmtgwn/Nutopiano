@@ -37,7 +37,11 @@ interface SellerGuardProps {
   children: ReactNode;
 }
 
-const isSellerRole = (role?: string) => role === 'SELLER' || role === 'SUPER_ADMIN';
+const isSellerRole = (role?: string) =>
+  role === 'ADMIN' ||
+  role === 'STAFF' ||
+  role === 'SELLER' ||
+  role === 'SUPER_ADMIN';
 
 export default function SellerGuard({ children }: SellerGuardProps) {
   const router = useRouter();
@@ -50,7 +54,7 @@ export default function SellerGuard({ children }: SellerGuardProps) {
     if (user) {
       if (!isSellerRole(user.role)) {
         router.replace('/');
-        toast.error('Bu sayfaya erişim için satıcı yetkisi gerekli.');
+        toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
       }
       return;
     }
@@ -79,7 +83,7 @@ export default function SellerGuard({ children }: SellerGuardProps) {
 
         if (!isSellerRole(profile.role)) {
           router.replace('/');
-          toast.error('Bu sayfaya erişim için satıcı yetkisi gerekli.');
+          toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
         }
       } catch (error: unknown) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');

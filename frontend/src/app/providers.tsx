@@ -8,6 +8,7 @@ import { Toaster } from 'react-hot-toast';
 import { store } from '@/store';
 import { loadCartState } from '@/store';
 import { hydrateCart } from '@/store/cartSlice';
+import AuthBootstrap from '@/components/auth/AuthBootstrap';
 
 const ReactQueryDevtools = dynamic(
   () =>
@@ -42,6 +43,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <ReduxProvider store={store}>
       <QueryClientProvider client={queryClient}>
+        <AuthBootstrap />
         {children}
         {process.env.NODE_ENV === 'development' ? (
           <ReactQueryDevtools initialIsOpen={false} />

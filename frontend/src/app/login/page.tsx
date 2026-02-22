@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
@@ -26,6 +26,11 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const isSafeInternalPath = (value: string | null): value is string =>
+  typeof value === 'string' &&
+  value.startsWith('/') &&
+  !value.startsWith('//');
+
 interface ProfileResponse {
   userId: string;
   name?: string;
@@ -40,6 +45,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const status = useAppSelector((state) => state.user.status);
 
   const isSubmitting = status === 'authenticating';
@@ -88,15 +94,24 @@ export default function LoginPage() {
       );
 
       toast.success('Giriş başarılı.');
-      
-      // Try to redirect to the page user was trying to access, otherwise go to shop
-      const redirectUrl = typeof window !== 'undefined' ? localStorage.getItem('redirectAfterLogin') : null;
-      if (redirectUrl) {
+
+      const nextPath = searchParams.get('next');
+      const storedRedirect =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('redirectAfterLogin')
+          : null;
+
+      const redirectPath = isSafeInternalPath(nextPath)
+        ? nextPath
+        : isSafeInternalPath(storedRedirect)
+          ? storedRedirect
+          : '/shop';
+
+      if (storedRedirect) {
         localStorage.removeItem('redirectAfterLogin');
-        router.push(redirectUrl);
-      } else {
-        router.push('/shop');
       }
+
+      router.push(redirectPath);
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Giriş yapılırken bir hata oluştu.');
 
