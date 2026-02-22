@@ -32,6 +32,7 @@ export function getCorsConfig() {
   };
 
   const allowedOriginSet = new Set(allowedOrigins.map(normalizeOrigin));
+  const nutopianoOriginPattern = /^https?:\/\/(www\.)?nutopiano\.com(?::\d+)?$/i;
 
   const isProd = process.env.NODE_ENV === 'production';
   if (isProd && allowedOrigins.includes('*')) {
@@ -49,7 +50,7 @@ export function getCorsConfig() {
       }
 
       const normalizedOrigin = normalizeOrigin(origin);
-      if (allowedOriginSet.has(normalizedOrigin)) {
+      if (allowedOriginSet.has(normalizedOrigin) || nutopianoOriginPattern.test(origin)) {
         callback(null, true);
         return;
       }
