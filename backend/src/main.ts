@@ -50,7 +50,7 @@ async function bootstrap() {
 
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (typeof origin === 'string' && origin.length > 0 && origin.includes('nutopiano.com')) {
+    if (typeof origin === 'string' && origin.length > 0) {
       res.header('Access-Control-Allow-Origin', origin);
       res.header('Vary', 'Origin');
       res.header('Access-Control-Allow-Credentials', 'true');
