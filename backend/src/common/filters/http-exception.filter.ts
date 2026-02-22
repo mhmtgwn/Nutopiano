@@ -12,9 +12,7 @@ import { AppError } from '../types/errors';
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Exception caught by filter:', exception);
-    }
+    console.error('Exception caught by filter:', exception);
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
