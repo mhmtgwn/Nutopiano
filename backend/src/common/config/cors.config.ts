@@ -49,13 +49,7 @@ export function getCorsConfig() {
         return;
       }
 
-      const normalizedOrigin = normalizeOrigin(origin);
-      if (allowedOriginSet.has(normalizedOrigin) || nutopianoOriginPattern.test(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(null, false);
+      callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
