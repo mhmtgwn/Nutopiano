@@ -100,6 +100,26 @@ export class PosController {
     return this.posService.findProductByBarcode(req.user, code);
   }
 
+  @Get('products/search')
+  @ApiOperation({
+    summary: 'Search products for POS',
+    description:
+      'Searches active products/variants by name, SKU, description or id in current business.',
+  })
+  @ApiOkResponse({
+    description: 'Array of matched product/variant summaries.',
+  })
+  searchProducts(
+    @Req() req: { user: JwtPayload },
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.posService.searchProducts(req.user, {
+      q,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Get('customers/search')
   @ApiOperation({
     summary: 'Search customers for POS',

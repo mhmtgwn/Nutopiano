@@ -1355,6 +1355,137 @@ export class PosService {
     throw new NotFoundException('Barkoda ait urun bulunamadi');
   }
 
+  async searchProducts(
+    currentUser: JwtPayload,
+    params?: { q?: string; limit?: number },
+  ) {
+    this.assertAllowedRole(currentUser);
+    const businessId = Number(currentUser.businessId);
+    const q = (params?.q ?? '').trim();
+    const limit = Math.min(Math.max(Number(params?.limit ?? 12), 1), 50);
+    const qNumber = q && /^[0-9]+$/.test(q) ? Number(q) : null;
+
+    const productWhere: Prisma.ProductWhereInput = {
+      businessId,
+      isActive: true,
+      archivedAt: null,
+    };
+
+    if (q) {
+      productWhere.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ];
+      if (qNumber) {
+        (productWhere.OR as Prisma.ProductWhereInput[]).push({ id: qNumber });
+      }
+    }
+
+    const variantWhere: any = {
+      businessId,
+      isActive: true,
+      product: {
+        businessId,
+        isActive: true,
+        archivedAt: null,
+      },
+    };
+    if (q) {
+      const or: any[] = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        {
+          product: {
+            name: { contains: q, mode: 'insensitive' },
+          },
+        },
+      ];
+      if (qNumber) {
+        or.push({ id: qNumber }, { productId: qNumber });
+      }
+      variantWhere.OR = or;
+    }
+
+    const [products, variants] = await Promise.all([
+      this.prisma.product.findMany({
+        where: productWhere,
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          priceCents: true,
+          stock: true,
+        },
+        orderBy: [{ name: 'asc' }],
+        take: limit,
+      }),
+      (this.prisma as any).productVariant.findMany({
+        where: variantWhere,
+        select: {
+          id: true,
+          productId: true,
+          name: true,
+          sku: true,
+          priceCents: true,
+          stock: true,
+          product: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: [{ name: 'asc' }],
+        take: limit,
+      }),
+    ]);
+
+    const normalized = [
+      ...products.map((p) => ({
+        type: 'PRODUCT' as const,
+        productId: p.id,
+        variantId: null as number | null,
+        name: p.name,
+        sku: p.sku,
+        priceCents: p.priceCents,
+        stock: p.stock,
+      })),
+      ...variants.map((v: any) => ({
+        type: 'VARIANT' as const,
+        productId: v.productId as number,
+        variantId: v.id as number,
+        name: `${v.product?.name ?? 'Urun'} / ${v.name}`,
+        sku: v.sku as string | null,
+        priceCents: v.priceCents as number,
+        stock: v.stock as number | null,
+      })),
+    ];
+
+    const queryLower = q.toLowerCase();
+    const score = (row: {
+      name: string;
+      sku?: string | null;
+      productId: number;
+      variantId: number | null;
+    }) => {
+      if (!q) return 100;
+      if (row.sku && row.sku.toLowerCase() === queryLower) return 0;
+      if (row.name.toLowerCase().startsWith(queryLower)) return 1;
+      if (row.sku?.toLowerCase().includes(queryLower)) return 2;
+      if (row.name.toLowerCase().includes(queryLower)) return 3;
+      if (qNumber && (row.productId === qNumber || row.variantId === qNumber)) return 4;
+      return 10;
+    };
+
+    return normalized
+      .sort((a, b) => {
+        const scoreDiff = score(a) - score(b);
+        if (scoreDiff !== 0) return scoreDiff;
+        return a.name.localeCompare(b.name, 'tr');
+      })
+      .slice(0, limit);
+  }
+
   async searchCustomers(
     currentUser: JwtPayload,
     params?: { q?: string; limit?: number },

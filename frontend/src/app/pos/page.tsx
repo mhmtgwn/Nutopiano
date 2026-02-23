@@ -61,6 +61,15 @@ type PosCustomerSummary = {
   phone: string;
   balance: number;
 };
+type PosProductSearchRow = {
+  type: 'PRODUCT' | 'VARIANT';
+  productId: number;
+  variantId: number | null;
+  name: string;
+  sku?: string | null;
+  priceCents: number;
+  stock?: number | null;
+};
 type PosPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 type PosSplitPaymentDraft = {
   method: PosPaymentMethod;
@@ -692,6 +701,9 @@ export default function PosPage() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [resolvedProductName, setResolvedProductName] = useState('');
   const scannerBufferRef = useRef('');
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState<PosProductSearchRow[]>([]);
+  const [isSearchingProduct, setIsSearchingProduct] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerResults, setCustomerResults] = useState<PosCustomerSummary[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSummary | null>(null);
@@ -1153,6 +1165,31 @@ export default function PosPage() {
     [isAuthed],
   );
 
+  const searchProducts = useCallback(async () => {
+    if (!isAuthed) return;
+    setIsSearchingProduct(true);
+    try {
+      const q = productQuery.trim();
+      const endpoint = `/pos/products/search?limit=12${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      const res = await api.get<PosProductSearchRow[]>(endpoint);
+      setProductResults(res.data);
+    } catch (error) {
+      toast.error(resolveApiErrorMessage(error, 'Urun aranirken hata olustu.'));
+    } finally {
+      setIsSearchingProduct(false);
+    }
+  }, [isAuthed, productQuery]);
+
+  const selectProduct = useCallback((product: PosProductSearchRow) => {
+    setProductId(String(product.productId));
+    setVariantId(product.variantId ?? null);
+    setUnitPriceCents(String(product.priceCents));
+    setResolvedProductName(product.name);
+    if (product.sku) {
+      setBarcodeInput(product.sku);
+    }
+  }, []);
+
   const searchCustomers = useCallback(async () => {
     if (!isAuthed) return;
     setIsSearchingCustomer(true);
@@ -1559,6 +1596,43 @@ export default function PosPage() {
                   </label>
 
                   <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-8">
+                    Elle Urun Ara
+                    <div className="flex gap-2">
+                      <input
+                        value={productQuery}
+                        onChange={(e) => setProductQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void searchProducts();
+                          }
+                        }}
+                        className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="Urun adi / SKU / urun id"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-11 px-4 text-xs"
+                        onClick={() => void searchProducts()}
+                        disabled={isSearchingProduct}
+                      >
+                        {isSearchingProduct ? 'Araniyor...' : 'Urun Ara'}
+                      </Button>
+                    </div>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-4">
+                    Product ID
+                    <input
+                      value={productId}
+                      onChange={(e) => setProductId(e.target.value)}
+                      className="h-11 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="10"
+                      inputMode="numeric"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-8">
                     Musteri Ara
                     <div className="flex gap-2">
                       <input
@@ -1609,6 +1683,29 @@ export default function PosPage() {
                       inputMode="numeric"
                     />
                   </label>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {productResults.slice(0, 6).map((p) => (
+                    <button
+                      key={`quick-product-${p.type}-${p.variantId ?? p.productId}`}
+                      type="button"
+                      onClick={() => selectProduct(p)}
+                      className={`rounded-lg border px-3 py-1.5 text-left text-xs ${
+                        productId === String(p.productId) &&
+                        ((p.variantId ?? null) === variantId || (!variantId && !p.variantId))
+                          ? 'border-[#1A3C34] bg-[#EAF3F0] text-[#1A3C34]'
+                          : 'border-[#E5E5E0] bg-white text-[#1A3C34]'
+                      }`}
+                    >
+                      <p className="font-semibold">{p.name}</p>
+                      <p className="text-[11px]">
+                        {p.sku ? `${p.sku} • ` : ''}
+                        {formatMoney(p.priceCents)}
+                        {typeof p.stock === 'number' ? ` • Stok: ${p.stock}` : ''}
+                      </p>
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
