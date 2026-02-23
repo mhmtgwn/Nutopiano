@@ -35,7 +35,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Roles('CUSTOMER', 'ADMIN', 'STAFF')
+  @Roles('CUSTOMER', 'ADMIN', 'SELLER', 'STAFF')
   @ApiOperation({
     summary: 'Create order',
     description:
@@ -49,7 +49,7 @@ export class OrdersController {
   })
   @ApiOkResponse({ description: 'The created order with items.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than CUSTOMER, ADMIN or STAFF.',
+    description: 'Forbidden for roles other than CUSTOMER, ADMIN, SELLER or STAFF.',
   })
   create(
     @Req() req: { user: JwtPayload },

@@ -40,7 +40,7 @@ type ReceiptLine = {
 type ReceiptRecord = {
   saleId: string;
   createdAt: string;
-  customerId: number;
+  customerId?: number;
   lines: ReceiptLine[];
   totalAmountCents?: number;
   note?: string;
@@ -70,6 +70,16 @@ type PosProductSearchRow = {
   priceCents: number;
   stock?: number | null;
 };
+type PosCartDraftItem = {
+  key: string;
+  productId: number;
+  variantId: number | null;
+  name: string;
+  quantity: number;
+  expectedUnitPriceCents?: number;
+  discountAmountCents?: number;
+};
+type PosQuickPaymentMethod = 'NONE' | 'CASH' | 'CARD';
 type PosPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 type PosSplitPaymentDraft = {
   method: PosPaymentMethod;
@@ -314,7 +324,7 @@ const buildReceiptHtml = (
       <p class="sub">POS Satis Fisi</p>
       <p class="meta">Fis No: ${receipt.saleId}</p>
       <p class="meta">Tarih: ${createdAtText}</p>
-      <p class="meta">Musteri ID: ${receipt.customerId}</p>
+      <p class="meta">Musteri ID: ${typeof receipt.customerId === 'number' ? receipt.customerId : 'Misafir'}</p>
       <table>
         <thead>
           <tr>
@@ -704,6 +714,9 @@ export default function PosPage() {
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PosProductSearchRow[]>([]);
   const [isSearchingProduct, setIsSearchingProduct] = useState(false);
+  const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
+  const [quickPaymentMethod, setQuickPaymentMethod] = useState<PosQuickPaymentMethod>('NONE');
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerResults, setCustomerResults] = useState<PosCustomerSummary[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSummary | null>(null);
@@ -1019,6 +1032,38 @@ export default function PosPage() {
     shiftNote,
   ]);
 
+  const ensureShiftSession = useCallback(async () => {
+    if (!isAuthed) return;
+    const normalizedRegisterCode = registerCode.trim().toUpperCase() || 'MAIN';
+    try {
+      const currentRes = await api.get<PosShiftRow | null>('/pos/register-session/current');
+      const current = currentRes.data;
+      if (current && !current.closedAt) {
+        setActiveShift(current);
+        if (!registerCode.trim()) {
+          setRegisterCode(current.registerCode);
+        }
+        return;
+      }
+
+      await api.post('/pos/register-session/open', {
+        registerCode: normalizedRegisterCode,
+        openingCashCents: 0,
+        note: 'AUTO_OPEN_ON_LOGIN',
+      });
+      await loadShiftRows();
+    } catch (error) {
+      const message = resolveApiErrorMessage(error, '');
+      const normalizedMessage = message.toLowerCase();
+      if (
+        !normalizedMessage.includes('zaten') &&
+        !normalizedMessage.includes('already')
+      ) {
+        await loadShiftRows();
+      }
+    }
+  }, [isAuthed, loadShiftRows, registerCode]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -1052,8 +1097,8 @@ export default function PosPage() {
 
   useEffect(() => {
     if (!isAuthed) return;
-    void loadShiftRows();
-  }, [isAuthed, loadShiftRows]);
+    void ensureShiftSession();
+  }, [ensureShiftSession, isAuthed]);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -1094,17 +1139,38 @@ export default function PosPage() {
   const parsedUnitPriceInput = Number(unitPriceCents);
   const parsedItemDiscountInput = Number(itemDiscountCents);
   const parsedCartDiscountInput = Number(cartDiscountCents);
-  const estimatedSubtotalCents =
+  const cartSubtotalCents = cartItems.reduce((acc, row) => {
+    if (
+      !Number.isFinite(row.quantity) ||
+      row.quantity <= 0 ||
+      !Number.isFinite(row.expectedUnitPriceCents) ||
+      (row.expectedUnitPriceCents ?? 0) <= 0
+    ) {
+      return acc;
+    }
+    return acc + Math.trunc(row.quantity) * Math.trunc(row.expectedUnitPriceCents ?? 0);
+  }, 0);
+  const cartLineDiscountCents = cartItems.reduce((acc, row) => {
+    if (!Number.isFinite(row.discountAmountCents) || (row.discountAmountCents ?? 0) <= 0) {
+      return acc;
+    }
+    return acc + Math.trunc(row.discountAmountCents ?? 0);
+  }, 0);
+  const draftLineSubtotalCents =
     Number.isFinite(parsedQuantityInput) &&
       Number.isFinite(parsedUnitPriceInput) &&
       parsedQuantityInput > 0 &&
       parsedUnitPriceInput > 0
       ? Math.trunc(parsedQuantityInput) * Math.trunc(parsedUnitPriceInput)
       : undefined;
-  const estimatedDiscountCents =
-    (Number.isFinite(parsedItemDiscountInput) && parsedItemDiscountInput > 0
+  const draftLineDiscountCents =
+    Number.isFinite(parsedItemDiscountInput) && parsedItemDiscountInput > 0
       ? Math.trunc(parsedItemDiscountInput)
-      : 0) +
+      : 0;
+  const usesCartEstimate = cartItems.length > 0;
+  const estimatedSubtotalCents = usesCartEstimate ? cartSubtotalCents : draftLineSubtotalCents;
+  const estimatedDiscountCents =
+    (usesCartEstimate ? cartLineDiscountCents : draftLineDiscountCents) +
     (Number.isFinite(parsedCartDiscountInput) && parsedCartDiscountInput > 0
       ? Math.trunc(parsedCartDiscountInput)
       : 0);
@@ -1126,21 +1192,32 @@ export default function PosPage() {
     toast.success('Fis ayarlari kaydedildi.');
   };
 
+  const printReceiptRecord = useCallback(
+    (receipt: ReceiptRecord) => {
+      const html = buildReceiptHtml(receiptSettings, receipt);
+      const printWindow = window.open('', '_blank', 'width=420,height=760');
+      if (!printWindow) {
+        toast.error('Yazdirma penceresi acilamadi.');
+        return false;
+      }
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      return true;
+    },
+    [receiptSettings],
+  );
+
   const printReceipt = () => {
     if (!lastReceipt) {
       toast.error('Yazdirilacak fis yok.');
       return;
     }
-    const html = buildReceiptHtml(receiptSettings, lastReceipt);
-    const printWindow = window.open('', '_blank', 'width=420,height=760');
-    if (!printWindow) {
-      toast.error('Yazdirma penceresi acilamadi.');
-      return;
+    const printed = printReceiptRecord(lastReceipt);
+    if (!printed) {
+      toast.error('Fis yazdirilamadi.');
     }
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
   };
 
   const lookupBarcode = useCallback(
@@ -1188,6 +1265,78 @@ export default function PosPage() {
     if (product.sku) {
       setBarcodeInput(product.sku);
     }
+  }, []);
+
+  const addCurrentProductToCart = useCallback(() => {
+    const parsedProductId = Number(productId);
+    const parsedQuantity = Number(quantity);
+    const parsedUnitPrice = Number(unitPriceCents);
+    const parsedLineDiscount = Number(itemDiscountCents);
+
+    if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+      toast.error('Sepete eklemek icin gecerli productId girin.');
+      return;
+    }
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      toast.error('Sepete eklemek icin gecerli adet girin.');
+      return;
+    }
+
+    const nextItem: PosCartDraftItem = {
+      key: createIdempotencyKey('pos-item'),
+      productId: parsedProductId,
+      variantId: typeof variantId === 'number' && variantId > 0 ? variantId : null,
+      name: resolvedProductName || `Urun #${parsedProductId}`,
+      quantity: Math.trunc(parsedQuantity),
+      expectedUnitPriceCents:
+        Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0
+          ? Math.trunc(parsedUnitPrice)
+          : undefined,
+      discountAmountCents:
+        Number.isFinite(parsedLineDiscount) && parsedLineDiscount > 0
+          ? Math.trunc(parsedLineDiscount)
+          : undefined,
+    };
+
+    setCartItems((prev) => {
+      const idx = prev.findIndex(
+        (row) =>
+          row.productId === nextItem.productId &&
+          row.variantId === nextItem.variantId &&
+          (row.expectedUnitPriceCents ?? null) === (nextItem.expectedUnitPriceCents ?? null) &&
+          (row.discountAmountCents ?? null) === (nextItem.discountAmountCents ?? null),
+      );
+      if (idx < 0) return [...prev, nextItem];
+      return prev.map((row, i) =>
+        i === idx ? { ...row, quantity: row.quantity + nextItem.quantity } : row,
+      );
+    });
+
+    setQuantity('1');
+    toast.success('Urun sepete eklendi.');
+  }, [
+    itemDiscountCents,
+    productId,
+    quantity,
+    resolvedProductName,
+    unitPriceCents,
+    variantId,
+  ]);
+
+  const removeCartItem = useCallback((key: string) => {
+    setCartItems((prev) => prev.filter((row) => row.key !== key));
+  }, []);
+
+  const updateCartItemQuantity = useCallback((key: string, nextQuantity: number) => {
+    if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
+      setCartItems((prev) => prev.filter((row) => row.key !== key));
+      return;
+    }
+    setCartItems((prev) =>
+      prev.map((row) =>
+        row.key === key ? { ...row, quantity: Math.max(1, Math.trunc(nextQuantity)) } : row,
+      ),
+    );
   }, []);
 
   const searchCustomers = useCallback(async () => {
@@ -1330,24 +1479,48 @@ export default function PosPage() {
   }, [isAuthed, lookupBarcode]);
 
   const handleCreateSale = async () => {
-    const parsedCustomerId = selectedCustomer?.id ?? Number(customerId);
-    const parsedProductId = Number(productId);
-    const parsedQuantity = Number(quantity);
-    const parsedUnitPriceCents = Number(unitPriceCents);
-    const parsedItemDiscountCents = Number(itemDiscountCents);
-    const parsedCartDiscountCents = Number(cartDiscountCents);
+    if (!isAuthed) return;
+    await ensureShiftSession();
 
-    if (!Number.isFinite(parsedCustomerId) || parsedCustomerId <= 0) {
-      toast.error('Gecerli customerId girin.');
-      return;
-    }
-    if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
-      toast.error('Gecerli productId girin.');
-      return;
-    }
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      toast.error('Gecerli quantity girin.');
-      return;
+    const parsedCustomerId = selectedCustomer?.id ?? Number(customerId);
+    const normalizedCustomerId =
+      Number.isFinite(parsedCustomerId) && parsedCustomerId > 0
+        ? Math.trunc(parsedCustomerId)
+        : undefined;
+    const parsedCartDiscountCents = Number(cartDiscountCents);
+    const saleDraftItems: PosCartDraftItem[] =
+      cartItems.length > 0 ? [...cartItems] : [];
+
+    if (saleDraftItems.length === 0) {
+      const parsedProductId = Number(productId);
+      const parsedQuantity = Number(quantity);
+      const parsedUnitPriceCents = Number(unitPriceCents);
+      const parsedItemDiscountCents = Number(itemDiscountCents);
+
+      if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
+        toast.error('Gecerli productId girin veya urunu sepete ekleyin.');
+        return;
+      }
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        toast.error('Gecerli quantity girin.');
+        return;
+      }
+
+      saleDraftItems.push({
+        key: createIdempotencyKey('pos-item'),
+        productId: Math.trunc(parsedProductId),
+        variantId: typeof variantId === 'number' && variantId > 0 ? variantId : null,
+        name: resolvedProductName || `Urun #${Math.trunc(parsedProductId)}`,
+        quantity: Math.max(1, Math.trunc(parsedQuantity)),
+        expectedUnitPriceCents:
+          Number.isFinite(parsedUnitPriceCents) && parsedUnitPriceCents > 0
+            ? Math.trunc(parsedUnitPriceCents)
+            : undefined,
+        discountAmountCents:
+          Number.isFinite(parsedItemDiscountCents) && parsedItemDiscountCents > 0
+            ? Math.trunc(parsedItemDiscountCents)
+            : undefined,
+      });
     }
 
     let splitPaymentPayload: {
@@ -1365,29 +1538,42 @@ export default function PosPage() {
       return;
     }
 
-    const item: PosOrderQueuePayload['items'][number] = {
-      productId: parsedProductId,
-      quantity: parsedQuantity,
-    };
-    if (typeof variantId === 'number' && variantId > 0) {
-      item.variantId = variantId;
-    }
-    if (Number.isFinite(parsedUnitPriceCents) && parsedUnitPriceCents > 0) {
-      item.expectedUnitPriceCents = parsedUnitPriceCents;
-    }
-    if (Number.isFinite(parsedItemDiscountCents) && parsedItemDiscountCents > 0) {
-      item.discountAmountCents = parsedItemDiscountCents;
+    if (quickPaymentMethod !== 'NONE' && splitPaymentPayload.lines.length > 0) {
+      toast.error('Hizli odeme ile split odeme ayni anda kullanilamaz.');
+      return;
     }
 
+    const payloadItems: PosOrderQueuePayload['items'] = saleDraftItems.map((row) => {
+      const line: PosOrderQueuePayload['items'][number] = {
+        productId: row.productId,
+        quantity: Math.max(1, Math.trunc(row.quantity)),
+      };
+      if (typeof row.variantId === 'number' && row.variantId > 0) {
+        line.variantId = row.variantId;
+      }
+      if (
+        Number.isFinite(row.expectedUnitPriceCents) &&
+        (row.expectedUnitPriceCents ?? 0) > 0
+      ) {
+        line.expectedUnitPriceCents = Math.trunc(row.expectedUnitPriceCents ?? 0);
+      }
+      if (Number.isFinite(row.discountAmountCents) && (row.discountAmountCents ?? 0) > 0) {
+        line.discountAmountCents = Math.trunc(row.discountAmountCents ?? 0);
+      }
+      return line;
+    });
+
     const payload: PosOrderQueuePayload = {
-      customerId: parsedCustomerId,
       idempotencyKey: createIdempotencyKey('pos-sale'),
       source: 'POS',
       notes: note.trim() || undefined,
-      items: [item],
+      items: payloadItems,
     };
+    if (typeof normalizedCustomerId === 'number') {
+      payload.customerId = normalizedCustomerId;
+    }
     if (Number.isFinite(parsedCartDiscountCents) && parsedCartDiscountCents > 0) {
-      payload.cartDiscountAmountCents = parsedCartDiscountCents;
+      payload.cartDiscountAmountCents = Math.trunc(parsedCartDiscountCents);
     }
 
     if (
@@ -1400,31 +1586,71 @@ export default function PosPage() {
       );
       return;
     }
+    if (
+      typeof navigator !== 'undefined' &&
+      !navigator.onLine &&
+      quickPaymentMethod !== 'NONE'
+    ) {
+      toast.error(
+        'Offline modda nakit/kart odeme kaydi anlik islenemez. Baglanti ile tekrar deneyin.',
+      );
+      return;
+    }
+
+    const payloadSubtotalCents = payload.items.reduce((acc, line) => {
+      if (
+        !Number.isFinite(line.expectedUnitPriceCents) ||
+        (line.expectedUnitPriceCents ?? 0) <= 0
+      ) {
+        return acc;
+      }
+      return acc + Math.trunc(line.expectedUnitPriceCents ?? 0) * Math.trunc(line.quantity);
+    }, 0);
+    const payloadLineDiscountCents = payload.items.reduce((acc, line) => {
+      if (!Number.isFinite(line.discountAmountCents) || (line.discountAmountCents ?? 0) <= 0) {
+        return acc;
+      }
+      return acc + Math.trunc(line.discountAmountCents ?? 0);
+    }, 0);
+    const estimatedPayloadTotalCents =
+      payloadSubtotalCents > 0
+        ? Math.max(
+            payloadSubtotalCents -
+              payloadLineDiscountCents -
+              (payload.cartDiscountAmountCents ?? 0),
+            0,
+          )
+        : undefined;
 
     setIsSubmitting(true);
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         const queued = await enqueuePosOrder(payload);
         await refreshQueue();
-        setLastReceipt({
+        const queuedReceipt: ReceiptRecord = {
           saleId: `Q-${queued.id.slice(0, 8)}`,
           createdAt: queued.createdAt,
           customerId: payload.customerId,
-          lines: [{ productId: item.productId, quantity: item.quantity, unitPriceCents: item.expectedUnitPriceCents }],
-          totalAmountCents:
-            typeof item.expectedUnitPriceCents === 'number'
-              ? item.expectedUnitPriceCents * item.quantity
-              : undefined,
+          lines: payload.items.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            unitPriceCents: line.expectedUnitPriceCents,
+          })),
+          totalAmountCents: estimatedPayloadTotalCents,
           note: payload.notes,
           isOfflineQueued: true,
-        });
+        };
+        setLastReceipt(queuedReceipt);
+        if (autoPrintReceipt) {
+          printReceiptRecord(queuedReceipt);
+        }
         toast.success('Internet yok. Satis lokal kuyruga alindi.');
         return;
       }
 
       const res = await api.post<{
         id: number;
-        customerId: number;
+        customerId?: number;
         totalAmountCents: number;
         createdAt: string;
         items?: Array<{
@@ -1445,6 +1671,9 @@ export default function PosPage() {
       let splitApplied:
         | { appliedAmountCents: number; remainingDueCents: number }
         | undefined;
+      let quickPaymentApplied:
+        | { amountCents: number; method: string }
+        | undefined;
       if (splitPaymentPayload.lines.length > 0) {
         const splitRes = await api.post<{
           appliedAmountCents: number;
@@ -1456,27 +1685,65 @@ export default function PosPage() {
           appliedAmountCents: splitRes.data.appliedAmountCents,
           remainingDueCents: splitRes.data.remainingDueCents,
         };
+      } else if (quickPaymentMethod !== 'NONE' && data.totalAmountCents > 0) {
+        const paymentRes = await api.post<{
+          amountCents: number;
+          method: string;
+        }>(`/orders/${data.id}/payments`, {
+          amount: String(data.totalAmountCents),
+          method: quickPaymentMethod,
+        });
+        quickPaymentApplied = {
+          amountCents: paymentRes.data.amountCents,
+          method: paymentRes.data.method,
+        };
       }
 
-      setLastReceipt({
+      const nextReceipt: ReceiptRecord = {
         saleId: String(data.id),
         createdAt: data.createdAt || new Date().toISOString(),
-        customerId: data.customerId,
+        customerId: data.customerId ?? payload.customerId,
         lines:
           data.items?.map((line) => ({
             productId: line.productId,
             quantity: line.quantity,
             unitPriceCents: line.unitPriceCents,
-          })) ?? [{ productId: item.productId, quantity: item.quantity, unitPriceCents: item.expectedUnitPriceCents }],
+          })) ??
+          payload.items.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            unitPriceCents: line.expectedUnitPriceCents,
+          })),
         totalAmountCents: data.totalAmountCents,
         note: payload.notes,
         isOfflineQueued: false,
-      });
+      };
+      setLastReceipt(nextReceipt);
+      if (autoPrintReceipt) {
+        printReceiptRecord(nextReceipt);
+      }
+
+      setCartItems([]);
+      setProductId('');
+      setQuantity('1');
+      setUnitPriceCents('');
+      setItemDiscountCents('');
+      setCartDiscountCents('');
+      setVariantId(null);
+      setResolvedProductName('');
+      setBarcodeInput('');
+      setSelectedCustomer(null);
+      setCustomerId('');
+      setCustomerResults([]);
       setSplitPayments(defaultSplitPaymentRows.map((line) => ({ ...line })));
       void loadInvoicePayload(data.id);
       if (splitApplied) {
         toast.success(
           `Satis olusturuldu. Split odeme: ${formatMoney(splitApplied.appliedAmountCents)} (kalan: ${formatMoney(splitApplied.remainingDueCents)})`,
+        );
+      } else if (quickPaymentApplied) {
+        toast.success(
+          `Satis olusturuldu. ${quickPaymentApplied.method} tahsilat: ${formatMoney(quickPaymentApplied.amountCents)}`,
         );
       } else {
         toast.success('Satis olusturuldu.');
@@ -1489,20 +1756,31 @@ export default function PosPage() {
           );
           return;
         }
+        if (quickPaymentMethod !== 'NONE') {
+          toast.error(
+            'Baglanti kesildi. Hizli nakit/kart seciliyken satis offline kuyruga alinmaz.',
+          );
+          return;
+        }
         const queued = await enqueuePosOrder(payload);
         await refreshQueue();
-        setLastReceipt({
+        const queuedReceipt: ReceiptRecord = {
           saleId: `Q-${queued.id.slice(0, 8)}`,
           createdAt: queued.createdAt,
           customerId: payload.customerId,
-          lines: [{ productId: item.productId, quantity: item.quantity, unitPriceCents: item.expectedUnitPriceCents }],
-          totalAmountCents:
-            typeof item.expectedUnitPriceCents === 'number'
-              ? item.expectedUnitPriceCents * item.quantity
-              : undefined,
+          lines: payload.items.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            unitPriceCents: line.expectedUnitPriceCents,
+          })),
+          totalAmountCents: estimatedPayloadTotalCents,
           note: payload.notes,
           isOfflineQueued: true,
-        });
+        };
+        setLastReceipt(queuedReceipt);
+        if (autoPrintReceipt) {
+          printReceiptRecord(queuedReceipt);
+        }
         toast.success('Baglanti kesildi. Satis lokal kuyruga alindi.');
       } else {
         toast.error(resolveApiErrorMessage(error, 'Satis olusturulamadi.'));
@@ -1734,8 +2012,107 @@ export default function PosPage() {
                     <span className="font-semibold">Secili musteri:</span>{' '}
                     {selectedCustomer
                       ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
-                      : 'Yok'}
+                      : 'Misafir'}
                   </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 px-3 text-xs"
+                    onClick={addCurrentProductToCart}
+                  >
+                    Sepete Ekle
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 px-3 text-xs"
+                    onClick={() => setCartItems([])}
+                    disabled={cartItems.length === 0}
+                  >
+                    Sepeti Temizle
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 px-3 text-xs"
+                    onClick={() => {
+                      setSelectedCustomer(null);
+                      setCustomerId('');
+                    }}
+                  >
+                    Misafir Satis
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border border-[#DCE5DC] bg-white px-3 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                      Sepet
+                    </p>
+                    <p className="text-xs text-[#1A3C34]/70">{cartItems.length} kalem</p>
+                  </div>
+                  {cartItems.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#5C5C5C]">
+                      Sepet bos. Tek kalem satmak icin urun bilgisiyle direkt satis da yapabilirsiniz.
+                    </p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {cartItems.map((row) => (
+                        <div
+                          key={row.key}
+                          className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-semibold">
+                              {row.name} {row.variantId ? `(Varyant #${row.variantId})` : ''}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-7 px-2 text-[11px]"
+                              onClick={() => removeCartItem(row.key)}
+                            >
+                              Kaldir
+                            </Button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-7 px-2 text-[11px]"
+                              onClick={() => updateCartItemQuantity(row.key, row.quantity - 1)}
+                            >
+                              -1
+                            </Button>
+                            <input
+                              value={String(row.quantity)}
+                              onChange={(e) =>
+                                updateCartItemQuantity(row.key, Number(e.target.value))
+                              }
+                              className="h-7 w-16 rounded-md border border-[#D9D9D3] px-2 text-center text-xs text-[#1A3C34]"
+                              inputMode="numeric"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-7 px-2 text-[11px]"
+                              onClick={() => updateCartItemQuantity(row.key, row.quantity + 1)}
+                            >
+                              +1
+                            </Button>
+                            <span className="ml-auto">
+                              {typeof row.expectedUnitPriceCents === 'number'
+                                ? `${formatMoney(row.expectedUnitPriceCents)} x ${row.quantity}`
+                                : 'Fiyat snapshot yok'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1747,6 +2124,12 @@ export default function PosPage() {
                   {formatMoney(estimatedPayableCents)}
                 </p>
                 <div className="mt-3 space-y-1.5 text-sm text-[#1A3C34]">
+                  <p className="flex items-center justify-between">
+                    <span>Sepet kalemi</span>
+                    <span className="font-semibold">
+                      {cartItems.length > 0 ? cartItems.length : 1}
+                    </span>
+                  </p>
                   <p className="flex items-center justify-between">
                     <span>Ara toplam</span>
                     <span className="font-semibold">{formatMoney(estimatedSubtotalCents)}</span>
@@ -1763,6 +2146,32 @@ export default function PosPage() {
                     <span>Kalan</span>
                     <span className="font-semibold">{formatMoney(estimatedRemainingCents)}</span>
                   </p>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                    Tahsilat
+                    <select
+                      value={quickPaymentMethod}
+                      onChange={(e) =>
+                        setQuickPaymentMethod(e.target.value as PosQuickPaymentMethod)
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
+                    >
+                      <option value="NONE">Odeme secilmedi</option>
+                      <option value="CASH">Nakit</option>
+                      <option value="CARD">Kart</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
+                    <input
+                      type="checkbox"
+                      checked={autoPrintReceipt}
+                      onChange={(e) => setAutoPrintReceipt(e.target.checked)}
+                      className="h-4 w-4 rounded border-[#C8D2C8]"
+                    />
+                    Fisi satis tamamlaninca otomatik yazdir
+                  </label>
                 </div>
 
                 <div className="mt-4 space-y-2">
@@ -2192,12 +2601,12 @@ export default function PosPage() {
                 </span>
               </label>
               <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Customer ID
+                Customer ID (opsiyonel)
                 <input
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
                   className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="1"
+                  placeholder="Bos birak = misafir"
                   inputMode="numeric"
                 />
               </label>
@@ -2355,7 +2764,7 @@ export default function PosPage() {
                 <span className="font-semibold">Secili musteri:</span>{' '}
                 {selectedCustomer
                   ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
-                  : 'Yok'}
+                  : 'Misafir'}
               </div>
               <div className="md:col-span-5 flex flex-wrap gap-2">
                 <Button onClick={() => void handleCreateSale()} disabled={isSubmitting}>
@@ -2428,7 +2837,12 @@ export default function PosPage() {
                     <p className="font-semibold">{receiptSettings.businessName}</p>
                     <p>Fis: {lastReceipt.saleId}</p>
                     <p>Tarih: {new Date(lastReceipt.createdAt).toLocaleString('tr-TR')}</p>
-                    <p>Musteri: {lastReceipt.customerId}</p>
+                    <p>
+                      Musteri:{' '}
+                      {typeof lastReceipt.customerId === 'number'
+                        ? lastReceipt.customerId
+                        : 'Misafir'}
+                    </p>
                     <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
                       {lastReceipt.lines.map((line, idx) => (
                         <p key={`${line.productId}-${idx}`}>
@@ -2532,9 +2946,11 @@ export default function PosPage() {
                       className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
                     >
                       <p>
-                        {item.createdAt} • customer: {item.payload.customerId} • product:{' '}
-                        {item.payload.items[0]?.productId} • qty:{' '}
-                        {item.payload.items[0]?.quantity}
+                        {item.createdAt} • customer:{' '}
+                        {typeof item.payload.customerId === 'number'
+                          ? item.payload.customerId
+                          : 'Misafir'}{' '}
+                        • kalem: {item.payload.items.length}
                       </p>
                       {item.lastError ? (
                         <p className="mt-1 text-xs text-[#9A4A1B]">

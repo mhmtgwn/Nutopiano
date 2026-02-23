@@ -91,6 +91,8 @@ type VariantRow = {
   name: string;
 };
 type OrderItemStockLine = { productId: number; variantId?: number | null; quantity: number };
+const POS_GUEST_CUSTOMER_PHONE = '9999999999';
+const POS_GUEST_CUSTOMER_NAME = 'POS Misafir';
 
 @Injectable()
 export class OrdersService {
@@ -149,7 +151,10 @@ export class OrdersService {
         userId: Number(currentUser.userId),
         role: String(currentUser.role),
       },
-      customerId: Number(payload.customerId),
+      customerId:
+        typeof payload.customerId === 'number' && Number.isFinite(payload.customerId)
+          ? Number(payload.customerId)
+          : null,
       source: payload.source ?? null,
       notes: payload.notes?.trim() ?? null,
       couponCode: payload.couponCode?.trim().toUpperCase() ?? null,
@@ -346,6 +351,96 @@ export class OrdersService {
     });
 
     return fallbackCustomer?.id ?? null;
+  }
+
+  private async resolveOrCreatePosGuestCustomer(
+    businessId: number,
+    createdByUserId: number,
+  ): Promise<number> {
+    const existing = await this.prisma.customer.findFirst({
+      where: {
+        businessId,
+        phone: POS_GUEST_CUSTOMER_PHONE,
+      },
+      select: {
+        id: true,
+        deletedAt: true,
+      },
+    });
+
+    if (existing) {
+      if (existing.deletedAt) {
+        const restored = await this.prisma.customer.update({
+          where: { id: existing.id },
+          data: {
+            name: POS_GUEST_CUSTOMER_NAME,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        return restored.id;
+      }
+      return existing.id;
+    }
+
+    try {
+      const created = await this.prisma.customer.create({
+        data: {
+          businessId,
+          createdByUserId,
+          name: POS_GUEST_CUSTOMER_NAME,
+          phone: POS_GUEST_CUSTOMER_PHONE,
+          balance: 0,
+        },
+        select: { id: true },
+      });
+      return created.id;
+    } catch {
+      const conflictRow = await this.prisma.customer.findFirst({
+        where: {
+          businessId,
+          phone: POS_GUEST_CUSTOMER_PHONE,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (conflictRow) {
+        return conflictRow.id;
+      }
+      throw new BadRequestException('POS misafir musterisi olusturulamadi');
+    }
+  }
+
+  private async resolveCustomerIdForCreate(
+    currentUser: JwtPayload,
+    businessId: number,
+    createdByUserId: number,
+    payload: CreateOrderDto,
+  ): Promise<number> {
+    if (typeof payload.customerId === 'number' && Number.isFinite(payload.customerId)) {
+      const customer = await this.prisma.customer.findFirst({
+        where: { id: payload.customerId, businessId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+      return customer.id;
+    }
+
+    if (currentUser.role === 'CUSTOMER') {
+      const linkedCustomerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      if (!linkedCustomerId) {
+        throw new NotFoundException('Customer not found');
+      }
+      return linkedCustomerId;
+    }
+
+    if (payload.source === OrderSource.POS) {
+      return this.resolveOrCreatePosGuestCustomer(businessId, createdByUserId);
+    }
+
+    throw new NotFoundException('Customer is required');
   }
 
   async findAllPaginated(
@@ -561,13 +656,12 @@ export class OrdersService {
       }
     }
 
-    const customer = await this.prisma.customer.findFirst({
-      where: { id: payload.customerId, businessId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!customer) {
-      throw new NotFoundException('Customer not found');
-    }
+    const resolvedCustomerId = await this.resolveCustomerIdForCreate(
+      currentUser,
+      businessId,
+      createdByUserId,
+      payload,
+    );
 
     const defaultStatusKey =
       (await this.settingsService.getJson<string>(
@@ -966,7 +1060,7 @@ export class OrdersService {
       const order = await (tx as any).order.create({
         data: {
           businessId,
-          customerId: payload.customerId,
+          customerId: resolvedCustomerId,
           createdByUserId,
           statusId: status.id,
           subtotalAmountCents,

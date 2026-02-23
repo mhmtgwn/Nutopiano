@@ -1,5 +1,5 @@
 export type PosOrderQueuePayload = {
-  customerId: number;
+  customerId?: number;
   idempotencyKey?: string;
   items: Array<{
     productId: number;

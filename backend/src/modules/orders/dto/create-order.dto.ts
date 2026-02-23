@@ -14,9 +14,10 @@ import { OrderSource } from '@prisma/client';
 import { CreateOrderItemDto } from './create-order-item.dto';
 
 export class CreateOrderDto {
+  @IsOptional()
   @IsInt()
   @Min(1)
-  customerId: number;
+  customerId?: number;
 
   @IsOptional()
   @IsEnum(OrderSource)
