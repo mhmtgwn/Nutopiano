@@ -3,6 +3,30 @@ import type { NextRequest } from 'next/server';
 
 const ACCESS_COOKIE = 'nutopiano_access';
 
+const isAdminRole = (role?: string | null) =>
+  role === 'ADMIN' || role === 'SUPER_ADMIN';
+
+const isAdminOnlyPath = (pathname: string) =>
+  pathname.startsWith('/admin') || pathname.startsWith('/platform');
+
+const decodeJwtRole = (token: string): string | null => {
+  try {
+    const segments = token.split('.');
+    if (segments.length < 2) return null;
+
+    const base64Url = segments[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const paddingLength = (4 - (base64.length % 4)) % 4;
+    const padded = `${base64}${'='.repeat(paddingLength)}`;
+    const decoded = atob(padded);
+    const payload = JSON.parse(decoded) as { role?: unknown };
+
+    return typeof payload.role === 'string' ? payload.role : null;
+  } catch {
+    return null;
+  }
+};
+
 const isProtectedPath = (pathname: string) => {
   if (pathname.startsWith('/account')) return true;
   if (pathname.startsWith('/admin')) return true;
@@ -22,6 +46,16 @@ export function middleware(req: NextRequest) {
 
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   if (token && token.trim().length > 0) {
+    if (isAdminOnlyPath(pathname)) {
+      const role = decodeJwtRole(token);
+      if (!isAdminRole(role)) {
+        const redirectUrl = req.nextUrl.clone();
+        redirectUrl.pathname = '/';
+        redirectUrl.search = '';
+        return NextResponse.redirect(redirectUrl);
+      }
+    }
+
     return NextResponse.next();
   }
 
