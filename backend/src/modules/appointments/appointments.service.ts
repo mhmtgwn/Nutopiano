@@ -191,7 +191,7 @@ export class AppointmentsService {
     const userId = Number(currentUser.userId);
 
     const where =
-      currentUser.role === 'ADMIN'
+      currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN'
         ? { businessId }
         : { businessId, staffUserId: userId };
 
@@ -271,7 +271,7 @@ export class AppointmentsService {
     }
 
     if (payload.staffUserId !== undefined) {
-      if (currentUser.role !== 'ADMIN') {
+      if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
         throw new ForbiddenException('Only admin can change staff assignment');
       }
 

@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isAdminRole } from '@/lib/role-routing';
 
 const ACCESS_COOKIE = 'nutopiano_access';
 
-const isAdminRole = (role?: string | null) =>
-  role === 'ADMIN' || role === 'SUPER_ADMIN';
-
-const isAdminOnlyPath = (pathname: string) =>
-  pathname.startsWith('/admin') || pathname.startsWith('/platform');
+const isAdminOnlyPath = (pathname: string) => pathname.startsWith('/admin');
+const isPlatformOnlyPath = (pathname: string) => pathname.startsWith('/platform');
 
 const decodeJwtRole = (token: string): string | null => {
   try {
@@ -34,10 +32,11 @@ const isProtectedPath = (pathname: string) => {
   if (pathname.startsWith('/seller')) return true;
   if (pathname.startsWith('/dashboard')) return true;
   if (pathname.startsWith('/pos')) return true;
+  if (pathname.startsWith('/panel')) return true;
   return false;
 };
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (!isProtectedPath(pathname)) {
@@ -46,8 +45,16 @@ export function middleware(req: NextRequest) {
 
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   if (token && token.trim().length > 0) {
-    if (isAdminOnlyPath(pathname)) {
+    if (isAdminOnlyPath(pathname) || isPlatformOnlyPath(pathname)) {
       const role = decodeJwtRole(token);
+
+      if (isPlatformOnlyPath(pathname) && role !== 'SUPER_ADMIN') {
+        const redirectUrl = req.nextUrl.clone();
+        redirectUrl.pathname = '/';
+        redirectUrl.search = '';
+        return NextResponse.redirect(redirectUrl);
+      }
+
       if (!isAdminRole(role)) {
         const redirectUrl = req.nextUrl.clone();
         redirectUrl.pathname = '/';
@@ -67,5 +74,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/account/:path*', '/admin/:path*', '/platform/:path*', '/seller/:path*', '/dashboard/:path*', '/pos/:path*'],
+  matcher: ['/account/:path*', '/admin/:path*', '/platform/:path*', '/seller/:path*', '/dashboard/:path*', '/pos/:path*', '/panel/:path*'],
 };

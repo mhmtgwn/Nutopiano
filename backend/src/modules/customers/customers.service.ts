@@ -600,7 +600,7 @@ export class CustomersService {
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
     const where =
-      currentUser.role === 'ADMIN'
+      currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN'
         ? { businessId, deletedAt: null as null }
         : { businessId, createdByUserId: userId, deletedAt: null as null };
 
@@ -630,7 +630,7 @@ export class CustomersService {
     currentUser: JwtPayload,
     params?: { q?: string; page?: number; pageSize?: number },
   ): Promise<{ data: CustomerSummary[]; meta: PaginationMeta }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -774,7 +774,7 @@ export class CustomersService {
     const userId = Number(currentUser.userId);
 
     const where =
-      currentUser.role === 'ADMIN'
+      currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN'
         ? { businessId, deletedAt: null as null }
         : { businessId, createdByUserId: userId, deletedAt: null as null };
 

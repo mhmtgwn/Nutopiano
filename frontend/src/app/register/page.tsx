@@ -8,6 +8,7 @@ import Button from '@/components/common/Button';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { getPanelHomePathByRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -125,7 +126,7 @@ export default function RegisterPage() {
         ? nextPath
         : isSafeInternalPath(storedRedirect)
           ? storedRedirect
-          : '/shop';
+          : getPanelHomePathByRole(profile.role);
 
       if (storedRedirect) {
         localStorage.removeItem('redirectAfterLogin');

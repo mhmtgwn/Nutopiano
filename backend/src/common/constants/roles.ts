@@ -4,6 +4,7 @@
 
 export const ROLES = {
   SUPER_ADMIN: 'SUPER_ADMIN',
+  ADMIN: 'ADMIN',
   SELLER: 'SELLER',
   CUSTOMER: 'CUSTOMER',
   STAFF: 'STAFF',
@@ -15,7 +16,18 @@ export const ROLE_PERMISSIONS = {
   SUPER_ADMIN: {
     description: 'Platform administrator - full access',
     canAccessPlatformAdmin: true,
-    canAccessSellerPortal: false,
+    canAccessSellerPortal: true,
+    canAccessCustomerPortal: true,
+    canManageUsers: true,
+    canManageSellers: true,
+    canManageOrders: true,
+    canManagePayments: true,
+    canViewAnalytics: true,
+  },
+  ADMIN: {
+    description: 'Business admin - full access in own business',
+    canAccessPlatformAdmin: true,
+    canAccessSellerPortal: true,
     canAccessCustomerPortal: true,
     canManageUsers: true,
     canManageSellers: true,
@@ -58,6 +70,8 @@ export const ROLE_PERMISSIONS = {
   },
 } as const;
 
-export const ADMIN_ROLES = [ROLES.SUPER_ADMIN] as const;
+export const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN] as const;
+export const PLATFORM_ADMIN_ROLES = [ROLES.SUPER_ADMIN] as const;
+export const BUSINESS_ADMIN_ROLES = [ROLES.ADMIN] as const;
 export const SELLER_ROLES = [ROLES.SELLER, ROLES.STAFF] as const;
 export const CUSTOMER_ROLES = [ROLES.CUSTOMER] as const;

@@ -95,7 +95,7 @@ export class FinanceService {
     }>;
     meta: PaginationMeta;
   }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -193,7 +193,7 @@ export class FinanceService {
   }
 
   async approvePayout(currentUser: JwtPayload, payoutId: number) {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -231,7 +231,7 @@ export class FinanceService {
   }
 
   async completePayout(currentUser: JwtPayload, payoutId: number) {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 

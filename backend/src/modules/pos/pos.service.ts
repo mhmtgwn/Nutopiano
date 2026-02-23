@@ -42,7 +42,12 @@ export class PosService {
   }
 
   private assertAllowedRole(currentUser: JwtPayload) {
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'STAFF') {
+    if (
+      currentUser.role !== 'ADMIN' &&
+      currentUser.role !== 'SUPER_ADMIN' &&
+      currentUser.role !== 'SELLER' &&
+      currentUser.role !== 'STAFF'
+    ) {
       throw new ForbiddenException('Access denied');
     }
   }

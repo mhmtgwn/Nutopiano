@@ -8,6 +8,7 @@ import Button from '@/components/common/Button';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
+import { getPanelHomePathByRole, getPanelLabelByRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -149,8 +150,8 @@ export default function AccountSettingsPage() {
     return null;
   }
 
-  const isAdmin = user.role === 'ADMIN';
   const isCustomer = user.role === 'CUSTOMER';
+  const hasBackofficePanel = !isCustomer;
 
   const canEditPreferences = isCustomer;
 
@@ -362,16 +363,16 @@ export default function AccountSettingsPage() {
           )}
         </section>
 
-        {isAdmin && (
+        {hasBackofficePanel && (
           <section className="border-t border-[var(--neutral-200)] pt-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Yönetim</p>
-            <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Admin Paneli</p>
+            <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">{getPanelLabelByRole(user.role)}</p>
             <p className="mt-2 text-sm text-[var(--neutral-600)]">
-              Ürünleri, kategorileri ve siparişleri yönetmek için panele geçin.
+              Rolünüze ait operasyon arayüzüne geçiş yapın.
             </p>
             <div className="mt-4">
-              <Button type="button" onClick={() => router.push('/admin')}>
-                Admin Paneline Git
+              <Button type="button" onClick={() => router.push(getPanelHomePathByRole(user.role))}>
+                Panele Git
               </Button>
             </div>
           </section>

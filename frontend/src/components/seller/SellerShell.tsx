@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -17,16 +17,19 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import { useAppSelector } from '@/store';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 
 interface SellerShellProps {
   children: ReactNode;
 }
 
-const navItems = [
+const sellerNavItems = [
   { label: 'Genel Bakış', href: '/dashboard', icon: Home },
   { label: 'Ürünler', href: '/dashboard/products', icon: Package },
   { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
   { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
+  { label: 'POS', href: '/pos', icon: CreditCard },
   { label: 'Kampanyalar', href: '/dashboard/campaigns/coupons', icon: Tag },
   { label: 'Finans', href: '/dashboard/finance', icon: Wallet },
   { label: 'Abonelik', href: '/dashboard/subscription', icon: CreditCard },
@@ -34,9 +37,37 @@ const navItems = [
   { label: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
 ] as const;
 
+const staffNavItems = [
+  { label: 'Genel Bakış', href: '/dashboard', icon: Home },
+  { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
+  { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
+  { label: 'POS', href: '/pos', icon: CreditCard },
+  { label: 'Finans', href: '/dashboard/finance', icon: Wallet },
+  { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
+  { label: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
+] as const;
+
 export default function SellerShell({ children }: SellerShellProps) {
   const pathname = usePathname();
+  const user = useAppSelector((state) => state.user.user);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const navItems = useMemo(
+    () => (user?.role === 'STAFF' ? staffNavItems : sellerNavItems),
+    [user?.role],
+  );
+
+  const panelLabel = getPanelLabelByRole(user?.role);
+  const isStaff = user?.role === 'STAFF';
+  const panelDescription = isStaff
+    ? 'Günlük operasyon, sipariş ve stok akışını yönetin.'
+    : 'Ürün, sipariş ve finans akışlarını yönetin.';
+  const activeNavClass = isStaff
+    ? 'border border-[#7A4B00]/20 bg-[#7A4B00] text-white'
+    : 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white';
+  const panelBadgeClass = isStaff
+    ? 'rounded-full border border-[#7A4B00]/20 bg-[#FFF3DF] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7A4B00] md:px-4'
+    : 'rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4';
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === href : pathname.startsWith(href);
@@ -55,10 +86,10 @@ export default function SellerShell({ children }: SellerShellProps) {
                 Nutopiano Seller
               </p>
               <h2 className="mt-2 text-xl font-serif text-[var(--primary-800)]">
-                Satıcı Paneli
+                {panelLabel}
               </h2>
               <p className="mt-2 text-xs text-[var(--neutral-600)]">
-                Ürün, sipariş ve finans akışlarını yönetin.
+                {panelDescription}
               </p>
               <Link
                 href="/"
@@ -78,7 +109,7 @@ export default function SellerShell({ children }: SellerShellProps) {
                     href={item.href}
                     className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
                       active
-                        ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                        ? activeNavClass
                         : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
                     }`}
                   >
@@ -110,8 +141,8 @@ export default function SellerShell({ children }: SellerShellProps) {
                   >
                     <Menu className="h-5 w-5" />
                   </button>
-                  <div className="rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4">
-                    Satıcı erişimi
+                  <div className={panelBadgeClass}>
+                    {panelLabel}
                   </div>
                 </div>
               </div>
@@ -155,7 +186,7 @@ export default function SellerShell({ children }: SellerShellProps) {
                         href={item.href}
                         className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
                           active
-                            ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                            ? activeNavClass
                             : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
                         }`}
                       >

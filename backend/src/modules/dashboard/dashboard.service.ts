@@ -35,6 +35,7 @@ export class DashboardService {
     currentUser: JwtPayload,
   ): Promise<SellerDashboardSummary> {
     if (
+      currentUser.role !== 'SUPER_ADMIN' &&
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SELLER' &&
       currentUser.role !== 'STAFF'
@@ -110,6 +111,7 @@ export class DashboardService {
     currentUser: JwtPayload,
   ): Promise<SellerReportsSummary> {
     if (
+      currentUser.role !== 'SUPER_ADMIN' &&
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SELLER' &&
       currentUser.role !== 'STAFF'

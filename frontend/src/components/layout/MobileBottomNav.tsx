@@ -37,12 +37,13 @@ export default function MobileBottomNav() {
 		window.setTimeout(() => setSearchValue(''), 0);
 	};
 
-  const accountHref = user ? '/account/orders' : '/login';
+  const accountHref = user ? '/panel' : '/login';
+  const accountLabel = user?.role === 'CUSTOMER' ? 'Hesap' : 'Panel';
 
   	const items = [
 		{ href: '/categories', label: 'Shop', Icon: Store },
 		{ href: '/cart', label: 'Sepet', Icon: ShoppingBag, badge: totalQuantity },
-		{ href: accountHref, label: 'Hesap', Icon: UserCircle2 },
+		{ href: accountHref, label: accountLabel, Icon: UserCircle2 },
 	];
 
   	return (

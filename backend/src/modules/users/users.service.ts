@@ -87,7 +87,7 @@ export class UsersService {
   async updateRole(
     currentUser: JwtPayload,
     id: number,
-    role: string,
+    role: Role,
   ): Promise<UserSummary> {
     const businessId = Number(currentUser.businessId);
     const currentUserId = Number(currentUser.userId);
@@ -115,9 +115,46 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    const allowedRoles = new Set<Role>([
+      Role.SUPER_ADMIN,
+      Role.ADMIN,
+      Role.SELLER,
+      Role.STAFF,
+      Role.CUSTOMER,
+    ]);
+    if (!allowedRoles.has(role)) {
+      throw new ForbiddenException('Gecersiz rol');
+    }
+
+    if (role === Role.SUPER_ADMIN && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'SUPER_ADMIN atamasi sadece SUPER_ADMIN tarafindan yapilabilir.',
+      );
+    }
+
+    const target = await this.prisma.user.findFirst({
+      where: {
+        id,
+        businessId,
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (target.role === Role.SUPER_ADMIN && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'SUPER_ADMIN kullanicinin rolunu sadece SUPER_ADMIN degistirebilir.',
+      );
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { role: role as Role },
+      data: { role },
       select: {
         id: true,
         name: true,

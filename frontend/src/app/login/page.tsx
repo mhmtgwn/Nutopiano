@@ -8,6 +8,7 @@ import Button from '@/components/common/Button';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
+import { getPanelHomePathByRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -105,7 +106,7 @@ export default function LoginPage() {
         ? nextPath
         : isSafeInternalPath(storedRedirect)
           ? storedRedirect
-          : '/shop';
+          : getPanelHomePathByRole(profile.role);
 
       if (storedRedirect) {
         localStorage.removeItem('redirectAfterLogin');
@@ -127,7 +128,7 @@ export default function LoginPage() {
           Giriş Yap
         </h1>
         <p className="text-xs text-[var(--neutral-600)] md:text-sm">
-          Nutopiano yönetim hesabınızla giriş yaparak sipariş ve profil
+          Nutopiano hesabınızla giriş yaparak sipariş, profil ve panel
           bilgilerinize erişin.
         </p>
       </header>
@@ -150,7 +151,7 @@ export default function LoginPage() {
               placeholder="Örn: 5XXXXXXXXX"
             />
             <p className="text-[11px] text-[var(--neutral-500)] md:text-xs">
-              Yönetim hesabınıza ait telefon numarası ve şifre ile giriş yapın.
+              Telefon numarası ve şifreniz ile güvenli şekilde giriş yapın.
             </p>
           </div>
 

@@ -24,7 +24,7 @@ type AppointmentRow = {
   updatedAt: string;
 };
 
-type UserRole = 'ADMIN' | 'STAFF' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF' | 'CUSTOMER';
 
 type UserRow = {
   id: number;

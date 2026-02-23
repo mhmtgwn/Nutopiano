@@ -250,7 +250,9 @@ model CustomerAddress {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
+  SELLER
   STAFF
   CUSTOMER
 }

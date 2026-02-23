@@ -4,11 +4,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Heart, LogOut, MapPin, MessageSquare, Search, Settings, ShoppingBag, Store, User, UserCircle2 } from 'lucide-react';
+import {
+  ClipboardList,
+  CreditCard,
+  Heart,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  MessageSquare,
+  Package,
+  Search,
+  Settings,
+  ShoppingBag,
+  Store,
+  User,
+  UserCircle2,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 
 export default function Header() {
   const router = useRouter();
@@ -24,6 +41,50 @@ export default function Header() {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
+  const panelHref = user ? '/panel' : '/login';
+  const panelLabel = getPanelLabelByRole(user?.role);
+  const isCustomer = user?.role === 'CUSTOMER';
+
+  type BackofficeMenuLink = {
+    href: string;
+    label: string;
+    icon: LucideIcon;
+  };
+
+  const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(() => {
+    switch (user?.role) {
+      case 'SUPER_ADMIN':
+        return [
+          { href: '/platform/users', label: 'Kullanıcılar', icon: User },
+          { href: '/platform/sellers', label: 'Satıcılar', icon: Store },
+          { href: '/platform/plans', label: 'Planlar', icon: CreditCard },
+          { href: '/platform/orders', label: 'Siparişler', icon: ClipboardList },
+        ];
+      case 'ADMIN':
+        return [
+          { href: '/admin/orders', label: 'Siparişler', icon: ClipboardList },
+          { href: '/admin/products', label: 'Ürünler', icon: Package },
+          { href: '/admin/customers', label: 'Müşteriler', icon: User },
+          { href: '/admin/finance', label: 'Finans', icon: CreditCard },
+        ];
+      case 'SELLER':
+        return [
+          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
+          { href: '/dashboard/products', label: 'Ürünler', icon: Package },
+          { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
+          { href: '/pos', label: 'POS', icon: LayoutDashboard },
+        ];
+      case 'STAFF':
+        return [
+          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
+          { href: '/dashboard/inventory', label: 'Stok', icon: Package },
+          { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
+          { href: '/pos', label: 'POS', icon: LayoutDashboard },
+        ];
+      default:
+        return [];
+    }
+  }, [user?.role]);
 
   useEffect(() => {
     if (!isSearchOpen) return;
@@ -185,8 +246,19 @@ export default function Header() {
                       <div className="border-b border-[var(--neutral-200)] px-4 py-3">
                         <p className="text-sm font-semibold text-[var(--primary-800)]">{user.name}</p>
                         <p className="text-xs text-[var(--neutral-500)]">{user.phone}</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--neutral-500)]">
+                          {panelLabel}
+                        </p>
                       </div>
                       <div className="space-y-1 p-2">
+                        <Link
+                          href={panelHref}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          {panelLabel}
+                        </Link>
                         <Link
                           href="/account/profile"
                           className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
@@ -195,38 +267,60 @@ export default function Header() {
                           <User className="h-4 w-4" />
                           Profil
                         </Link>
-                        <Link
-                          href="/account/orders"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <ShoppingBag className="h-4 w-4" />
-                          Siparişlerim
-                        </Link>
-                        <Link
-                          href="/account/favorites"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <Heart className="h-4 w-4" />
-                          Favorilerim
-                        </Link>
-                        <Link
-                          href="/account/reviews"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          Yorumlarım
-                        </Link>
-                        <Link
-                          href="/account/addresses"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <MapPin className="h-4 w-4" />
-                          Adreslerim
-                        </Link>
+                        {!isCustomer && backofficeMenuLinks.length > 0 ? (
+                          <div className="my-1 border-t border-[var(--neutral-200)] pt-1">
+                            {backofficeMenuLinks.map((link) => {
+                              const Icon = link.icon;
+                              return (
+                                <Link
+                                  key={link.href}
+                                  href={link.href}
+                                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                                  onClick={() => setIsUserMenuOpen(false)}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                  {link.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {isCustomer ? (
+                          <>
+                            <Link
+                              href="/account/orders"
+                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                              onClick={() => setIsUserMenuOpen(false)}
+                            >
+                              <ShoppingBag className="h-4 w-4" />
+                              Siparişlerim
+                            </Link>
+                            <Link
+                              href="/account/favorites"
+                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                              onClick={() => setIsUserMenuOpen(false)}
+                            >
+                              <Heart className="h-4 w-4" />
+                              Favorilerim
+                            </Link>
+                            <Link
+                              href="/account/reviews"
+                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                              onClick={() => setIsUserMenuOpen(false)}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              Yorumlarım
+                            </Link>
+                            <Link
+                              href="/account/addresses"
+                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                              onClick={() => setIsUserMenuOpen(false)}
+                            >
+                              <MapPin className="h-4 w-4" />
+                              Adreslerim
+                            </Link>
+                          </>
+                        ) : null}
                         <Link
                           href="/account/settings"
                           className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"

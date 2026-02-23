@@ -19,6 +19,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { useAppSelector } from '@/store';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 
 interface AdminShellProps {
   children: ReactNode;
@@ -83,9 +85,22 @@ const createNavSections = (basePath: string): NavSection[] => [
 
 export default function AdminShell({ children, basePath = '/admin' }: AdminShellProps) {
   const pathname = usePathname();
+  const user = useAppSelector((state) => state.user.user);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const navSections = useMemo(() => createNavSections(basePath), [basePath]);
+  const panelLabel = getPanelLabelByRole(user?.role);
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const panelModeLabel = isSuperAdmin ? 'Platform Panel' : 'Admin Panel';
+  const panelDescription = isSuperAdmin
+    ? 'Satıcı, kullanıcı, plan ve operasyon akışlarını platform genelinde yönetin.'
+    : 'Ürün, sipariş ve ödeme akışlarını işletme düzeyinde yönetin.';
+  const activeNavClass = isSuperAdmin
+    ? 'border border-[#173A74]/20 bg-[#173A74] text-white'
+    : 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white';
+  const panelBadgeClass = isSuperAdmin
+    ? 'rounded-full border border-[#173A74]/25 bg-[#ECF2FF] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#173A74] md:px-4'
+    : 'rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4';
 
   const isActive = (href: string) =>
     href === basePath ? pathname === href : pathname.startsWith(href);
@@ -104,10 +119,10 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                 Nutopiano Admin
               </p>
               <h2 className="mt-2 text-xl font-serif text-[var(--primary-800)]">
-                Yönetim Merkezi
+                {panelLabel}
               </h2>
               <p className="mt-2 text-xs text-[var(--neutral-600)]">
-                Ürün, sipariş ve ödeme akışlarını tek panelden yönetin.
+                {panelDescription}
               </p>
               <Link
                 href="/"
@@ -133,7 +148,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                           href={item.href}
                           className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
                             active
-                              ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                              ? activeNavClass
                               : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
                           }`}
                         >
@@ -153,7 +168,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="hidden text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] lg:block">
-                    Admin Panel
+                    {panelModeLabel}
                   </p>
                   <h1 className="mt-2 hidden text-3xl font-serif text-[var(--primary-800)] md:text-4xl lg:block">
                     Kontrol Paneli
@@ -171,8 +186,8 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                   >
                     <Menu className="h-5 w-5" />
                   </button>
-                  <div className="rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4">
-                    Yönetici erişimi
+                  <div className={panelBadgeClass}>
+                    {panelLabel}
                   </div>
                 </div>
               </div>
@@ -229,7 +244,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                               href={item.href}
                               className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
                                 active
-                                  ? 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white'
+                                  ? activeNavClass
                                   : 'border border-transparent text-[var(--primary-800)]/70 hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]'
                               }`}
                             >

@@ -1,14 +1,13 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
 
 import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { isSellerPanelRole } from '@/lib/role-routing';
+import { getPanelHomePathByRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -25,32 +24,24 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-interface ProfileResponse {
+type ProfileResponse = {
   userId: string;
   name?: string;
   phone?: string;
   email?: string;
   role: string;
   businessId?: string | null;
-}
+};
 
-interface SellerGuardProps {
-  children: ReactNode;
-}
-
-export default function SellerGuard({ children }: SellerGuardProps) {
+export default function PanelRedirectPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, status } = useAppSelector((state) => state.user);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const isLoading = isLoadingProfile || status === 'authenticating';
 
   useEffect(() => {
     if (user) {
-      if (!isSellerPanelRole(user.role)) {
-        router.replace('/');
-        toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
-      }
+      router.replace(getPanelHomePathByRole(user.role));
       return;
     }
 
@@ -76,42 +67,27 @@ export default function SellerGuard({ children }: SellerGuardProps) {
           }),
         );
 
-        if (!isSellerPanelRole(profile.role)) {
-          router.replace('/');
-          toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
-        }
+        router.replace(getPanelHomePathByRole(profile.role));
       } catch (error: unknown) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');
         dispatch(setAuthError(message));
         dispatch(logout());
-        router.replace('/login');
+        router.replace('/login?next=/panel');
       } finally {
         setIsLoadingProfile(false);
       }
     };
 
-    fetchProfile();
-  }, [user, dispatch, router]);
+    void fetchProfile();
+  }, [dispatch, router, user]);
 
-  if (isLoading && !user) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <Spinner fullscreen label="Yetki kontrol ediliyor..." />
-        </div>
+  const isLoading = isLoadingProfile || status === 'authenticating';
+
+  return (
+    <div className="min-h-[calc(100vh-140px)] bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+        <Spinner fullscreen label={isLoading ? 'Panel yönlendiriliyor...' : 'Hazırlanıyor...'} />
       </div>
-    );
-  }
-
-  if (!user || !isSellerPanelRole(user.role)) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <Spinner fullscreen label="Yönlendiriliyor..." />
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+    </div>
+  );
 }

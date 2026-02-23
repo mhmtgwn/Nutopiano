@@ -20,6 +20,7 @@ import { AdminOrStaffSelf, Roles } from '@common/decorators';
 import { JwtAuthGuard, RolesGuard, StaffSelfGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { UsersService } from './users.service';
+import { Role } from '@prisma/client';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -102,7 +103,7 @@ export class UsersController {
   updateRole(
     @Req() req: { user: JwtPayload },
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { role: 'ADMIN' | 'STAFF' | 'CUSTOMER' },
+    @Body() body: { role: Role },
   ) {
     return this.usersService.updateRole(req.user, id, body.role);
   }

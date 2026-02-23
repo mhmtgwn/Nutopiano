@@ -29,7 +29,7 @@ import type { Response } from 'express';
 @ApiTags('pos')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'STAFF')
+@Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'STAFF')
 @Controller('pos')
 export class PosController {
   constructor(private readonly posService: PosService) {}

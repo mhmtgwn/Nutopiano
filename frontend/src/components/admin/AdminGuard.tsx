@@ -8,6 +8,7 @@ import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { isAdminRole, isSuperAdminRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -35,23 +36,29 @@ interface ProfileResponse {
 
 interface AdminGuardProps {
   children: ReactNode;
+  requireSuperAdmin?: boolean;
 }
 
-const isAdminRole = (role?: string) =>
-  role === 'ADMIN' || role === 'SUPER_ADMIN';
-
-export default function AdminGuard({ children }: AdminGuardProps) {
+export default function AdminGuard({
+  children,
+  requireSuperAdmin = false,
+}: AdminGuardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, status } = useAppSelector((state) => state.user);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const isLoading = isLoadingProfile || status === 'authenticating';
+  const hasAccess = (role?: string) =>
+    requireSuperAdmin ? isSuperAdminRole(role) : isAdminRole(role);
+  const deniedMessage = requireSuperAdmin
+    ? 'Bu sayfaya erişim için super admin yetkisi gerekli.'
+    : 'Bu sayfaya erişim için admin yetkisi gerekli.';
 
   useEffect(() => {
     if (user) {
-      if (!isAdminRole(user.role)) {
+      if (!hasAccess(user.role)) {
         router.replace('/');
-        toast.error('Bu sayfaya erişim için admin yetkisi gerekli.');
+        toast.error(deniedMessage);
       }
 
       return;
@@ -77,9 +84,9 @@ export default function AdminGuard({ children }: AdminGuardProps) {
           }),
         );
 
-        if (!isAdminRole(profile.role)) {
+        if (!hasAccess(profile.role)) {
           router.replace('/');
-          toast.error('Bu sayfaya erişim için admin yetkisi gerekli.');
+          toast.error(deniedMessage);
         }
       } catch (error: unknown) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');
@@ -93,7 +100,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     };
 
     fetchProfile();
-  }, [user, dispatch, router]);
+  }, [user, dispatch, router, requireSuperAdmin]);
 
   if (isLoading && !user) {
     return (
@@ -105,7 +112,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     );
   }
 
-  if (!user || !isAdminRole(user.role)) {
+  if (!user || !hasAccess(user.role)) {
     return (
       <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">

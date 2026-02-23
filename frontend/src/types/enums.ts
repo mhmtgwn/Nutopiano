@@ -4,6 +4,7 @@
 
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
   SELLER = 'SELLER',
   CUSTOMER = 'CUSTOMER',
   STAFF = 'STAFF',
@@ -86,6 +87,7 @@ export const SellerStatusDisplay: Record<SellerStatus, string> = {
 
 export const UserRoleDisplay: Record<UserRole, string> = {
   [UserRole.SUPER_ADMIN]: 'Süper Admin',
+  [UserRole.ADMIN]: 'Admin',
   [UserRole.SELLER]: 'Satıcı',
   [UserRole.CUSTOMER]: 'Müşteri',
   [UserRole.STAFF]: 'Personel',

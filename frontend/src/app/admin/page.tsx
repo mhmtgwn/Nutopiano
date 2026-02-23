@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -18,6 +19,8 @@ import {
 import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { formatPrice } from '@/lib/format';
+import { getPanelLabelByRole } from '@/lib/role-routing';
+import { useAppSelector } from '@/store';
 
 interface DashboardSummary {
   activeProducts: number;
@@ -83,16 +86,75 @@ interface ReturnRequestSummary {
   requestedAt: string;
 }
 
-const quickLinks = [
-  { label: 'Sipariş takibi', href: '/admin/orders' },
-  { label: 'Ürün yönetimi', href: '/admin/products' },
-  { label: 'Müşteri paneli', href: '/admin/customers' },
-  { label: 'Ödeme operasyonu', href: '/admin/payments' },
-  { label: 'Finans raporları', href: '/admin/finance' },
-  { label: 'SMTP & SMS', href: '/admin/smtp' },
-];
+type QuickLink = {
+  label: string;
+  href: string;
+};
+
+type SetupCta = {
+  label: string;
+  href: string;
+};
+
+const buildQuickLinks = (basePath: string, isSuperAdmin: boolean): QuickLink[] => {
+  if (isSuperAdmin) {
+    return [
+      { label: 'Kullanıcı yönetimi', href: `${basePath}/users` },
+      { label: 'Satıcı operasyonu', href: `${basePath}/sellers` },
+      { label: 'Başvuru havuzu', href: `${basePath}/sellers/applications` },
+      { label: 'Plan yönetimi', href: `${basePath}/plans` },
+      { label: 'Finans raporları', href: `${basePath}/finance` },
+      { label: 'SMTP & SMS', href: `${basePath}/smtp` },
+    ];
+  }
+
+  return [
+    { label: 'Sipariş takibi', href: `${basePath}/orders` },
+    { label: 'Ürün yönetimi', href: `${basePath}/products` },
+    { label: 'Müşteri paneli', href: `${basePath}/customers` },
+    { label: 'Ödeme operasyonu', href: `${basePath}/payments` },
+    { label: 'Finans raporları', href: `${basePath}/finance` },
+    { label: 'Hizmet operasyonu', href: `${basePath}/services` },
+  ];
+};
+
+const buildSetupCtas = (basePath: string, isSuperAdmin: boolean): SetupCta[] => {
+  if (isSuperAdmin) {
+    return [
+      { label: 'Kullanıcı ekle', href: `${basePath}/users` },
+      { label: 'Satıcıları yönet', href: `${basePath}/sellers` },
+      { label: 'Planları hazırla', href: `${basePath}/plans` },
+    ];
+  }
+
+  return [
+    { label: 'İlk ürünü ekle', href: `${basePath}/products` },
+    { label: 'Kategori oluştur', href: `${basePath}/categories` },
+    { label: 'Siparişleri izle', href: `${basePath}/orders` },
+  ];
+};
 
 export default function AdminOverviewPage() {
+  const pathname = usePathname();
+  const user = useAppSelector((state) => state.user.user);
+  const basePath = pathname.startsWith('/platform') ? '/platform' : '/admin';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const panelLabel = getPanelLabelByRole(user?.role);
+  const quickLinks = useMemo(
+    () => buildQuickLinks(basePath, isSuperAdmin),
+    [basePath, isSuperAdmin],
+  );
+  const setupCtas = useMemo(
+    () => buildSetupCtas(basePath, isSuperAdmin),
+    [basePath, isSuperAdmin],
+  );
+  const reportHref = `${basePath}/reports`;
+  const ordersHref = `${basePath}/orders`;
+  const heroTitle = isSuperAdmin ? 'Platform Dashboard' : 'Admin Dashboard';
+  const heroDescription = isSuperAdmin
+    ? 'Platform genelinde satıcı, plan, kullanıcı ve sipariş operasyonunu tek merkezden izleyin.'
+    : 'İşletme tarafında sipariş, stok, müşteri ve iade operasyonunu canlı metriklerle izleyin.';
+
   const summaryQuery = useQuery<DashboardSummary>({
     queryKey: ['admin-dashboard-summary'],
     queryFn: async () => {
@@ -212,6 +274,10 @@ export default function AdminOverviewPage() {
 
   const latestOrders = latestOrdersQuery.data?.data ?? [];
   const topProducts = reportsQuery.data?.topProducts ?? [];
+  const summary = summaryQuery.data;
+  const showSetupGuide = Boolean(
+    summary && summary.ordersTotal === 0 && summary.activeProducts === 0,
+  );
 
   return (
     <div className="space-y-6">
@@ -219,17 +285,17 @@ export default function AdminOverviewPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Yönetim Merkezi
+              {panelLabel}
             </p>
             <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
-              Admin Dashboard
+              {heroTitle}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-[var(--neutral-600)]">
-              Sipariş, stok, müşteri ve iade operasyonunu canlı metriklerle tek yerden izleyin.
+              {heroDescription}
             </p>
           </div>
           <Link
-            href="/admin/reports"
+            href={reportHref}
             className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
           >
             Raporlar <ArrowUpRight className="h-4 w-4" />
@@ -251,6 +317,32 @@ export default function AdminOverviewPage() {
 
       {!isLoading && !isError ? (
         <>
+          {showSetupGuide ? (
+            <section className="rounded-[var(--radius-xl)] border border-[#CFAE74] bg-[#FFF9EE] px-6 py-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#7A5A24]">
+                İlk Kurulum
+              </p>
+              <h2 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+                Dashboard için başlangıç adımları
+              </h2>
+              <p className="mt-2 text-sm text-[var(--neutral-700)]">
+                Henüz sipariş ve ürün verisi oluşmamış. Aşağıdaki adımlarla paneli aktive edin.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {setupCtas.map((cta) => (
+                  <Link
+                    key={cta.href}
+                    href={cta.href}
+                    className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[#D9C08F] bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:bg-[#FFFCF4]"
+                  >
+                    {cta.label}
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {statCards.map((item) => {
               const Icon = item.icon;
@@ -284,7 +376,7 @@ export default function AdminOverviewPage() {
                   </h2>
                 </div>
                 <Link
-                  href="/admin/orders"
+                  href={ordersHref}
                   className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)]/80 hover:text-[var(--primary-800)]"
                 >
                   Tümünü aç
@@ -292,7 +384,16 @@ export default function AdminOverviewPage() {
               </div>
 
               {latestOrders.length === 0 ? (
-                <p className="mt-4 text-sm text-[var(--neutral-600)]">Henüz sipariş kaydı yok.</p>
+                <div className="mt-4 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
+                  <p className="text-sm text-[var(--neutral-600)]">Henüz sipariş kaydı yok.</p>
+                  <Link
+                    href={isSuperAdmin ? `${basePath}/sellers` : `${basePath}/products`}
+                    className="mt-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
+                  >
+                    {isSuperAdmin ? 'Satıcıları kontrol et' : 'Ürünleri hazırlamaya başla'}
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </div>
               ) : (
                 <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
@@ -332,7 +433,16 @@ export default function AdminOverviewPage() {
                 </p>
                 <h2 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Top ürünler</h2>
                 {topProducts.length === 0 ? (
-                  <p className="mt-3 text-sm text-[var(--neutral-600)]">Veri bulunamadı.</p>
+                  <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
+                    <p className="text-sm text-[var(--neutral-600)]">Veri bulunamadı.</p>
+                    <Link
+                      href={isSuperAdmin ? `${basePath}/sellers` : `${basePath}/products`}
+                      className="mt-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
+                    >
+                      {isSuperAdmin ? 'Satıcı aktivitelerini aç' : 'Ürün kataloğunu düzenle'}
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </div>
                 ) : (
                   <div className="mt-3 space-y-3">
                     {topProducts.slice(0, 5).map((product) => (

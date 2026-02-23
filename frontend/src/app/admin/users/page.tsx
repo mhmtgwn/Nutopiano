@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 import api from '@/services/api';
 
-type UserRole = 'ADMIN' | 'STAFF' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF' | 'CUSTOMER';
 
 type UserRow = {
   id: number;
@@ -34,12 +34,14 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const roleLabel: Record<UserRole, string> = {
+  SUPER_ADMIN: 'Süper Admin',
   ADMIN: 'Admin',
+  SELLER: 'Satıcı',
   STAFF: 'Personel',
   CUSTOMER: 'Müşteri',
 };
 
-const roles: UserRole[] = ['CUSTOMER', 'STAFF', 'ADMIN'];
+const roles: UserRole[] = ['CUSTOMER', 'STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();

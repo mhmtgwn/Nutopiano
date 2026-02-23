@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import Button from '@/components/common/Button';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import api from '@/services/api';
+import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { isPosRoleAllowed } from '@/lib/role-routing';
 import {
   enqueuePosOrder,
   listQueuedPosOrders,
@@ -14,6 +16,15 @@ import {
   type PosOrderQueueItem,
   type PosOrderQueuePayload,
 } from '@/lib/offline/pos-order-queue';
+
+type ProfileResponse = {
+  userId: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  role: string;
+  businessId?: string | null;
+};
 
 type ReceiptSettings = {
   businessName: string;
@@ -38,13 +49,11 @@ type ReceiptRecord = {
 
 const RECEIPT_SETTINGS_KEY = 'pos_receipt_settings_v1';
 type BarcodeLookupResponse = {
-  type: 'PRODUCT' | 'VARIANT';
+  ok: boolean;
   productId: number;
-  variantId: number | null;
   name: string;
-  sku?: string | null;
   priceCents: number;
-  stock?: number | null;
+  variantId?: number | null;
 };
 type PosCustomerSummary = {
   id: number;
@@ -588,8 +597,86 @@ const buildA4InvoiceHtml = (invoice: PosInvoicePayload) => {
 
 export default function PosPage() {
   const router = useRouter();
-  const user = useAppSelector((state) => state.user.user);
+  const dispatch = useAppDispatch();
+  const { user, status } = useAppSelector((state) => state.user);
   const isAuthed = !!user;
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const isCheckingAccess = isLoadingProfile || status === 'authenticating';
+
+  useEffect(() => {
+    if (user) {
+      if (!isPosRoleAllowed(user.role)) {
+        router.replace('/');
+        toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
+      }
+      return;
+    }
+
+    const fetchProfile = async () => {
+      try {
+        setIsLoadingProfile(true);
+        dispatch(startAuth());
+
+        const response = await api.get<ProfileResponse>('/auth/profile');
+        const profile = response.data;
+
+        dispatch(
+          setCredentials({
+            user: {
+              id: profile.userId,
+              name: profile.name,
+              phone: profile.phone,
+              email: profile.email,
+              role: profile.role,
+              businessId: profile.businessId,
+            },
+            token: null,
+          }),
+        );
+
+        if (!isPosRoleAllowed(profile.role)) {
+          router.replace('/');
+          toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
+        }
+      } catch (error: unknown) {
+        const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');
+        dispatch(setAuthError(message));
+        dispatch(logout());
+
+        const loginUrl = new URL('/login', window.location.origin);
+        loginUrl.searchParams.set('next', '/pos');
+        router.replace(loginUrl.pathname + loginUrl.search);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user, dispatch, router]);
+
+  if (isCheckingAccess && !user) {
+    return (
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+            Yetki kontrol ediliyor...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !isPosRoleAllowed(user.role)) {
+    return (
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+            Yönlendiriliyor...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState('');

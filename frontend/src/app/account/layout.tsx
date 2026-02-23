@@ -1,14 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-
-const NAV_ITEMS = [
-  { href: '/account/orders', label: 'Siparişler' },
-  { href: '/account/addresses', label: 'Adresler' },
-  { href: '/account/favorites', label: 'Favoriler' },
-  { href: '/account/reviews', label: 'Yorumlar' },
-  { href: '/account/profile', label: 'Profil' },
-  { href: '/account/settings', label: 'Ayarlar' },
-] as const;
+import AccountNav from '@/components/account/AccountNav';
 
 export const metadata: Metadata = {
   title: 'Hesabım | Nutopiano',
@@ -25,17 +16,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
               Hesabım
             </p>
           </div>
-          <nav className="flex flex-col p-2">
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-[var(--radius-lg)] px-3 py-2 text-sm font-medium text-[var(--primary-800)] hover:bg-[var(--neutral-50)]"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <AccountNav />
         </aside>
 
         <section className="min-w-0">{children}</section>

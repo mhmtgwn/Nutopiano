@@ -460,7 +460,7 @@ export class OrdersService {
     currentUser: JwtPayload,
     params?: { source?: string; page?: number; pageSize?: number },
   ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -1384,7 +1384,11 @@ export class OrdersService {
     currentUser: JwtPayload,
     params?: { status?: string },
   ): Promise<ReturnRequestSummary[]> {
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'STAFF') {
+    if (
+      currentUser.role !== 'ADMIN' &&
+      currentUser.role !== 'SUPER_ADMIN' &&
+      currentUser.role !== 'STAFF'
+    ) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -1418,7 +1422,11 @@ export class OrdersService {
     requestId: number,
     payload: ResolveReturnRequestDto,
   ): Promise<ReturnRequestSummary> {
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'STAFF') {
+    if (
+      currentUser.role !== 'ADMIN' &&
+      currentUser.role !== 'SUPER_ADMIN' &&
+      currentUser.role !== 'STAFF'
+    ) {
       throw new ForbiddenException('Access denied');
     }
 

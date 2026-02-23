@@ -41,7 +41,7 @@ export class PlansService {
     }>;
     meta: PaginationMeta;
   }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -104,7 +104,7 @@ export class PlansService {
     createdAt: Date;
     updatedAt: Date;
   }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 
@@ -148,7 +148,7 @@ export class PlansService {
     createdAt: Date;
     updatedAt: Date;
   }> {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
 

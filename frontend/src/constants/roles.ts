@@ -83,6 +83,14 @@ export const ROLE_DEFINITIONS: Record<string, RoleDefinition> = {
     permissions: Object.keys(PERMISSIONS),
   },
 
+  ADMIN: {
+    name: 'ADMIN',
+    displayName: 'Admin',
+    description: 'İşletme yöneticisi',
+    level: 70,
+    permissions: Object.keys(PERMISSIONS),
+  },
+
   SELLER: {
     name: 'SELLER',
     displayName: 'Satıcı',
