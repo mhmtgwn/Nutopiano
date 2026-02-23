@@ -24,6 +24,7 @@ import { CloseRegisterSessionDto } from './dto/close-register-session.dto';
 import { PosReturnOrderDto } from './dto/pos-return-order.dto';
 import { ApplyCustomerBalanceDto } from './dto/apply-customer-balance.dto';
 import { ApplySplitPaymentsDto } from './dto/apply-split-payments.dto';
+import { CreatePosCustomerDto } from './dto/create-pos-customer.dto';
 import type { Response } from 'express';
 
 @ApiTags('pos')
@@ -148,6 +149,22 @@ export class PosController {
   })
   findCustomer(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.posService.findCustomerById(req.user, Number(id));
+  }
+
+  @Post('customers')
+  @ApiOperation({
+    summary: 'Create customer for POS',
+    description:
+      'Creates a POS customer in current business, or returns existing customer by phone.',
+  })
+  @ApiOkResponse({
+    description: 'Created or existing customer summary.',
+  })
+  createCustomer(
+    @Req() req: { user: JwtPayload },
+    @Body() payload: CreatePosCustomerDto,
+  ) {
+    return this.posService.createCustomer(req.user, payload);
   }
 
   @Get('reports/end-of-day')

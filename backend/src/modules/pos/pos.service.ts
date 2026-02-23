@@ -13,6 +13,7 @@ import { CloseRegisterSessionDto } from './dto/close-register-session.dto';
 import { PosReturnOrderDto } from './dto/pos-return-order.dto';
 import { ApplyCustomerBalanceDto } from './dto/apply-customer-balance.dto';
 import { ApplySplitPaymentsDto } from './dto/apply-split-payments.dto';
+import { CreatePosCustomerDto } from './dto/create-pos-customer.dto';
 
 type SalesBucketPeriod = 'day' | 'week' | 'month';
 
@@ -1541,6 +1542,110 @@ export class PosService {
       throw new NotFoundException('Customer not found');
     }
     return customer;
+  }
+
+  async createCustomer(currentUser: JwtPayload, payload: CreatePosCustomerDto) {
+    this.assertAllowedRole(currentUser);
+    const businessId = Number(currentUser.businessId);
+    const createdByUserId = Number(currentUser.userId);
+    const name = payload.name.trim();
+    const phone = payload.phone.trim();
+    const balance = payload.balance !== undefined ? Number(payload.balance) : 0;
+
+    if (!name) {
+      throw new BadRequestException('Musteri adi zorunlu');
+    }
+    if (!phone) {
+      throw new BadRequestException('Telefon zorunlu');
+    }
+
+    const existingActive = await this.prisma.customer.findFirst({
+      where: {
+        businessId,
+        phone,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        balance: true,
+      },
+    });
+    if (existingActive) {
+      return existingActive;
+    }
+
+    const existingDeleted = await this.prisma.customer.findFirst({
+      where: {
+        businessId,
+        phone,
+        deletedAt: { not: null },
+      },
+      select: {
+        id: true,
+      },
+    });
+    if (existingDeleted) {
+      return this.prisma.customer.update({
+        where: {
+          id: existingDeleted.id,
+        },
+        data: {
+          name,
+          balance: Number.isFinite(balance) ? Math.max(Math.trunc(balance), 0) : 0,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          balance: true,
+        },
+      });
+    }
+
+    try {
+      return await this.prisma.customer.create({
+        data: {
+          businessId,
+          createdByUserId,
+          name,
+          phone,
+          balance: Number.isFinite(balance) ? Math.max(Math.trunc(balance), 0) : 0,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          balance: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        (error as { code?: unknown }).code === 'P2002'
+      ) {
+        const conflict = await this.prisma.customer.findFirst({
+          where: {
+            businessId,
+            phone,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            balance: true,
+          },
+        });
+        if (conflict) {
+          return conflict;
+        }
+      }
+      throw error;
+    }
   }
 
   async applySplitPayments(

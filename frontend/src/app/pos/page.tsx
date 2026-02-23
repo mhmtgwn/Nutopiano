@@ -80,6 +80,7 @@ type PosCartDraftItem = {
   discountAmountCents?: number;
 };
 type PosQuickPaymentMethod = 'NONE' | 'CASH' | 'CARD';
+type PosCustomerMode = 'GUEST' | 'CUSTOMER';
 type PosPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 type PosSplitPaymentDraft = {
   method: PosPaymentMethod;
@@ -714,13 +715,20 @@ export default function PosPage() {
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PosProductSearchRow[]>([]);
   const [isSearchingProduct, setIsSearchingProduct] = useState(false);
+  const [isProductSearchModalOpen, setIsProductSearchModalOpen] = useState(false);
   const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
   const [quickPaymentMethod, setQuickPaymentMethod] = useState<PosQuickPaymentMethod>('NONE');
+  const [customerMode, setCustomerMode] = useState<PosCustomerMode>('GUEST');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerResults, setCustomerResults] = useState<PosCustomerSummary[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSummary | null>(null);
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [isCustomerSearchModalOpen, setIsCustomerSearchModalOpen] = useState(false);
+  const [isCustomerCreateModalOpen, setIsCustomerCreateModalOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [balanceApplyAmount, setBalanceApplyAmount] = useState('');
   const [isApplyingBalance, setIsApplyingBalance] = useState(false);
   const [lastOnlineOrderId, setLastOnlineOrderId] = useState<number | null>(null);
@@ -1110,6 +1118,7 @@ export default function PosPage() {
     void loadSalesReport();
   }, [isAuthed, loadSalesReport]);
 
+
   const queueCount = queueItems.length;
   const hasQueue = queueCount > 0;
   const splitTotalCents = useMemo(
@@ -1220,6 +1229,63 @@ export default function PosPage() {
     }
   };
 
+  const addProductToCart = useCallback(
+    (payload: {
+      productId: number;
+      variantId?: number | null;
+      name: string;
+      priceCents?: number;
+      sku?: string | null;
+      quantity?: number;
+    }) => {
+      const nextQuantity =
+        Number.isFinite(payload.quantity) && (payload.quantity ?? 0) > 0
+          ? Math.trunc(payload.quantity ?? 1)
+          : 1;
+      const nextItem: PosCartDraftItem = {
+        key: createIdempotencyKey('pos-item'),
+        productId: payload.productId,
+        variantId:
+          typeof payload.variantId === 'number' && payload.variantId > 0
+            ? payload.variantId
+            : null,
+        name: payload.name,
+        quantity: nextQuantity,
+        expectedUnitPriceCents:
+          Number.isFinite(payload.priceCents) && (payload.priceCents ?? 0) > 0
+            ? Math.trunc(payload.priceCents ?? 0)
+            : undefined,
+      };
+
+      setCartItems((prev) => {
+        const idx = prev.findIndex(
+          (row) =>
+            row.productId === nextItem.productId &&
+            row.variantId === nextItem.variantId &&
+            (row.expectedUnitPriceCents ?? null) ===
+              (nextItem.expectedUnitPriceCents ?? null) &&
+            (row.discountAmountCents ?? null) ===
+              (nextItem.discountAmountCents ?? null),
+        );
+        if (idx < 0) return [...prev, nextItem];
+        return prev.map((row, i) =>
+          i === idx ? { ...row, quantity: row.quantity + nextItem.quantity } : row,
+        );
+      });
+
+      setProductId(String(payload.productId));
+      setVariantId(nextItem.variantId);
+      if (typeof nextItem.expectedUnitPriceCents === 'number') {
+        setUnitPriceCents(String(nextItem.expectedUnitPriceCents));
+      }
+      setResolvedProductName(payload.name);
+      if (payload.sku) {
+        setBarcodeInput(payload.sku);
+      }
+    },
+    [],
+  );
+
   const lookupBarcode = useCallback(
     async (rawCode: string) => {
       const code = rawCode.trim();
@@ -1229,17 +1295,20 @@ export default function PosPage() {
           `/pos/products/barcode/${encodeURIComponent(code)}`,
         );
         const data = res.data;
-        setProductId(String(data.productId));
-        setVariantId(data.variantId ?? null);
-        setUnitPriceCents(String(data.priceCents));
-        setResolvedProductName(data.name);
-        setBarcodeInput(code);
-        toast.success(`Barkod cozuldu: ${data.name}`);
+        addProductToCart({
+          productId: data.productId,
+          variantId: data.variantId ?? null,
+          name: data.name,
+          priceCents: data.priceCents,
+          sku: code,
+          quantity: 1,
+        });
+        toast.success(`Urun sepete eklendi: ${data.name}`);
       } catch (error) {
         toast.error(resolveApiErrorMessage(error, 'Barkod eslesmedi.'));
       }
     },
-    [isAuthed],
+    [addProductToCart, isAuthed],
   );
 
   const searchProducts = useCallback(async () => {
@@ -1247,7 +1316,7 @@ export default function PosPage() {
     setIsSearchingProduct(true);
     try {
       const q = productQuery.trim();
-      const endpoint = `/pos/products/search?limit=12${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      const endpoint = `/pos/products/search?limit=20${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       const res = await api.get<PosProductSearchRow[]>(endpoint);
       setProductResults(res.data);
     } catch (error) {
@@ -1257,71 +1326,19 @@ export default function PosPage() {
     }
   }, [isAuthed, productQuery]);
 
-  const selectProduct = useCallback((product: PosProductSearchRow) => {
-    setProductId(String(product.productId));
-    setVariantId(product.variantId ?? null);
-    setUnitPriceCents(String(product.priceCents));
-    setResolvedProductName(product.name);
-    if (product.sku) {
-      setBarcodeInput(product.sku);
-    }
-  }, []);
-
-  const addCurrentProductToCart = useCallback(() => {
-    const parsedProductId = Number(productId);
-    const parsedQuantity = Number(quantity);
-    const parsedUnitPrice = Number(unitPriceCents);
-    const parsedLineDiscount = Number(itemDiscountCents);
-
-    if (!Number.isFinite(parsedProductId) || parsedProductId <= 0) {
-      toast.error('Sepete eklemek icin gecerli productId girin.');
-      return;
-    }
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      toast.error('Sepete eklemek icin gecerli adet girin.');
-      return;
-    }
-
-    const nextItem: PosCartDraftItem = {
-      key: createIdempotencyKey('pos-item'),
-      productId: parsedProductId,
-      variantId: typeof variantId === 'number' && variantId > 0 ? variantId : null,
-      name: resolvedProductName || `Urun #${parsedProductId}`,
-      quantity: Math.trunc(parsedQuantity),
-      expectedUnitPriceCents:
-        Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0
-          ? Math.trunc(parsedUnitPrice)
-          : undefined,
-      discountAmountCents:
-        Number.isFinite(parsedLineDiscount) && parsedLineDiscount > 0
-          ? Math.trunc(parsedLineDiscount)
-          : undefined,
-    };
-
-    setCartItems((prev) => {
-      const idx = prev.findIndex(
-        (row) =>
-          row.productId === nextItem.productId &&
-          row.variantId === nextItem.variantId &&
-          (row.expectedUnitPriceCents ?? null) === (nextItem.expectedUnitPriceCents ?? null) &&
-          (row.discountAmountCents ?? null) === (nextItem.discountAmountCents ?? null),
-      );
-      if (idx < 0) return [...prev, nextItem];
-      return prev.map((row, i) =>
-        i === idx ? { ...row, quantity: row.quantity + nextItem.quantity } : row,
-      );
-    });
-
-    setQuantity('1');
-    toast.success('Urun sepete eklendi.');
-  }, [
-    itemDiscountCents,
-    productId,
-    quantity,
-    resolvedProductName,
-    unitPriceCents,
-    variantId,
-  ]);
+  const selectProduct = useCallback(
+    (product: PosProductSearchRow) => {
+      addProductToCart({
+        productId: product.productId,
+        variantId: product.variantId ?? null,
+        name: product.name,
+        priceCents: product.priceCents,
+        sku: product.sku,
+        quantity: 1,
+      });
+    },
+    [addProductToCart],
+  );
 
   const removeCartItem = useCallback((key: string) => {
     setCartItems((prev) => prev.filter((row) => row.key !== key));
@@ -1357,7 +1374,52 @@ export default function PosPage() {
   const selectCustomer = useCallback((customer: PosCustomerSummary) => {
     setSelectedCustomer(customer);
     setCustomerId(String(customer.id));
+    setCustomerMode('CUSTOMER');
   }, []);
+
+  useEffect(() => {
+    if (!isAuthed || !isProductSearchModalOpen) return;
+    void searchProducts();
+  }, [isAuthed, isProductSearchModalOpen, searchProducts]);
+
+  useEffect(() => {
+    if (!isAuthed || !isCustomerSearchModalOpen) return;
+    void searchCustomers();
+  }, [isAuthed, isCustomerSearchModalOpen, searchCustomers]);
+
+  const createPosCustomer = useCallback(async () => {
+    if (!isAuthed) return;
+    const normalizedName = newCustomerName.trim();
+    const normalizedPhone = newCustomerPhone.trim();
+    if (!normalizedName) {
+      toast.error('Musteri adi zorunlu.');
+      return;
+    }
+    if (!normalizedPhone) {
+      toast.error('Telefon zorunlu.');
+      return;
+    }
+
+    setIsCreatingCustomer(true);
+    try {
+      const res = await api.post<PosCustomerSummary>('/pos/customers', {
+        name: normalizedName,
+        phone: normalizedPhone,
+      });
+      setSelectedCustomer(res.data);
+      setCustomerId(String(res.data.id));
+      setCustomerMode('CUSTOMER');
+      setIsCustomerCreateModalOpen(false);
+      setIsCustomerSearchModalOpen(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      toast.success(`Musteri secildi: #${res.data.id} ${res.data.name}`);
+    } catch (error) {
+      toast.error(resolveApiErrorMessage(error, 'Musteri olusturulamadi.'));
+    } finally {
+      setIsCreatingCustomer(false);
+    }
+  }, [isAuthed, newCustomerName, newCustomerPhone]);
 
   const applyCustomerBalance = useCallback(async () => {
     if (!lastOnlineOrderId) {
@@ -1482,14 +1544,23 @@ export default function PosPage() {
     if (!isAuthed) return;
     await ensureShiftSession();
 
-    const parsedCustomerId = selectedCustomer?.id ?? Number(customerId);
+    const parsedCustomerId =
+      customerMode === 'CUSTOMER' ? selectedCustomer?.id ?? Number(customerId) : undefined;
     const normalizedCustomerId =
-      Number.isFinite(parsedCustomerId) && parsedCustomerId > 0
+      customerMode === 'CUSTOMER' &&
+      typeof parsedCustomerId === 'number' &&
+      Number.isFinite(parsedCustomerId) &&
+      parsedCustomerId > 0
         ? Math.trunc(parsedCustomerId)
         : undefined;
     const parsedCartDiscountCents = Number(cartDiscountCents);
     const saleDraftItems: PosCartDraftItem[] =
       cartItems.length > 0 ? [...cartItems] : [];
+
+    if (customerMode === 'CUSTOMER' && typeof normalizedCustomerId !== 'number') {
+      toast.error('Musteri secin veya yeni musteri ekleyin.');
+      return;
+    }
 
     if (saleDraftItems.length === 0) {
       const parsedProductId = Number(productId);
@@ -1732,8 +1803,10 @@ export default function PosPage() {
       setVariantId(null);
       setResolvedProductName('');
       setBarcodeInput('');
-      setSelectedCustomer(null);
-      setCustomerId('');
+      if (customerMode === 'GUEST') {
+        setSelectedCustomer(null);
+        setCustomerId('');
+      }
       setCustomerResults([]);
       setSplitPayments(defaultSplitPaymentRows.map((line) => ({ ...line })));
       void loadInvoicePayload(data.id);
@@ -1830,116 +1903,45 @@ export default function PosPage() {
                 </p>
 
                 <div className="grid gap-3 md:grid-cols-12">
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-8">
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-9">
                     Barkod / SKU
                     <div className="flex gap-2">
                       <input
                         value={barcodeInput}
                         onChange={(e) => setBarcodeInput(e.target.value)}
-                        className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                        placeholder="Scanner ile okutun veya yazin"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-11 px-4 text-xs"
-                        onClick={() => void lookupBarcode(barcodeInput)}
-                      >
-                        Tara
-                      </Button>
-                    </div>
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-4">
-                    Adet
-                    <input
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="h-11 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                      placeholder="1"
-                      inputMode="numeric"
-                    />
-                    <div className="mt-1 flex gap-2">
-                      {[1, 2, 5].map((presetQty) => (
-                        <Button
-                          key={`quick-qty-${presetQty}`}
-                          type="button"
-                          variant="secondary"
-                          className="h-7 px-2 text-[11px]"
-                          onClick={() => setQuantity(String(presetQty))}
-                        >
-                          x{presetQty}
-                        </Button>
-                      ))}
-                    </div>
-                  </label>
-
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-8">
-                    Elle Urun Ara
-                    <div className="flex gap-2">
-                      <input
-                        value={productQuery}
-                        onChange={(e) => setProductQuery(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
-                            void searchProducts();
+                            void lookupBarcode(barcodeInput);
                           }
                         }}
                         className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                        placeholder="Urun adi / SKU / urun id"
+                        placeholder="Barkod okutun veya kod yazip Enter'a basin"
                       />
                       <Button
                         type="button"
                         variant="secondary"
                         className="h-11 px-4 text-xs"
-                        onClick={() => void searchProducts()}
-                        disabled={isSearchingProduct}
+                        onClick={() => setIsProductSearchModalOpen(true)}
                       >
-                        {isSearchingProduct ? 'Araniyor...' : 'Urun Ara'}
+                        Ara
                       </Button>
                     </div>
+                    <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
+                      Okutulan urun otomatik olarak sepete eklenir.
+                    </span>
                   </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-4">
-                    Product ID
-                    <input
-                      value={productId}
-                      onChange={(e) => setProductId(e.target.value)}
-                      className="h-11 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                      placeholder="10"
-                      inputMode="numeric"
-                    />
-                  </label>
-
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-8">
-                    Musteri Ara
-                    <div className="flex gap-2">
-                      <input
-                        value={customerQuery}
-                        onChange={(e) => setCustomerQuery(e.target.value)}
-                        className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                        placeholder="Ad / telefon / musteri id"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-11 px-4 text-xs"
-                        onClick={() => void searchCustomers()}
-                        disabled={isSearchingCustomer}
-                      >
-                        {isSearchingCustomer ? 'Araniyor...' : 'Ara'}
-                      </Button>
-                    </div>
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-4">
-                    Unit Price (kurus)
-                    <input
-                      value={unitPriceCents}
-                      onChange={(e) => setUnitPriceCents(e.target.value)}
-                      className="h-11 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                      placeholder="15000"
-                      inputMode="numeric"
-                    />
-                  </label>
+                  <div className="md:col-span-3 flex items-end">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-11 w-full px-3 text-xs"
+                      onClick={() => setCartItems([])}
+                      disabled={cartItems.length === 0}
+                    >
+                      Sepeti Temizle
+                    </Button>
+                  </div>
 
                   <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-6">
                     Kalem Iskonto (kurus)
@@ -1963,46 +1965,6 @@ export default function PosPage() {
                   </label>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {productResults.slice(0, 6).map((p) => (
-                    <button
-                      key={`quick-product-${p.type}-${p.variantId ?? p.productId}`}
-                      type="button"
-                      onClick={() => selectProduct(p)}
-                      className={`rounded-lg border px-3 py-1.5 text-left text-xs ${
-                        productId === String(p.productId) &&
-                        ((p.variantId ?? null) === variantId || (!variantId && !p.variantId))
-                          ? 'border-[#1A3C34] bg-[#EAF3F0] text-[#1A3C34]'
-                          : 'border-[#E5E5E0] bg-white text-[#1A3C34]'
-                      }`}
-                    >
-                      <p className="font-semibold">{p.name}</p>
-                      <p className="text-[11px]">
-                        {p.sku ? `${p.sku} • ` : ''}
-                        {formatMoney(p.priceCents)}
-                        {typeof p.stock === 'number' ? ` • Stok: ${p.stock}` : ''}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {customerResults.slice(0, 4).map((c) => (
-                    <button
-                      key={`quick-customer-${c.id}`}
-                      type="button"
-                      onClick={() => selectCustomer(c)}
-                      className={`rounded-full border px-3 py-1.5 text-xs ${
-                        selectedCustomer?.id === c.id
-                          ? 'border-[#1A3C34] bg-[#EAF3F0] text-[#1A3C34]'
-                          : 'border-[#E5E5E0] bg-white text-[#1A3C34]'
-                      }`}
-                    >
-                      #{c.id} {c.name}
-                    </button>
-                  ))}
-                </div>
-
                 <div className="rounded-xl border border-[#E5E5E0] bg-[#F9FBF8] px-3 py-2 text-sm text-[#1A3C34]">
                   <p>
                     <span className="font-semibold">Secili urun:</span>{' '}
@@ -2010,8 +1972,10 @@ export default function PosPage() {
                   </p>
                   <p className="mt-1">
                     <span className="font-semibold">Secili musteri:</span>{' '}
-                    {selectedCustomer
-                      ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                    {customerMode === 'CUSTOMER'
+                      ? selectedCustomer
+                        ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                        : 'Secilmedi'
                       : 'Misafir'}
                   </p>
                 </div>
@@ -2021,29 +1985,9 @@ export default function PosPage() {
                     type="button"
                     variant="secondary"
                     className="h-9 px-3 text-xs"
-                    onClick={addCurrentProductToCart}
+                    onClick={() => setIsProductSearchModalOpen(true)}
                   >
-                    Sepete Ekle
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-9 px-3 text-xs"
-                    onClick={() => setCartItems([])}
-                    disabled={cartItems.length === 0}
-                  >
-                    Sepeti Temizle
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-9 px-3 text-xs"
-                    onClick={() => {
-                      setSelectedCustomer(null);
-                      setCustomerId('');
-                    }}
-                  >
-                    Misafir Satis
+                    Urun Ara
                   </Button>
                 </div>
 
@@ -2150,6 +2094,68 @@ export default function PosPage() {
 
                 <div className="mt-4 grid gap-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                    Musteri
+                    <select
+                      value={customerMode}
+                      onChange={(e) => {
+                        const nextMode = e.target.value as PosCustomerMode;
+                        setCustomerMode(nextMode);
+                        if (nextMode === 'GUEST') {
+                          setSelectedCustomer(null);
+                          setCustomerId('');
+                        }
+                      }}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
+                    >
+                      <option value="GUEST">Misafir</option>
+                      <option value="CUSTOMER">Musteri sec</option>
+                    </select>
+                  </label>
+                  {customerMode === 'CUSTOMER' ? (
+                    <div className="rounded-lg border border-[#D9D9D3] bg-white px-3 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3 text-xs"
+                          onClick={() => setIsCustomerSearchModalOpen(true)}
+                        >
+                          Musteri Ara
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3 text-xs"
+                          onClick={() => setIsCustomerCreateModalOpen(true)}
+                        >
+                          Musteri Ekle
+                        </Button>
+                        {selectedCustomer ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-9 px-3 text-xs"
+                            onClick={() => {
+                              setSelectedCustomer(null);
+                              setCustomerId('');
+                            }}
+                          >
+                            Kaldir
+                          </Button>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-xs text-[#1A3C34]">
+                        {selectedCustomer
+                          ? `Secili: #${selectedCustomer.id} ${selectedCustomer.name} • ${selectedCustomer.phone}`
+                          : 'Henuz musteri secilmedi.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#1A3C34]/75">
+                      Misafir satis modu aktif.
+                    </p>
+                  )}
+                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
                     Tahsilat
                     <select
                       value={quickPaymentMethod}
@@ -2211,6 +2217,180 @@ export default function PosPage() {
                 <p className="mt-3 text-xs text-[#5C5C5C]">
                   Split odeme ve operasyonel raporlar asagidaki detayli panelde.
                 </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isAuthed && isProductSearchModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-3xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-[#1A3C34]">Urun Ara ve Sec</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 px-3 text-xs"
+                  onClick={() => setIsProductSearchModalOpen(false)}
+                >
+                  Bitti / Kapat
+                </Button>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void searchProducts();
+                    }
+                  }}
+                  className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
+                  placeholder="Urun adi / SKU / urun id"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 px-4 text-xs"
+                  onClick={() => void searchProducts()}
+                  disabled={isSearchingProduct}
+                >
+                  {isSearchingProduct ? 'Araniyor...' : 'Ara'}
+                </Button>
+              </div>
+              <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
+                {productResults.length === 0 ? (
+                  <p className="text-sm text-[#5C5C5C]">Urun bulunamadi.</p>
+                ) : (
+                  productResults.map((product) => (
+                    <button
+                      key={`picker-${product.type}-${product.variantId ?? product.productId}`}
+                      type="button"
+                      onClick={() => selectProduct(product)}
+                      className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
+                    >
+                      <p className="font-semibold">{product.name}</p>
+                      <p className="text-xs">
+                        {product.sku ? `${product.sku} • ` : ''}
+                        {formatMoney(product.priceCents)}
+                        {typeof product.stock === 'number' ? ` • Stok: ${product.stock}` : ''}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isAuthed && isCustomerSearchModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-2xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-[#1A3C34]">Musteri Ara</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 px-3 text-xs"
+                  onClick={() => setIsCustomerSearchModalOpen(false)}
+                >
+                  Kapat
+                </Button>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void searchCustomers();
+                    }
+                  }}
+                  className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
+                  placeholder="Ad / telefon / musteri id"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 px-4 text-xs"
+                  onClick={() => void searchCustomers()}
+                  disabled={isSearchingCustomer}
+                >
+                  {isSearchingCustomer ? 'Araniyor...' : 'Ara'}
+                </Button>
+              </div>
+              <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
+                {customerResults.length === 0 ? (
+                  <p className="text-sm text-[#5C5C5C]">Musteri bulunamadi.</p>
+                ) : (
+                  customerResults.map((customer) => (
+                    <button
+                      key={`customer-modal-${customer.id}`}
+                      type="button"
+                      onClick={() => {
+                        selectCustomer(customer);
+                        setCustomerMode('CUSTOMER');
+                        setIsCustomerSearchModalOpen(false);
+                      }}
+                      className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
+                    >
+                      <p className="font-semibold">
+                        #{customer.id} {customer.name}
+                      </p>
+                      <p className="text-xs">
+                        {customer.phone} • Bakiye: {formatMoney(customer.balance)}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isAuthed && isCustomerCreateModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-lg rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-[#1A3C34]">Yeni Musteri Ekle</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-9 px-3 text-xs"
+                  onClick={() => setIsCustomerCreateModalOpen(false)}
+                >
+                  Kapat
+                </Button>
+              </div>
+              <div className="mt-3 grid gap-3">
+                <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                  Ad Soyad
+                  <input
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                    placeholder="Musteri adi"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                  Telefon
+                  <input
+                    value={newCustomerPhone}
+                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                    placeholder="05xxxxxxxxx"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  className="h-10 w-full text-sm"
+                  onClick={() => void createPosCustomer()}
+                  disabled={isCreatingCustomer}
+                >
+                  {isCreatingCustomer ? 'Kaydediliyor...' : 'Kaydet ve Musteriyi Sec'}
+                </Button>
               </div>
             </div>
           </div>
@@ -2591,9 +2771,9 @@ export default function PosPage() {
                     type="button"
                     variant="secondary"
                     className="h-10 px-3"
-                    onClick={() => void lookupBarcode(barcodeInput)}
+                    onClick={() => setIsProductSearchModalOpen(true)}
                   >
-                    Tara
+                    Ara
                   </Button>
                 </div>
                 <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
@@ -2762,8 +2942,10 @@ export default function PosPage() {
               </div>
               <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
                 <span className="font-semibold">Secili musteri:</span>{' '}
-                {selectedCustomer
-                  ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                {customerMode === 'CUSTOMER'
+                  ? selectedCustomer
+                    ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                    : 'Secilmedi'
                   : 'Misafir'}
               </div>
               <div className="md:col-span-5 flex flex-wrap gap-2">
