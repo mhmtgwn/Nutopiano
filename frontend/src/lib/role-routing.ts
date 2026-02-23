@@ -32,11 +32,10 @@ export const isSellerPanelRole = (
 
 export const isPosRoleAllowed = (
   role?: string | null,
-): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF'> =>
+): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER'> =>
   role === 'SUPER_ADMIN' ||
   role === 'ADMIN' ||
-  role === 'SELLER' ||
-  role === 'STAFF';
+  role === 'SELLER';
 
 export const getPanelHomePathByRole = (role?: string | null): string => {
   switch (role) {

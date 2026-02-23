@@ -1,13 +1,30 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Headers, Query } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { ProductType, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 @Controller('dev')
 export class DevController {
   constructor(private readonly prisma: PrismaService) {}
 
+  private assertSeedAccess(apiKey?: string) {
+    const isProduction = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+    const allowInProduction = process.env.ALLOW_DEV_SEED_IN_PROD === 'true';
+
+    if (isProduction && !allowInProduction) {
+      throw new ForbiddenException('Dev seed endpoint is disabled in production');
+    }
+
+    const expectedKey = process.env.DEV_SEED_KEY?.trim();
+    if (expectedKey && apiKey !== expectedKey) {
+      throw new ForbiddenException('Invalid dev seed key');
+    }
+  }
+
   @Get('seed')
-  async seed() {
+  async seed(@Headers('x-dev-seed-key') headerKey?: string, @Query('key') queryKey?: string) {
+    this.assertSeedAccess(headerKey ?? queryKey);
+
     // 1) Business
     let business = await this.prisma.business.findFirst();
 
@@ -21,28 +38,77 @@ export class DevController {
 
     const businessId = business.id;
 
-    // 2) Admin user for login
-    const adminPhone = '5551112233';
+    // 2) Demo users for login
+    const demoPassword = 'password123';
+    const passwordHash = await bcrypt.hash(demoPassword, 12);
 
-    let admin = await this.prisma.user.findUnique({
-      where: { phone: adminPhone },
-    });
+    const demoUsers = [
+      {
+        role: Role.SUPER_ADMIN,
+        phone: '5550000001',
+        name: 'Demo Super Admin',
+      },
+      {
+        role: Role.ADMIN,
+        phone: '5551112233',
+        name: 'Demo Admin',
+      },
+      {
+        role: Role.SELLER,
+        phone: '5550000002',
+        name: 'Demo Seller',
+      },
+      {
+        role: Role.STAFF,
+        phone: '5550000003',
+        name: 'Demo Staff',
+      },
+      {
+        role: Role.CUSTOMER,
+        phone: '5550000004',
+        name: 'Demo Customer',
+      },
+    ] as const;
 
+    const createdOrUpdatedUsers = [] as Array<{
+      role: Role;
+      phone: string;
+      password: string;
+    }>;
+
+    for (const u of demoUsers) {
+      const existing = await this.prisma.user.findUnique({ where: { phone: u.phone } });
+      if (!existing) {
+        await this.prisma.user.create({
+          data: {
+            businessId,
+            name: u.name,
+            phone: u.phone,
+            passwordHash,
+            role: u.role,
+            isActive: true,
+          },
+        });
+      } else {
+        await this.prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            businessId,
+            name: u.name,
+            role: u.role,
+            isActive: true,
+            passwordHash,
+          },
+        });
+      }
+
+      createdOrUpdatedUsers.push({ role: u.role, phone: u.phone, password: demoPassword });
+    }
+
+    const adminPhone = demoUsers.find((u) => u.role === Role.ADMIN)?.phone ?? '5551112233';
+    const admin = await this.prisma.user.findUnique({ where: { phone: adminPhone } });
     if (!admin) {
-      admin = await this.prisma.user.create({
-        data: {
-          businessId,
-          name: 'Demo Admin',
-          phone: adminPhone,
-          role: Role.ADMIN,
-          isActive: true,
-        },
-      });
-    } else if (!admin.isActive) {
-      admin = await this.prisma.user.update({
-        where: { id: admin.id },
-        data: { isActive: true },
-      });
+      throw new Error('Seed failed: admin user could not be created');
     }
 
     // 3) Default order status + settings for orders
@@ -291,13 +357,13 @@ export class DevController {
     return {
       message: 'Seed completed',
       businessId,
-      adminPhone,
+      demoUsers: createdOrUpdatedUsers,
       customerId: customer.id,
       defaultStatusKey,
       totalProducts,
       createdProductsCount,
       updatedProductsCount,
-      note: 'Giriş için bu telefonu kullanın: 5551112233 (şifre yok, sadece telefon). Checkout için müşteri ID: customerId.',
+      note: 'Giriş için demo kullanıcılar demoUsers alanında. Hepsinin şifresi: password123. Checkout için müşteri ID: customerId.',
     };
   }
 }

@@ -25,7 +25,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
-import { getPanelLabelByRole } from '@/lib/role-routing';
+import { getPanelLabelByRole, isPosRoleAllowed } from '@/lib/role-routing';
 
 export default function Header() {
   const router = useRouter();
@@ -59,6 +59,9 @@ export default function Header() {
           { href: '/platform/sellers', label: 'Satıcılar', icon: Store },
           { href: '/platform/plans', label: 'Planlar', icon: CreditCard },
           { href: '/platform/orders', label: 'Siparişler', icon: ClipboardList },
+          ...(isPosRoleAllowed(user?.role)
+            ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }]
+            : []),
         ];
       case 'ADMIN':
         return [
@@ -66,6 +69,9 @@ export default function Header() {
           { href: '/admin/products', label: 'Ürünler', icon: Package },
           { href: '/admin/customers', label: 'Müşteriler', icon: User },
           { href: '/admin/finance', label: 'Finans', icon: CreditCard },
+          ...(isPosRoleAllowed(user?.role)
+            ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }]
+            : []),
         ];
       case 'SELLER':
         return [
