@@ -38,7 +38,7 @@ interface AdminGuardProps {
 }
 
 const isAdminRole = (role?: string) =>
-  role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SELLER' || role === 'STAFF';
+  role === 'ADMIN' || role === 'SUPER_ADMIN';
 
 export default function AdminGuard({ children }: AdminGuardProps) {
   const router = useRouter();

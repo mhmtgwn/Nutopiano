@@ -5,6 +5,7 @@ const ACCESS_COOKIE = 'nutopiano_access';
 
 const isProtectedPath = (pathname: string) => {
   if (pathname.startsWith('/account')) return true;
+  if (pathname.startsWith('/admin')) return true;
   if (pathname.startsWith('/platform')) return true;
   if (pathname.startsWith('/seller')) return true;
   if (pathname.startsWith('/dashboard')) return true;
@@ -32,5 +33,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/account/:path*', '/platform/:path*', '/seller/:path*', '/dashboard/:path*', '/pos/:path*'],
+  matcher: ['/account/:path*', '/admin/:path*', '/platform/:path*', '/seller/:path*', '/dashboard/:path*', '/pos/:path*'],
 };
