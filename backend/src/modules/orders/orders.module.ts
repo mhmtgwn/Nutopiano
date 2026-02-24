@@ -6,9 +6,16 @@ import { OrderStatusModule } from '../order-status/order-status.module';
 import { SettingsModule } from '../settings/settings.module';
 import { FinanceModule } from '../finance/finance.module';
 import { EmailModule } from '../../email/email.module';
+import { CommerceModule } from '../../core/commerce';
 
 @Module({
-  imports: [OrderStatusModule, SettingsModule, FinanceModule, EmailModule],
+  imports: [
+    OrderStatusModule,
+    SettingsModule,
+    FinanceModule,
+    EmailModule,
+    CommerceModule,
+  ],
   controllers: [OrdersController, PlatformOrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

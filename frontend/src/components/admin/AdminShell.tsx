@@ -87,10 +87,45 @@ const createNavSections = (basePath: string): NavSection[] => {
         { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
         { label: 'Kapıya Hizmet', href: `${basePath}/services`, icon: Truck },
         { label: 'Ödeme Ayarları', href: `${basePath}/payments`, icon: CreditCard },
+      ],
+    },
+    {
+      title: 'Finance',
+      items: [
         {
-          label: 'Finans',
+          label: 'Overview',
           href: `${basePath}/finance`,
           icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+        {
+          label: 'Ledger',
+          href: `${basePath}/finance/ledger`,
+          icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+        {
+          label: 'Wallets',
+          href: `${basePath}/finance/wallets`,
+          icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+        {
+          label: 'Payouts',
+          href: `${basePath}/finance/payouts`,
+          icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+        {
+          label: 'Refunds',
+          href: `${basePath}/finance/refunds`,
+          icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+        {
+          label: 'Mismatch Monitor',
+          href: `${basePath}/finance/mismatch-monitor`,
+          icon: AlertTriangle,
           requiredCapabilities: ['VIEW_FINANCE'],
         },
       ],

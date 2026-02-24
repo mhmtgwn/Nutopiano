@@ -12,11 +12,14 @@ import { FinanceService } from '../finance/finance.service';
 import { EmailService } from '../../email/email.service';
 import { OUTBOX_EVENT_TYPES } from '../outbox/outbox.constants';
 import { OutboxService } from '../outbox/outbox.service';
+import { LedgerPostingService } from '../../core/commerce';
+import { CalculationVersionSeed } from '../../core/commerce/contracts';
+import { buildCalculationVersion } from '../../core/commerce/engine';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaymentMode } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { OrderSource, Prisma } from '@prisma/client';
+import { CommerceChannel, OrderSource, Prisma } from '@prisma/client';
 import {
   ResolveReturnRequestAction,
   ResolveReturnRequestDto,
@@ -32,14 +35,53 @@ import {
 export interface OrderSummary {
   id: number;
   customerId: number;
+  sellerId?: number | null;
   totalAmountCents: number;
+  currency?: string;
+  commissionAmountCents?: number;
+  sellerNetAmountCents?: number;
+  priceMismatch?: boolean;
   statusKey: string;
   source: OrderSource;
   createdByUserId: number;
   createdAt: Date;
 }
 
+export interface OrderLedgerEntrySummary {
+  id: number;
+  eventId: string;
+  eventType: string;
+  accountType: string;
+  direction: string;
+  amountCents: number;
+  currency: string;
+  orderId?: number | null;
+  sellerId?: number | null;
+  payoutRequestId?: number | null;
+  metadata?: unknown;
+  createdAt: Date;
+}
+
+export interface OrderAuditLogSummary {
+  id: number;
+  actorRole: string;
+  actorUserId: number;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  payloadJson?: unknown;
+  createdAt: Date;
+}
+
 export interface OrderDetail extends OrderSummary {
+  subtotalAmountCents?: number;
+  discountAmountCents?: number;
+  taxAmountCents?: number;
+  platformRevenueCents?: number;
+  calculationProfileId?: string | null;
+  calculationVersion?: string | null;
+  breakdownJson?: unknown;
+  priceMismatchMetaJson?: unknown;
   notes?: string | null;
   shipmentCarrier?: string | null;
   shipmentTrackingNumber?: string | null;
@@ -52,7 +94,10 @@ export interface OrderDetail extends OrderSummary {
     unitPriceCents: number;
     totalAmountCents: number;
   }>;
+  ledgerEntries?: OrderLedgerEntrySummary[];
+  auditLogs?: OrderAuditLogSummary[];
   creditLimitWarned?: boolean;
+  priceMismatch?: boolean;
 }
 
 export interface PaymentSummary {
@@ -76,6 +121,8 @@ export interface ReturnRequestSummary {
 }
 
 const ORDER_DEFAULT_STATUS_KEY = 'order.defaultStatusKey';
+const COMMISSION_RATE_KEY = 'global_commission_rate';
+const ORDER_CREATE_OPERATION = 'ORDER_CREATE';
 const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['IN_PROGRESS', 'PAID', 'COMPLETED', 'CANCELLED'],
@@ -95,6 +142,16 @@ type VariantRow = {
   name: string;
 };
 type OrderItemStockLine = { productId: number; variantId?: number | null; quantity: number };
+type ResolvedOrderRuleConfig = {
+  calculationProfileId: string;
+  taxProfileCode: string;
+  commissionProfileCode: string;
+  commissionPolicy: {
+    type: 'PERCENT' | 'FIXED';
+    value: number;
+  };
+  source: 'CHANNEL_BINDING' | 'FALLBACK_GLOBAL_RATE';
+};
 const POS_GUEST_CUSTOMER_PHONE = '9999999999';
 const POS_GUEST_CUSTOMER_NAME = 'POS Misafir';
 
@@ -106,6 +163,7 @@ export class OrdersService {
     private readonly financeService: FinanceService,
     private readonly emailService: EmailService,
     private readonly outboxService: OutboxService,
+    private readonly ledgerPostingService: LedgerPostingService,
   ) {}
 
   private aggregateStockLines(lines: OrderItemStockLine[]) {
@@ -128,6 +186,117 @@ export class OrdersService {
     return { byProduct, byVariant };
   }
 
+  private mapOrderSummaryRow(row: {
+    id: number;
+    customerId: number;
+    sellerId: number | null;
+    totalAmountCents: number;
+    currency: string;
+    commissionSnapshotCents: number;
+    sellerPayoutCents: number;
+    priceMismatch: boolean;
+    source: OrderSource;
+    createdByUserId: number;
+    createdAt: Date;
+    status: {
+      key: string;
+    };
+  }): OrderSummary {
+    return {
+      id: row.id,
+      customerId: row.customerId,
+      sellerId: row.sellerId,
+      totalAmountCents: row.totalAmountCents,
+      currency: row.currency,
+      commissionAmountCents: row.commissionSnapshotCents,
+      sellerNetAmountCents: row.sellerPayoutCents,
+      priceMismatch: Boolean(row.priceMismatch),
+      statusKey: row.status.key,
+      source: row.source,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt,
+    };
+  }
+
+  private async listOrderLedgerEntries(params: {
+    businessId: number;
+    orderId: number;
+  }): Promise<OrderLedgerEntrySummary[]> {
+    const rows = await this.prisma.financeLedgerEntry.findMany({
+      where: {
+        businessId: params.businessId,
+        orderId: params.orderId,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        eventId: true,
+        eventType: true,
+        accountType: true,
+        direction: true,
+        amountCents: true,
+        currency: true,
+        orderId: true,
+        sellerId: true,
+        payoutRequestId: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      eventId: row.eventId,
+      eventType: row.eventType,
+      accountType: row.accountType,
+      direction: row.direction,
+      amountCents: row.amountCents,
+      currency: row.currency,
+      orderId: row.orderId,
+      sellerId: row.sellerId,
+      payoutRequestId: row.payoutRequestId,
+      metadata: row.metadata ?? undefined,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  private async listOrderAuditLogs(params: {
+    businessId: number;
+    orderId: number;
+  }): Promise<OrderAuditLogSummary[]> {
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        businessId: params.businessId,
+        targetId: String(params.orderId),
+        targetType: {
+          in: ['ORDER', 'ORDER_STATUS', 'ORDER_PAYMENT', 'RETURN_REQUEST'],
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        actorRole: true,
+        actorUserId: true,
+        actionType: true,
+        targetType: true,
+        targetId: true,
+        payloadJson: true,
+        createdAt: true,
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      actorRole: row.actorRole,
+      actorUserId: row.actorUserId,
+      actionType: row.actionType,
+      targetType: row.targetType,
+      targetId: row.targetId,
+      payloadJson: row.payloadJson ?? undefined,
+      createdAt: row.createdAt,
+    }));
+  }
+
   private normalizeIdempotencyKey(rawKey?: string): string | null {
     if (!rawKey || typeof rawKey !== 'string') {
       return null;
@@ -145,6 +314,18 @@ export class OrdersService {
     }
 
     return normalized;
+  }
+
+  private mapOrderSourceToCommerceChannel(source: OrderSource): CommerceChannel {
+    if (source === OrderSource.POS) {
+      return CommerceChannel.POS;
+    }
+
+    if (source === OrderSource.WEB || source === OrderSource.MOBILE) {
+      return CommerceChannel.MARKETPLACE;
+    }
+
+    return CommerceChannel.MANUAL;
   }
 
   private buildOrderCreateIdempotencyHash(
@@ -194,6 +375,98 @@ export class OrdersService {
 
     const maybeCode = (error as { code?: unknown }).code;
     return typeof maybeCode === 'string' && maybeCode === 'P2002';
+  }
+
+  private async getCommissionRateForOrderCreate(
+    businessId: number,
+  ): Promise<number> {
+    const rate = await this.settingsService.getJson<number>(
+      businessId,
+      COMMISSION_RATE_KEY,
+    );
+
+    if (typeof rate !== 'number' || Number.isNaN(rate) || rate < 0) {
+      return 0.05;
+    }
+
+    return rate;
+  }
+
+  private async resolveOrderRuleConfig(params: {
+    businessId: number;
+    sellerId?: number | null;
+    source: OrderSource;
+    fallbackCommissionRateBps: number;
+  }): Promise<ResolvedOrderRuleConfig> {
+    const fallback: ResolvedOrderRuleConfig = {
+      calculationProfileId: 'legacy-default',
+      taxProfileCode: 'TR_DEFAULT',
+      commissionProfileCode: 'LEGACY_GLOBAL_RATE',
+      commissionPolicy: {
+        type: 'PERCENT',
+        value: Math.max(Math.trunc(params.fallbackCommissionRateBps), 0),
+      },
+      source: 'FALLBACK_GLOBAL_RATE',
+    };
+
+    const sellerId =
+      typeof params.sellerId === 'number' && Number.isFinite(params.sellerId)
+        ? Math.trunc(params.sellerId)
+        : null;
+    if (!sellerId) {
+      return fallback;
+    }
+
+    const binding = await this.prisma.sellerChannelRuleBinding.findFirst({
+      where: {
+        businessId: params.businessId,
+        sellerId,
+        channel: this.mapOrderSourceToCommerceChannel(params.source),
+        isActive: true,
+        calculationProfile: {
+          isActive: true,
+        },
+      },
+      include: {
+        calculationProfile: {
+          include: {
+            commissionRule: true,
+          },
+        },
+      },
+    });
+
+    if (!binding) {
+      return fallback;
+    }
+
+    const profile = binding.calculationProfile;
+    const rule = profile.commissionRule;
+    const commissionPolicy =
+      rule?.type === 'FIXED'
+        ? {
+            type: 'FIXED' as const,
+            value: Math.max(Math.trunc(Number(rule.fixedAmountCents ?? 0)), 0),
+          }
+        : {
+            type: 'PERCENT' as const,
+            value: Math.max(
+              Math.trunc(
+                Number(
+                  rule?.rateBps ?? params.fallbackCommissionRateBps ?? 0,
+                ),
+              ),
+              0,
+            ),
+          };
+
+    return {
+      calculationProfileId: profile.code,
+      taxProfileCode: profile.taxProfileCode || 'TR_DEFAULT',
+      commissionProfileCode: profile.code,
+      commissionPolicy,
+      source: 'CHANNEL_BINDING',
+    };
   }
 
   private async resolveOrderEmailRecipient(
@@ -828,7 +1101,12 @@ export class OrdersService {
         select: {
           id: true,
           customerId: true,
+          sellerId: true,
           totalAmountCents: true,
+          currency: true,
+          commissionSnapshotCents: true,
+          sellerPayoutCents: true,
+          priceMismatch: true,
           source: true,
           createdByUserId: true,
           createdAt: true,
@@ -846,15 +1124,7 @@ export class OrdersService {
       });
 
       return {
-        data: orders.map((o) => ({
-          id: o.id,
-          customerId: o.customerId,
-          totalAmountCents: o.totalAmountCents,
-          statusKey: o.status.key,
-          source: o.source,
-          createdByUserId: o.createdByUserId,
-          createdAt: o.createdAt,
-        })),
+        data: orders.map((o) => this.mapOrderSummaryRow(o)),
         meta,
       };
     }
@@ -882,7 +1152,12 @@ export class OrdersService {
       select: {
         id: true,
         customerId: true,
+        sellerId: true,
         totalAmountCents: true,
+        currency: true,
+        commissionSnapshotCents: true,
+        sellerPayoutCents: true,
+        priceMismatch: true,
         source: true,
         createdByUserId: true,
         createdAt: true,
@@ -900,15 +1175,7 @@ export class OrdersService {
     });
 
     return {
-      data: orders.map((o) => ({
-        id: o.id,
-        customerId: o.customerId,
-        totalAmountCents: o.totalAmountCents,
-        statusKey: o.status.key,
-        source: o.source,
-        createdByUserId: o.createdByUserId,
-        createdAt: o.createdAt,
-      })),
+      data: orders.map((o) => this.mapOrderSummaryRow(o)),
       meta,
     };
   }
@@ -948,7 +1215,12 @@ export class OrdersService {
       select: {
         id: true,
         customerId: true,
+        sellerId: true,
         totalAmountCents: true,
+        currency: true,
+        commissionSnapshotCents: true,
+        sellerPayoutCents: true,
+        priceMismatch: true,
         source: true,
         createdByUserId: true,
         createdAt: true,
@@ -966,15 +1238,7 @@ export class OrdersService {
     });
 
     return {
-      data: orders.map((o) => ({
-        id: o.id,
-        customerId: o.customerId,
-        totalAmountCents: o.totalAmountCents,
-        statusKey: o.status.key,
-        source: o.source,
-        createdByUserId: o.createdByUserId,
-        createdAt: o.createdAt,
-      })),
+      data: orders.map((o) => this.mapOrderSummaryRow(o)),
       meta,
     };
   }
@@ -987,6 +1251,8 @@ export class OrdersService {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
     const source: OrderSource = payload.source ?? OrderSource.POS;
+    const idempotencyOperation = ORDER_CREATE_OPERATION;
+    const idempotencyChannel = this.mapOrderSourceToCommerceChannel(source);
     const normalizedIdempotencyKey =
       this.normalizeIdempotencyKey(idempotencyKeyHeader);
     const idempotencyHash = normalizedIdempotencyKey
@@ -997,6 +1263,8 @@ export class OrdersService {
       const existingOrder = await this.prisma.order.findFirst({
         where: {
           businessId,
+          idempotencyOperation,
+          idempotencyChannel,
           idempotencyKey: normalizedIdempotencyKey,
         },
         select: {
@@ -1055,6 +1323,18 @@ export class OrdersService {
     if (!status) {
       throw new NotFoundException('Default order status not configured');
     }
+
+    const commissionRate = await this.getCommissionRateForOrderCreate(businessId);
+    const commissionRateBps = Math.max(
+      0,
+      Math.round(commissionRate * 10_000),
+    );
+    const resolvedRuleConfig = await this.resolveOrderRuleConfig({
+      businessId,
+      sellerId,
+      source,
+      fallbackCommissionRateBps: commissionRateBps,
+    });
 
     if (!payload.items || payload.items.length === 0) {
       throw new NotFoundException('Order items are required');
@@ -1187,6 +1467,7 @@ export class OrdersService {
         notes?: string | null;
         shipmentCarrier?: string | null;
         shipmentTrackingNumber?: string | null;
+        priceMismatch?: boolean;
       };
       items: OrderDetail['items'];
       creditLimitWarned?: boolean;
@@ -1238,6 +1519,14 @@ export class OrdersService {
         variantsLocked.map((v) => [v.id, v]),
       );
 
+      const priceMismatches: Array<{
+        productId: number;
+        variantId: number | null;
+        expectedUnitPriceCents: number;
+        actualUnitPriceCents: number;
+        deltaCents: number;
+      }> = [];
+
       // Validate stock again inside transaction with locked rows
       for (const item of payload.items) {
         const product = productMapLocked.get(item.productId);
@@ -1269,9 +1558,19 @@ export class OrdersService {
             typeof item.expectedUnitPriceCents === 'number' &&
             item.expectedUnitPriceCents !== variant.priceCents
           ) {
-            throw new BadRequestException(
-              `Sepetteki fiyat güncellendi: "${product.name} / ${variant.name}". Lütfen sepeti yenileyin.`,
-            );
+            if (source === OrderSource.POS) {
+              priceMismatches.push({
+                productId: item.productId,
+                variantId: variant.id,
+                expectedUnitPriceCents: item.expectedUnitPriceCents,
+                actualUnitPriceCents: variant.priceCents,
+                deltaCents: variant.priceCents - item.expectedUnitPriceCents,
+              });
+            } else {
+              throw new BadRequestException(
+                `Sepetteki fiyat güncellendi: "${product.name} / ${variant.name}". Lütfen sepeti yenileyin.`,
+              );
+            }
           }
         } else {
           if (
@@ -1287,12 +1586,32 @@ export class OrdersService {
             typeof item.expectedUnitPriceCents === 'number' &&
             item.expectedUnitPriceCents !== product.priceCents
           ) {
-            throw new BadRequestException(
-              `Sepetteki fiyat güncellendi: "${product.name}". Lütfen sepeti yenileyin.`,
-            );
+            if (source === OrderSource.POS) {
+              priceMismatches.push({
+                productId: item.productId,
+                variantId: null,
+                expectedUnitPriceCents: item.expectedUnitPriceCents,
+                actualUnitPriceCents: product.priceCents,
+                deltaCents: product.priceCents - item.expectedUnitPriceCents,
+              });
+            } else {
+              throw new BadRequestException(
+                `Sepetteki fiyat güncellendi: "${product.name}". Lütfen sepeti yenileyin.`,
+              );
+            }
           }
         }
       }
+
+      const hasPriceMismatch = priceMismatches.length > 0;
+      const priceMismatchMetaJson: Prisma.InputJsonValue | undefined =
+        hasPriceMismatch
+          ? ({
+              policy: 'ACCEPT_AND_FLAG',
+              channel: source,
+              items: priceMismatches,
+            } as Prisma.InputJsonValue)
+          : undefined;
 
       let totalAmountCents = 0;
       let subtotalAmountCents = 0;
@@ -1394,8 +1713,8 @@ export class OrdersService {
       }
 
       let couponToConsume: { id: number; code: string } | null = null;
+      let couponDiscountAmountCents = 0;
       if (normalizedCouponCode) {
-        let couponDiscountAmountCents = 0;
         const rows = await tx.$queryRaw<
           Array<{
             id: number;
@@ -1477,6 +1796,86 @@ export class OrdersService {
         Math.trunc(Number(payload.shippingCostCents ?? 0)),
         0,
       );
+      const commissionSnapshotCents = Math.max(
+        0,
+        resolvedRuleConfig.commissionPolicy.type === 'FIXED'
+          ? Math.min(resolvedRuleConfig.commissionPolicy.value, totalAmountCents)
+          : Math.round(
+              (totalAmountCents * resolvedRuleConfig.commissionPolicy.value) /
+                10_000,
+            ),
+      );
+      const platformRevenueCents = commissionSnapshotCents;
+      const sellerPayoutCents = Math.max(
+        totalAmountCents - platformRevenueCents,
+        0,
+      );
+      const calculationSeed: CalculationVersionSeed = {
+        stepOrder: [
+          'pricing',
+          'discount',
+          'tax',
+          'commission',
+          'delivery',
+          'rounding',
+          'finalize',
+        ],
+        ruleProfileId: resolvedRuleConfig.calculationProfileId,
+        commissionRuleSnapshot: resolvedRuleConfig.commissionPolicy,
+        taxProfile: {
+          inclusive: false,
+          code: resolvedRuleConfig.taxProfileCode,
+          rates: [taxRateBps],
+        },
+        roundingPolicy: 'HALF_UP',
+        discountRules: {
+          lineDiscountTotalCents: lineDiscountAmountCents,
+          cartDiscountAmountCents,
+          couponDiscountAmountCents,
+          couponCode: couponToConsume?.code ?? null,
+        },
+      };
+      const calculationVersion = buildCalculationVersion(calculationSeed);
+      const breakdownJson = {
+        source: 'legacy-order-create',
+        pricing: {
+          subtotalAmountCents,
+          shippingCostCents,
+        },
+        discount: {
+          lineDiscountAmountCents,
+          cartDiscountAmountCents,
+          couponDiscountAmountCents,
+          discountAmountCents,
+        },
+        tax: {
+          taxRateBps,
+          taxAmountCents,
+        },
+        commission: {
+          policyType: resolvedRuleConfig.commissionPolicy.type,
+          policyValue: resolvedRuleConfig.commissionPolicy.value,
+          rate:
+            resolvedRuleConfig.commissionPolicy.type === 'PERCENT'
+              ? resolvedRuleConfig.commissionPolicy.value / 10_000
+              : null,
+          commissionSnapshotCents,
+        },
+        payout: {
+          platformRevenueCents,
+          sellerPayoutCents,
+        },
+        ruleResolution: {
+          source: resolvedRuleConfig.source,
+          calculationProfileId: resolvedRuleConfig.calculationProfileId,
+          commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
+          taxProfileCode: resolvedRuleConfig.taxProfileCode,
+        },
+        calculationVersionSeed: calculationSeed as unknown as Record<
+          string,
+          unknown
+        >,
+      };
 
       const order = await (tx as any).order.create({
         data: {
@@ -1492,9 +1891,27 @@ export class OrdersService {
           couponCode: couponToConsume?.code ?? null,
           totalAmountCents,
           shippingCostCents,
+          commissionSnapshotCents,
+          platformRevenueCents,
+          sellerPayoutCents,
+          currency: 'TRY',
+          calculationProfileId: resolvedRuleConfig.calculationProfileId,
+          calculationVersion,
+          breakdownJson: breakdownJson as Prisma.InputJsonValue,
+          priceMismatch: hasPriceMismatch,
+          priceMismatchMetaJson,
+          countryCode: 'TR',
+          taxProfileCode: resolvedRuleConfig.taxProfileCode,
+          commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
           source,
           notes: payload.notes ?? null,
           idempotencyKey: normalizedIdempotencyKey,
+          idempotencyOperation: normalizedIdempotencyKey
+            ? idempotencyOperation
+            : null,
+          idempotencyChannel: normalizedIdempotencyKey
+            ? idempotencyChannel
+            : null,
           idempotencyHash,
         },
         select: {
@@ -1507,6 +1924,7 @@ export class OrdersService {
           notes: true,
           shipmentCarrier: true,
           shipmentTrackingNumber: true,
+          priceMismatch: true,
         },
       });
 
@@ -1533,6 +1951,24 @@ export class OrdersService {
           data: { usedCount: { increment: 1 } },
         });
       }
+
+      await this.ledgerPostingService.postOrderSaleSnapshot(
+        {
+          businessId,
+          orderId: order.id,
+          sellerId: sellerId ?? null,
+          currency: 'TRY',
+          totalAmountCents: order.totalAmountCents,
+          sellerPayoutCents,
+          platformRevenueCents,
+          metadata: {
+            source,
+            calculationVersion,
+            calculationProfileId: resolvedRuleConfig.calculationProfileId,
+          },
+        },
+        tx,
+      );
 
       let creditLimitWarned = false;
       if (isCreditPosSale && typeof sellerId === 'number') {
@@ -1612,6 +2048,8 @@ export class OrdersService {
         const existingOrder = await this.prisma.order.findFirst({
           where: {
             businessId,
+            idempotencyOperation,
+            idempotencyChannel,
             idempotencyKey: normalizedIdempotencyKey,
           },
           select: {
@@ -1645,11 +2083,14 @@ export class OrdersService {
       source,
       createdByUserId: result.order.createdByUserId,
       createdAt: result.order.createdAt,
+      sellerId: sellerId ?? null,
+      currency: 'TRY',
       notes: result.order.notes ?? undefined,
       shipmentCarrier: result.order.shipmentCarrier ?? undefined,
       shipmentTrackingNumber: result.order.shipmentTrackingNumber ?? undefined,
       items: result.items,
       creditLimitWarned: Boolean(result.creditLimitWarned),
+      priceMismatch: Boolean(result.order.priceMismatch),
     };
 
     void this.sendOrderCreatedNotification(
@@ -1669,12 +2110,15 @@ export class OrdersService {
         customerId: createdOrderDetail.customerId,
         sellerId: sellerId ?? null,
         totalAmountCents: createdOrderDetail.totalAmountCents,
+        priceMismatch: Boolean(createdOrderDetail.priceMismatch),
         source: createdOrderDetail.source,
         createdByUserId: createdOrderDetail.createdByUserId,
       },
     });
 
-    return createdOrderDetail;
+    const hydratedOrder = await this.findOne(currentUser, createdOrderDetail.id);
+    hydratedOrder.creditLimitWarned = Boolean(result.creditLimitWarned);
+    return hydratedOrder;
   }
 
   async findAll(currentUser: JwtPayload): Promise<OrderSummary[]> {
@@ -1695,7 +2139,12 @@ export class OrdersService {
         select: {
           id: true,
           customerId: true,
+          sellerId: true,
           totalAmountCents: true,
+          currency: true,
+          commissionSnapshotCents: true,
+          sellerPayoutCents: true,
+          priceMismatch: true,
           source: true,
           createdByUserId: true,
           createdAt: true,
@@ -1710,15 +2159,7 @@ export class OrdersService {
         },
       });
 
-      return orders.map((o) => ({
-        id: o.id,
-        customerId: o.customerId,
-        totalAmountCents: o.totalAmountCents,
-        statusKey: o.status.key,
-        source: o.source,
-        createdByUserId: o.createdByUserId,
-        createdAt: o.createdAt,
-      }));
+      return orders.map((o) => this.mapOrderSummaryRow(o));
     }
 
     const where = await this.buildOrderReadScopeWhere(currentUser);
@@ -1728,7 +2169,12 @@ export class OrdersService {
       select: {
         id: true,
         customerId: true,
+        sellerId: true,
         totalAmountCents: true,
+        currency: true,
+        commissionSnapshotCents: true,
+        sellerPayoutCents: true,
+        priceMismatch: true,
         source: true,
         createdByUserId: true,
         createdAt: true,
@@ -1743,15 +2189,7 @@ export class OrdersService {
       },
     });
 
-    return orders.map((o) => ({
-      id: o.id,
-      customerId: o.customerId,
-      totalAmountCents: o.totalAmountCents,
-      statusKey: o.status.key,
-      source: o.source,
-      createdByUserId: o.createdByUserId,
-      createdAt: o.createdAt,
-    }));
+    return orders.map((o) => this.mapOrderSummaryRow(o));
   }
 
   private async findAccessibleOrder(currentUser: JwtPayload, id: number) {
@@ -1851,36 +2289,6 @@ export class OrdersService {
       include: { status: true },
     });
 
-    const items = await (this.prisma as any).orderItem.findMany({
-      where: {
-        businessId: updated.businessId,
-        orderId: updated.id,
-      },
-      select: {
-        id: true,
-        productId: true,
-        variantId: true,
-        productName: true,
-        quantity: true,
-        unitPriceCents: true,
-        totalAmountCents: true,
-      },
-    });
-
-    const orderDetail: OrderDetail = {
-      id: updated.id,
-      customerId: updated.customerId,
-      totalAmountCents: updated.totalAmountCents,
-      statusKey: updated.status.key,
-      source: updated.source,
-      createdByUserId: updated.createdByUserId,
-      createdAt: updated.createdAt,
-      notes: updated.notes ?? undefined,
-      shipmentCarrier: (updated as any).shipmentCarrier ?? undefined,
-      shipmentTrackingNumber: (updated as any).shipmentTrackingNumber ?? undefined,
-      items,
-    };
-
     void this.sendOrderStatusChangedNotification(
       updated.businessId,
       updated.id,
@@ -1888,7 +2296,7 @@ export class OrdersService {
       updated.status.key,
     );
 
-    return orderDetail;
+    return this.findOne(currentUser, updated.id);
   }
 
   async requestCancelCustomerOrder(currentUser: JwtPayload, id: number) {
@@ -2051,6 +2459,11 @@ export class OrdersService {
             id: true,
             sellerId: true,
             customerId: true,
+            totalAmountCents: true,
+            sellerPayoutCents: true,
+            platformRevenueCents: true,
+            currency: true,
+            payoutReleasedAt: true,
             status: {
               select: {
                 key: true,
@@ -2163,6 +2576,27 @@ export class OrdersService {
             });
           }
         }
+
+        if (request.order) {
+          await this.ledgerPostingService.postOrderRefund(
+            {
+              businessId,
+              orderId: request.order.id,
+              sellerId: request.order.sellerId ?? null,
+              currency: request.order.currency || 'TRY',
+              totalAmountCents: request.order.totalAmountCents,
+              sellerPayoutCents: request.order.sellerPayoutCents,
+              platformRevenueCents: request.order.platformRevenueCents,
+              metadata: {
+                refundPolicy: 'MODEL_A_COMMISSION_REVERSED',
+                payoutReleasedAt:
+                  request.order.payoutReleasedAt?.toISOString() ?? null,
+                resolvedByUserId: decidedByUserId,
+              },
+            },
+            tx,
+          );
+        }
       }
 
       const orderStatusId =
@@ -2217,34 +2651,59 @@ export class OrdersService {
 
   async findOne(currentUser: JwtPayload, id: number): Promise<OrderDetail> {
     const order = await this.findAccessibleOrder(currentUser, id);
-    const items = await (this.prisma as any).orderItem.findMany({
-      where: {
+    const [items, ledgerEntries, auditLogs] = await Promise.all([
+      (this.prisma as any).orderItem.findMany({
+        where: {
+          businessId: order.businessId,
+          orderId: order.id,
+        },
+        select: {
+          id: true,
+          productId: true,
+          variantId: true,
+          productName: true,
+          quantity: true,
+          unitPriceCents: true,
+          totalAmountCents: true,
+        },
+      }),
+      this.listOrderLedgerEntries({
         businessId: order.businessId,
         orderId: order.id,
-      },
-      select: {
-        id: true,
-        productId: true,
-        variantId: true,
-        productName: true,
-        quantity: true,
-        unitPriceCents: true,
-        totalAmountCents: true,
-      },
-    });
+      }),
+      this.listOrderAuditLogs({
+        businessId: order.businessId,
+        orderId: order.id,
+      }),
+    ]);
 
     return {
       id: order.id,
       customerId: order.customerId,
+      sellerId: order.sellerId ?? null,
       totalAmountCents: order.totalAmountCents,
+      currency: order.currency,
+      commissionAmountCents: order.commissionSnapshotCents,
+      sellerNetAmountCents: order.sellerPayoutCents,
+      priceMismatch: Boolean(order.priceMismatch),
       statusKey: order.status.key,
       source: order.source,
       createdByUserId: order.createdByUserId,
       createdAt: order.createdAt,
+      subtotalAmountCents: order.subtotalAmountCents,
+      discountAmountCents: order.discountAmountCents,
+      taxAmountCents: order.taxAmountCents,
+      platformRevenueCents: order.platformRevenueCents,
+      calculationProfileId: order.calculationProfileId,
+      calculationVersion: order.calculationVersion,
+      breakdownJson: order.breakdownJson ?? undefined,
+      priceMismatchMetaJson: order.priceMismatchMetaJson ?? undefined,
       notes: order.notes ?? undefined,
       shipmentCarrier: (order as any).shipmentCarrier ?? undefined,
       shipmentTrackingNumber: (order as any).shipmentTrackingNumber ?? undefined,
       items,
+      ledgerEntries,
+      auditLogs,
     };
   }
 
@@ -2433,36 +2892,6 @@ export class OrdersService {
       });
     }
 
-    const items = await (this.prisma as any).orderItem.findMany({
-      where: {
-        businessId: result.businessId,
-        orderId: result.id,
-      },
-      select: {
-        id: true,
-        productId: true,
-        variantId: true,
-        productName: true,
-        quantity: true,
-        unitPriceCents: true,
-        totalAmountCents: true,
-      },
-    });
-
-    const orderDetail: OrderDetail = {
-      id: result.id,
-      customerId: result.customerId,
-      totalAmountCents: result.totalAmountCents,
-      statusKey: result.status.key,
-      source: result.source,
-      createdByUserId: result.createdByUserId,
-      createdAt: result.createdAt,
-      notes: result.notes ?? undefined,
-      shipmentCarrier: (result as any).shipmentCarrier ?? undefined,
-      shipmentTrackingNumber: (result as any).shipmentTrackingNumber ?? undefined,
-      items,
-    };
-
     void this.sendOrderStatusChangedNotification(
       result.businessId,
       result.id,
@@ -2470,7 +2899,7 @@ export class OrdersService {
       result.status.key,
     );
 
-    return orderDetail;
+    return this.findOne(currentUser, result.id);
   }
 
   async listPayments(

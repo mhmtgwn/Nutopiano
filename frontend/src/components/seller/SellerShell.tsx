@@ -5,12 +5,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BarChart3,
+  Home,
+  Package,
   CreditCard,
   Menu,
   ScrollText,
   Users,
   Wallet,
-  Warehouse,
   X,
 } from 'lucide-react';
 import { useAppSelector } from '@/store';
@@ -29,16 +31,24 @@ type SellerNavItem = {
 };
 
 const sellerNavItems: SellerNavItem[] = [
-  { label: 'Satis', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
-  { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
-  { label: 'Finans', href: '/dashboard/finance', icon: Wallet, requiredCapabilities: ['VIEW_FINANCE'] },
-  { label: 'Musteriler', href: '/dashboard/customers', icon: Users },
+  { label: 'Dashboard', href: '/dashboard', icon: Home },
+  { label: 'Orders', href: '/dashboard/orders', icon: ScrollText },
+  { label: 'Products', href: '/dashboard/products', icon: Package },
+  { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
+  { label: 'Customers', href: '/dashboard/customers', icon: Users },
+  { label: 'Reports', href: '/dashboard/reports', icon: BarChart3 },
+  {
+    label: 'Payouts',
+    href: '/dashboard/finance',
+    icon: Wallet,
+    requiredCapabilities: ['VIEW_FINANCE'],
+  },
 ];
 
 const staffNavItems: SellerNavItem[] = [
-  { label: 'Satis', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
-  { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
+  { label: 'Dashboard', href: '/dashboard', icon: Home },
+  { label: 'Orders', href: '/dashboard/orders', icon: ScrollText },
+  { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
 ];
 
 export default function SellerShell({ children }: SellerShellProps) {
@@ -59,8 +69,8 @@ export default function SellerShell({ children }: SellerShellProps) {
   const panelLabel = getPanelLabelByRole(user?.role);
   const isStaff = user?.role === 'USER';
   const panelDescription = isStaff
-    ? 'Satis ve siparis akisina erisiminiz var.'
-    : 'Satis, siparis, stok, finans ve musteri akislarini yonetin.';
+    ? 'Dashboard, order ve POS akisina erisiminiz var.'
+    : 'Order, urun, POS, customer, report ve payout akislarini yonetin.';
   const activeNavClass = isStaff
     ? 'border border-[#7A4B00]/20 bg-[#7A4B00] text-white'
     : 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white';

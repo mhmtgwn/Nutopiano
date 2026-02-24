@@ -47,6 +47,14 @@ export class PrismaService
     'CustomerLedgerEntry',
     'AuditLog',
     'OutboxEvent',
+    'CalculationProfile',
+    'CommissionRule',
+    'CommissionCategoryOverride',
+    'SellerChannelRuleBinding',
+    'SellerWallet',
+    'PlatformWallet',
+    'FinanceLedgerEntry',
+    'PayoutRequest',
   ]);
 
   private static readonly SOFT_DELETE_MODELS = new Set<string>([

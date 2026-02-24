@@ -50,6 +50,7 @@ export default function AdminPlatformPayoutsPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [conflictDetail, setConflictDetail] = useState<string | null>(null);
+  const [markPaidTargetId, setMarkPaidTargetId] = useState<number | null>(null);
 
   const {
     data: payload,
@@ -116,6 +117,29 @@ export default function AdminPlatformPayoutsPage() {
         return;
       }
       toast.error(resolveApiErrorMessage(err, 'Payout tamamlanamadı.'));
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.patch(`/platform/finance/payouts/${id}/reject`);
+      return res.data;
+    },
+    onSuccess: async () => {
+      toast.success('Payout reddedildi.');
+      await queryClient.invalidateQueries({ queryKey: ['platform-payouts'] });
+    },
+    onError: (err: unknown) => {
+      if (isConflictError(err)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            err,
+            'Payout durumu baska bir admin tarafindan degistirildi.',
+          ),
+        );
+        return;
+      }
+      toast.error(resolveApiErrorMessage(err, 'Payout reddedilemedi.'));
     },
   });
 
@@ -228,6 +252,9 @@ export default function AdminPlatformPayoutsPage() {
                 {items.map((row) => {
                   const canApprove = String(row.status).toLowerCase() === 'pending';
                   const canComplete = String(row.status).toLowerCase() === 'approved';
+                  const canReject =
+                    String(row.status).toLowerCase() === 'pending' ||
+                    String(row.status).toLowerCase() === 'approved';
                   const canMutatePayout = can('MANAGE_PAYOUT');
 
                   return (
@@ -253,7 +280,8 @@ export default function AdminPlatformPayoutsPage() {
                               !canMutatePayout ||
                               !canApprove ||
                               approveMutation.isPending ||
-                              completeMutation.isPending
+                              completeMutation.isPending ||
+                              rejectMutation.isPending
                             }
                             onClick={() => {
                               const ok = window.confirm('Bu payout onaylansın mı?');
@@ -268,18 +296,35 @@ export default function AdminPlatformPayoutsPage() {
                             type="button"
                             disabled={
                               !canMutatePayout ||
-                              !canComplete ||
+                              !canReject ||
                               approveMutation.isPending ||
-                              completeMutation.isPending
+                              completeMutation.isPending ||
+                              rejectMutation.isPending
                             }
                             onClick={() => {
-                              const ok = window.confirm('EFT yapıldı mı? Tamamlansın mı?');
+                              const ok = window.confirm('Bu payout reddedilsin mi?');
                               if (!ok) return;
-                              completeMutation.mutate(row.id);
+                              rejectMutation.mutate(row.id);
+                            }}
+                            className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] border border-red-200 bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Reddet
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              !canMutatePayout ||
+                              !canComplete ||
+                              approveMutation.isPending ||
+                              completeMutation.isPending ||
+                              rejectMutation.isPending
+                            }
+                            onClick={() => {
+                              setMarkPaidTargetId(row.id);
                             }}
                             className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Tamamla
+                            Mark as Paid
                           </button>
                         </div>
                       </td>
@@ -331,6 +376,51 @@ export default function AdminPlatformPayoutsPage() {
           </button>
         </div>
       )}
+
+      {markPaidTargetId !== null ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            onClick={() => setMarkPaidTargetId(null)}
+            className="absolute inset-0 bg-black/40"
+            aria-label="Modali kapat"
+          />
+          <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6 shadow-[var(--shadow-lg)]">
+            <h3 className="text-lg font-semibold text-[var(--primary-800)]">Mark as Paid</h3>
+            <p className="mt-3 text-sm text-[var(--neutral-700)]">
+              Bu islem immutable ledger kaydi olusturacaktir. Devam etmek istiyor musunuz?
+            </p>
+            <p className="mt-2 text-xs text-[var(--neutral-600)]">
+              Payout #{markPaidTargetId} durumu geri alinmayacak sekilde guncellenecektir.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMarkPaidTargetId(null)}
+                className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary-800)]"
+              >
+                Vazgec
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = markPaidTargetId;
+                  if (!targetId) return;
+                  completeMutation.mutate(targetId, {
+                    onSuccess: () => {
+                      setMarkPaidTargetId(null);
+                    },
+                  });
+                }}
+                disabled={completeMutation.isPending}
+                className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Evet, Onayla
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConflictResolutionModal
         isOpen={Boolean(conflictDetail)}

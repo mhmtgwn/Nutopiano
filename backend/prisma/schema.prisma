@@ -45,6 +45,14 @@ model Business {
   sellerTeamMembers   SellerTeamMember[]
   sellerInvites       SellerInvite[]
   sellerInviteDeliveries SellerInviteDelivery[]
+  calculationProfiles      CalculationProfile[]
+  commissionRules          CommissionRule[]
+  commissionCategoryOverrides CommissionCategoryOverride[]
+  sellerChannelRuleBindings SellerChannelRuleBinding[]
+  sellerWallets         SellerWallet[]
+  platformWallets       PlatformWallet[]
+  financeLedgerEntries  FinanceLedgerEntry[]
+  payoutRequests        PayoutRequest[]
   customerLedger      CustomerLedgerEntry[]
   auditLogs           AuditLog[]
   outboxEvents        OutboxEvent[]
@@ -157,6 +165,10 @@ model Seller {
   payments       Payment[]             @relation("SellerPayments")
   teamMembers    SellerTeamMember[]
   invites        SellerInvite[]
+  channelRuleBindings SellerChannelRuleBinding[]
+  wallets        SellerWallet[]
+  payoutRequests PayoutRequest[]
+  financeLedgerEntries FinanceLedgerEntry[]
   customerLedger CustomerLedgerEntry[]
 
   @@unique([businessId, slug])
@@ -253,6 +265,7 @@ model Category {
   parent    Category?  @relation("CategoryParent", fields: [parentId], references: [id])
   children  Category[] @relation("CategoryParent")
   products  Product[]
+  commissionCategoryOverrides CommissionCategoryOverride[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -413,6 +426,235 @@ enum PayoutStatus {
   pending
   approved
   completed
+}
+
+enum PayoutRequestStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum FinanceLedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum FinanceLedgerAccountType {
+  CLEARING
+  SELLER_PENDING
+  SELLER_AVAILABLE
+  PLATFORM_PENDING
+  PLATFORM_AVAILABLE
+  PLATFORM_REVENUE
+  PLATFORM_RESERVE
+}
+
+enum FinanceLedgerEventType {
+  ORDER_SALE
+  ORDER_REFUND
+  RELEASE_AVAILABLE
+  PAYOUT_REQUEST
+  PAYOUT_PAID
+  MANUAL_ADJUSTMENT
+}
+
+enum CommerceChannel {
+  MARKETPLACE
+  POS
+  MANUAL
+}
+
+enum CommissionRuleType {
+  PERCENT
+  FIXED
+}
+
+enum RoundingMode {
+  HALF_UP
+}
+
+model CalculationProfile {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+
+  code         String
+  name         String
+  description  String?
+  currency     String       @default("TRY")
+  taxInclusive Boolean      @default(true)
+  taxProfileCode String     @default("TR_STD")
+  roundingMode RoundingMode @default(HALF_UP)
+  discountRulesJson Json?
+  isActive     Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business       Business                  @relation(fields: [businessId], references: [id])
+  commissionRule CommissionRule?
+  channelBindings SellerChannelRuleBinding[]
+
+  @@unique([businessId, code])
+  @@index([businessId])
+  @@index([businessId, isActive])
+}
+
+model CommissionRule {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  calculationProfileId Int @unique
+
+  type CommissionRuleType
+  rateBps Int?
+  fixedAmountCents Int?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  calculationProfile CalculationProfile @relation(fields: [calculationProfileId], references: [id])
+  categoryOverrides CommissionCategoryOverride[]
+
+  @@index([businessId])
+  @@index([businessId, isActive])
+}
+
+model CommissionCategoryOverride {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  commissionRuleId Int
+  categoryId Int
+
+  type CommissionRuleType
+  rateBps Int?
+  fixedAmountCents Int?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  commissionRule CommissionRule @relation(fields: [commissionRuleId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([commissionRuleId, categoryId])
+  @@index([businessId, categoryId])
+  @@index([businessId, isActive])
+}
+
+model SellerChannelRuleBinding {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  sellerId Int
+  channel CommerceChannel
+  calculationProfileId Int
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  seller Seller @relation(fields: [sellerId], references: [id])
+  calculationProfile CalculationProfile @relation(fields: [calculationProfileId], references: [id])
+
+  @@unique([businessId, sellerId, channel])
+  @@index([businessId, calculationProfileId])
+  @@index([businessId, channel, isActive])
+}
+
+model SellerWallet {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  sellerId Int
+  currency String @default("TRY")
+  pendingBalanceCents Int @default(0)
+  availableBalanceCents Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@unique([businessId, sellerId, currency])
+  @@index([businessId, sellerId])
+}
+
+model PlatformWallet {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  currency String @default("TRY")
+  pendingBalanceCents Int @default(0)
+  availableBalanceCents Int @default(0)
+  reserveBalanceCents Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, currency])
+  @@index([businessId])
+}
+
+model PayoutRequest {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  sellerId Int
+  amountCents Int
+  currency String @default("TRY")
+  status PayoutRequestStatus @default(REQUESTED)
+  approvedAt DateTime?
+  paidAt DateTime?
+  rejectedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  seller Seller @relation(fields: [sellerId], references: [id])
+  financeLedgerEntries FinanceLedgerEntry[]
+
+  @@index([businessId, sellerId, status])
+  @@index([businessId, status, createdAt])
+}
+
+model FinanceLedgerEntry {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  eventId String
+  eventType FinanceLedgerEventType
+  accountType FinanceLedgerAccountType
+  direction FinanceLedgerDirection
+  amountCents Int
+  currency String @default("TRY")
+  orderId Int?
+  sellerId Int?
+  payoutRequestId Int?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
+  seller Seller? @relation(fields: [sellerId], references: [id])
+  payoutRequest PayoutRequest? @relation(fields: [payoutRequestId], references: [id])
+
+  @@index([businessId, eventId, createdAt])
+  @@index([businessId, eventType, createdAt])
+  @@index([businessId, orderId, createdAt])
+  @@index([businessId, sellerId, createdAt])
+  @@index([businessId, payoutRequestId, createdAt])
 }
 
 model Commission {
@@ -596,10 +838,24 @@ model Order {
   totalAmountCents       Int         @default(0)
   shippingCostCents      Int         @default(0)
   commissionSnapshotCents Int        @default(0)
+  platformRevenueCents   Int         @default(0)
+  sellerPayoutCents      Int         @default(0)
+  currency               String      @default("TRY")
+  calculationProfileId   String?
+  calculationVersion     String?
+  breakdownJson          Json?
+  priceMismatch          Boolean     @default(false)
+  priceMismatchMetaJson  Json?
+  countryCode            String      @default("TR")
+  taxProfileCode         String?
+  commissionProfileCode  String?
   returnCostCents        Int         @default(0)
+  payoutReleasedAt       DateTime?
   source                 OrderSource @default(POS)
   notes                  String?
   idempotencyKey         String?
+  idempotencyOperation   String?
+  idempotencyChannel     CommerceChannel?
   idempotencyHash        String?
   shipmentCarrier        String?
   shipmentTrackingNumber String?
@@ -615,18 +871,22 @@ model Order {
   items         OrderItem[]
   payments      Payment[]
   ledgerEntries CustomerLedgerEntry[]
+  financeLedgerEntries FinanceLedgerEntry[]
   commission    Commission?           @relation("OrderCommission")
 
   paymentSessions PaymentSession[]
   returnRequests  ReturnRequest[]
 
-  @@unique([businessId, idempotencyKey])
+  @@unique([businessId, idempotencyOperation, idempotencyChannel, idempotencyKey])
   @@index([businessId])
   @@index([businessId, customerId])
   @@index([businessId, deletedAt])
   @@index([businessId, statusId, createdAt])
   @@index([businessId, createdAt])
   @@index([businessId, sellerId, createdAt])
+  @@index([businessId, idempotencyKey])
+  @@index([businessId, priceMismatch, createdAt])
+  @@index([businessId, payoutReleasedAt, createdAt])
 }
 
 model ReturnRequest {

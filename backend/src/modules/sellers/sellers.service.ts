@@ -31,6 +31,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { SellerInviteDeliveryService } from './invite-delivery.service';
 import { AdminProductPublishForceDto } from './dto/admin-product-publish-force.dto';
 import { AdminProductStockForceDto } from './dto/admin-product-stock-force.dto';
+import { CreateSellerApplicationDto } from './dto/create-seller-application.dto';
 import { CreateSellerTeamInviteDto } from './dto/create-seller-team-invite.dto';
 import { UpdateSellerTeamMemberDto } from './dto/update-seller-team-member.dto';
 
@@ -67,6 +68,46 @@ export class SellersService {
     'orders.read',
     'orders.updateStatus',
   ] as const;
+
+  private slugifySeller(value: string): string {
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 96);
+
+    return normalized || 'seller';
+  }
+
+  private async resolveUniqueSellerSlug(
+    businessId: number,
+    rawBase: string,
+    excludeSellerId?: number,
+  ): Promise<string> {
+    const base = this.slugifySeller(rawBase);
+    const maxAttempts = 100;
+
+    for (let i = 0; i < maxAttempts; i += 1) {
+      const suffix = i === 0 ? '' : `-${i + 1}`;
+      const candidate = `${base}${suffix}`.slice(0, 110);
+      const existing = await this.prisma.seller.findFirst({
+        where: {
+          businessId,
+          slug: candidate,
+          ...(excludeSellerId ? { id: { not: excludeSellerId } } : {}),
+        },
+        select: { id: true },
+      });
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    throw new ConflictException('Unique seller slug üretilemedi');
+  }
 
   private normalizePermissions(permissions?: string[]) {
     const base = Array.isArray(permissions)
@@ -1233,6 +1274,163 @@ export class SellersService {
     });
 
     return updated;
+  }
+
+  async createSellerApplication(
+    currentUser: JwtPayload,
+    payload: CreateSellerApplicationDto,
+  ): Promise<{
+    id: number;
+    userId: number;
+    slug: string;
+    displayName: string;
+    description?: string | null;
+    logoUrl?: string | null;
+    status: 'PENDING' | 'APPROVED';
+    createdAt: Date;
+    updatedAt: Date;
+  }> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    if (!Number.isFinite(businessId) || businessId <= 0) {
+      throw new ForbiddenException('Access denied');
+    }
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const displayName = String(payload.displayName ?? '').trim();
+    if (!displayName) {
+      throw new BadRequestException('displayName zorunludur');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        businessId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('Kullanici bulunamadi');
+    }
+
+    const existing = await this.prisma.seller.findFirst({
+      where: {
+        businessId,
+        userId,
+      },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+
+    const targetSlug = await this.resolveUniqueSellerSlug(
+      businessId,
+      payload.slug?.trim() || displayName,
+      existing?.id,
+    );
+
+    const saved = existing
+      ? await this.prisma.seller.update({
+          where: { id: existing.id },
+          data: {
+            slug: targetSlug,
+            displayName,
+            description: payload.description?.trim() || null,
+            logoUrl: payload.logoUrl?.trim() || null,
+            isActive: existing.isActive,
+          },
+          select: {
+            id: true,
+            userId: true,
+            slug: true,
+            displayName: true,
+            description: true,
+            logoUrl: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+      : await this.prisma.seller.create({
+          data: {
+            businessId,
+            userId,
+            slug: targetSlug,
+            displayName,
+            description: payload.description?.trim() || null,
+            logoUrl: payload.logoUrl?.trim() || null,
+            isActive: false,
+          },
+          select: {
+            id: true,
+            userId: true,
+            slug: true,
+            displayName: true,
+            description: true,
+            logoUrl: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+    return {
+      ...saved,
+      status: saved.isActive ? 'APPROVED' : 'PENDING',
+    };
+  }
+
+  async getMySellerApplication(currentUser: JwtPayload): Promise<{
+    id: number;
+    userId: number;
+    slug: string;
+    displayName: string;
+    description?: string | null;
+    logoUrl?: string | null;
+    isActive: boolean;
+    status: 'PENDING' | 'APPROVED';
+    createdAt: Date;
+    updatedAt: Date;
+  } | null> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    if (!Number.isFinite(businessId) || businessId <= 0) {
+      throw new ForbiddenException('Access denied');
+    }
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const seller = await this.prisma.seller.findFirst({
+      where: {
+        businessId,
+        userId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        slug: true,
+        displayName: true,
+        description: true,
+        logoUrl: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!seller) return null;
+
+    return {
+      ...seller,
+      status: seller.isActive ? 'APPROVED' : 'PENDING',
+    };
   }
 
   async listPlatformSellers(

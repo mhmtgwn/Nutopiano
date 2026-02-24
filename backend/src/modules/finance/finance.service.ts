@@ -5,9 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  FinanceLedgerAccountType,
+  FinanceLedgerDirection,
+  FinanceLedgerEventType,
+  OrderSource,
+  Prisma,
+  PayoutRequestStatus,
+  ReturnRequestStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
+import { LedgerPostingService } from '../../core/commerce';
 import { SettingsService } from '../settings/settings.service';
 import {
   buildPaginationMeta,
@@ -30,6 +39,7 @@ export class FinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
+    private readonly ledgerPostingService: LedgerPostingService,
   ) {}
 
   private async getCommissionRate(businessId: number): Promise<number> {
@@ -84,6 +94,35 @@ export class FinanceService {
     }
 
     return { startAt, endAt: endAtExclusive };
+  }
+
+  private parseOptionalDateRange(params?: { dateFrom?: string; dateTo?: string }) {
+    const fromRaw = params?.dateFrom?.trim();
+    const toRaw = params?.dateTo?.trim();
+
+    let startAt: Date | undefined;
+    let endAtExclusive: Date | undefined;
+
+    if (fromRaw) {
+      startAt = new Date(`${fromRaw}T00:00:00.000Z`);
+      if (Number.isNaN(startAt.getTime())) {
+        throw new BadRequestException('dateFrom gecersiz');
+      }
+    }
+
+    if (toRaw) {
+      endAtExclusive = new Date(`${toRaw}T00:00:00.000Z`);
+      if (Number.isNaN(endAtExclusive.getTime())) {
+        throw new BadRequestException('dateTo gecersiz');
+      }
+      endAtExclusive.setUTCDate(endAtExclusive.getUTCDate() + 1);
+    }
+
+    if (startAt && endAtExclusive && endAtExclusive <= startAt) {
+      throw new BadRequestException('dateTo, dateFrom tarihinden once olamaz');
+    }
+
+    return { startAt, endAtExclusive };
   }
 
   private async resolveSellerProfileId(businessId: number, userId: number) {
@@ -233,12 +272,13 @@ export class FinanceService {
   ): Promise<{
     data: Array<{
       id: number;
-      beneficiaryUserId: number;
+      sellerId: number;
       amountCents: number;
       status: string;
       requestedAt: Date;
       approvedAt?: Date | null;
-      completedAt?: Date | null;
+      paidAt?: Date | null;
+      rejectedAt?: Date | null;
     }>;
     meta: PaginationMeta;
   }> {
@@ -250,29 +290,46 @@ export class FinanceService {
     const userId = Number(currentUser.userId);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+    const sellerId = await this.resolveSellerProfileId(businessId, userId);
+    if (!sellerId) {
+      throw new ForbiddenException('Aktif seller profili bulunamadi');
+    }
 
-    const where = { businessId, beneficiaryUserId: userId };
-    const total = await this.prisma.payout.count({ where });
+    const where = { businessId, sellerId };
+    const total = await this.prisma.payoutRequest.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
     const { skip, take } = paginationToSkipTake(meta);
 
-    const data = await this.prisma.payout.findMany({
+    const data = await this.prisma.payoutRequest.findMany({
       where,
-      orderBy: { requestedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       skip,
       take,
       select: {
         id: true,
-        beneficiaryUserId: true,
+        sellerId: true,
         amountCents: true,
         status: true,
-        requestedAt: true,
+        createdAt: true,
         approvedAt: true,
-        completedAt: true,
+        paidAt: true,
+        rejectedAt: true,
       },
     });
 
-    return { data, meta };
+    return {
+      data: data.map((row) => ({
+        id: row.id,
+        sellerId: row.sellerId,
+        amountCents: row.amountCents,
+        status: row.status,
+        requestedAt: row.createdAt,
+        approvedAt: row.approvedAt,
+        paidAt: row.paidAt,
+        rejectedAt: row.rejectedAt,
+      })),
+      meta,
+    };
   }
 
   async listPlatformPayouts(
@@ -281,12 +338,13 @@ export class FinanceService {
   ): Promise<{
     data: Array<{
       id: number;
-      beneficiaryUserId: number;
+      sellerId: number;
       amountCents: number;
       status: string;
       requestedAt: Date;
       approvedAt?: Date | null;
-      completedAt?: Date | null;
+      paidAt?: Date | null;
+      rejectedAt?: Date | null;
     }>;
     meta: PaginationMeta;
   }> {
@@ -299,55 +357,98 @@ export class FinanceService {
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
     const status = (params?.status ?? '').trim();
-    const where: { businessId: number; status?: any } = { businessId };
+    const where: { businessId: number; status?: PayoutRequestStatus } = {
+      businessId,
+    };
     if (status) {
-      where.status = status;
+      const normalizedStatus = status.toUpperCase() as PayoutRequestStatus;
+      if (!Object.values(PayoutRequestStatus).includes(normalizedStatus)) {
+        throw new BadRequestException('status gecersiz');
+      }
+      where.status = normalizedStatus;
     }
 
-    const total = await this.prisma.payout.count({ where });
+    const total = await this.prisma.payoutRequest.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
     const { skip, take } = paginationToSkipTake(meta);
 
-    const data = await this.prisma.payout.findMany({
+    const data = await this.prisma.payoutRequest.findMany({
       where,
-      orderBy: { requestedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       skip,
       take,
       select: {
         id: true,
-        beneficiaryUserId: true,
+        sellerId: true,
         amountCents: true,
         status: true,
-        requestedAt: true,
+        createdAt: true,
         approvedAt: true,
-        completedAt: true,
+        paidAt: true,
+        rejectedAt: true,
       },
     });
 
-    return { data, meta };
+    return {
+      data: data.map((row) => ({
+        id: row.id,
+        sellerId: row.sellerId,
+        amountCents: row.amountCents,
+        status: row.status,
+        requestedAt: row.createdAt,
+        approvedAt: row.approvedAt,
+        paidAt: row.paidAt,
+        rejectedAt: row.rejectedAt,
+      })),
+      meta,
+    };
   }
 
-  private async getAvailableBalanceCents(
+  private async getSellerPayoutabilityBySellerId(
     businessId: number,
-    beneficiaryUserId: number,
-  ): Promise<number> {
-    const commissionsAgg = await this.prisma.commission.aggregate({
-      where: { businessId, beneficiaryUserId },
-      _sum: { netAmountCents: true },
+    sellerId: number,
+  ): Promise<{
+    pendingBalanceCents: number;
+    availableBalanceCents: number;
+    reservedByRequestsCents: number;
+    availableForRequestCents: number;
+    currency: string;
+  }> {
+    const wallet = await this.prisma.sellerWallet.findFirst({
+      where: { businessId, sellerId },
+      select: {
+        pendingBalanceCents: true,
+        availableBalanceCents: true,
+        currency: true,
+      },
     });
 
-    const payoutsAgg = await this.prisma.payout.aggregate({
+    const requestAggregate = await this.prisma.payoutRequest.aggregate({
       where: {
         businessId,
-        beneficiaryUserId,
-        status: { in: ['approved', 'completed'] },
+        sellerId,
+        status: { in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED] },
       },
       _sum: { amountCents: true },
     });
 
-    const earned = commissionsAgg._sum.netAmountCents ?? 0;
-    const paidOrReserved = payoutsAgg._sum.amountCents ?? 0;
-    return Math.max(0, earned - paidOrReserved);
+    const pendingBalanceCents = Number(wallet?.pendingBalanceCents ?? 0);
+    const availableBalanceCents = Number(wallet?.availableBalanceCents ?? 0);
+    const reservedByRequestsCents = Number(
+      requestAggregate._sum.amountCents ?? 0,
+    );
+    const availableForRequestCents = Math.max(
+      availableBalanceCents - reservedByRequestsCents,
+      0,
+    );
+
+    return {
+      pendingBalanceCents,
+      availableBalanceCents,
+      reservedByRequestsCents,
+      availableForRequestCents,
+      currency: wallet?.currency ?? 'TRY',
+    };
   }
 
   async requestPayout(currentUser: JwtPayload, amountCents: number) {
@@ -360,29 +461,38 @@ export class FinanceService {
 
     const requested = Number(amountCents);
     if (!Number.isFinite(requested) || requested <= 0) {
-      throw new ForbiddenException('Invalid amount');
+      throw new BadRequestException('Invalid amount');
+    }
+    const sellerId = await this.resolveSellerProfileId(businessId, userId);
+    if (!sellerId) {
+      throw new ForbiddenException('Aktif seller profili bulunamadi');
     }
 
-    const available = await this.getAvailableBalanceCents(businessId, userId);
-    if (requested > available) {
+    const payoutability = await this.getSellerPayoutabilityBySellerId(
+      businessId,
+      sellerId,
+    );
+    if (requested > payoutability.availableForRequestCents) {
       throw new ForbiddenException('Insufficient available balance');
     }
 
-    return this.prisma.payout.create({
+    return this.prisma.payoutRequest.create({
       data: {
         businessId,
-        beneficiaryUserId: userId,
+        sellerId,
         amountCents: Math.floor(requested),
-        status: 'pending',
+        currency: payoutability.currency,
+        status: PayoutRequestStatus.REQUESTED,
       },
       select: {
         id: true,
-        beneficiaryUserId: true,
+        sellerId: true,
         amountCents: true,
         status: true,
-        requestedAt: true,
+        createdAt: true,
         approvedAt: true,
-        completedAt: true,
+        paidAt: true,
+        rejectedAt: true,
       },
     });
   }
@@ -394,7 +504,7 @@ export class FinanceService {
 
     const businessId = Number(currentUser.businessId);
 
-    const existing = await this.prisma.payout.findFirst({
+    const existing = await this.prisma.payoutRequest.findFirst({
       where: { id: payoutId, businessId },
       select: { id: true },
     });
@@ -403,20 +513,20 @@ export class FinanceService {
       throw new NotFoundException('Payout not found');
     }
 
-    const updated = await this.prisma.payout.updateMany({
+    const updated = await this.prisma.payoutRequest.updateMany({
       where: {
         id: payoutId,
         businessId,
-        status: 'pending',
+        status: PayoutRequestStatus.REQUESTED,
       },
       data: {
-        status: 'approved',
+        status: PayoutRequestStatus.APPROVED,
         approvedAt: new Date(),
       },
     });
 
     if (updated.count === 0) {
-      const current = await this.prisma.payout.findFirst({
+      const current = await this.prisma.payoutRequest.findFirst({
         where: { id: payoutId, businessId },
         select: { status: true },
       });
@@ -425,16 +535,17 @@ export class FinanceService {
       );
     }
 
-    return this.prisma.payout.findUniqueOrThrow({
+    return this.prisma.payoutRequest.findUniqueOrThrow({
       where: { id: payoutId },
       select: {
         id: true,
-        beneficiaryUserId: true,
+        sellerId: true,
         amountCents: true,
         status: true,
-        requestedAt: true,
+        createdAt: true,
         approvedAt: true,
-        completedAt: true,
+        paidAt: true,
+        rejectedAt: true,
       },
     });
   }
@@ -446,49 +557,955 @@ export class FinanceService {
 
     const businessId = Number(currentUser.businessId);
 
-    const existing = await this.prisma.payout.findFirst({
-      where: { id: payoutId, businessId },
-      select: { id: true },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const payout = await tx.payoutRequest.findFirst({
+        where: {
+          id: payoutId,
+          businessId,
+        },
+        select: {
+          id: true,
+          sellerId: true,
+          amountCents: true,
+          currency: true,
+          status: true,
+        },
+      });
 
-    if (!existing) {
-      throw new NotFoundException('Payout not found');
+      if (!payout) {
+        throw new NotFoundException('Payout not found');
+      }
+      if (payout.status !== PayoutRequestStatus.APPROVED) {
+        throw new ConflictException(
+          `Payout state changed. Current status: ${payout.status}`,
+        );
+      }
+
+      await this.ledgerPostingService.postPayoutPaid(
+        {
+          businessId,
+          payoutRequestId: payout.id,
+          sellerId: payout.sellerId,
+          amountCents: payout.amountCents,
+          currency: payout.currency,
+          metadata: {
+            action: 'admin_mark_paid',
+            payoutRequestId: payout.id,
+          },
+        },
+        tx,
+      );
+
+      await tx.payoutRequest.update({
+        where: { id: payout.id },
+        data: {
+          status: PayoutRequestStatus.PAID,
+          paidAt: new Date(),
+        },
+      });
+
+      return tx.payoutRequest.findUniqueOrThrow({
+        where: { id: payout.id },
+        select: {
+          id: true,
+          sellerId: true,
+          amountCents: true,
+          status: true,
+          createdAt: true,
+          approvedAt: true,
+          paidAt: true,
+          rejectedAt: true,
+        },
+      });
+    });
+  }
+
+  async rejectPayout(currentUser: JwtPayload, payoutId: number) {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
     }
 
-    const updated = await this.prisma.payout.updateMany({
+    const businessId = Number(currentUser.businessId);
+
+    const updated = await this.prisma.payoutRequest.updateMany({
       where: {
         id: payoutId,
         businessId,
-        status: 'approved',
+        status: {
+          in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED],
+        },
       },
       data: {
-        status: 'completed',
-        completedAt: new Date(),
+        status: PayoutRequestStatus.REJECTED,
+        rejectedAt: new Date(),
       },
     });
 
     if (updated.count === 0) {
-      const current = await this.prisma.payout.findFirst({
+      const current = await this.prisma.payoutRequest.findFirst({
         where: { id: payoutId, businessId },
         select: { status: true },
       });
+      if (!current) {
+        throw new NotFoundException('Payout not found');
+      }
       throw new ConflictException(
-        `Payout state changed. Current status: ${current?.status ?? 'unknown'}`,
+        `Payout state changed. Current status: ${current.status}`,
       );
     }
 
-    return this.prisma.payout.findUniqueOrThrow({
+    return this.prisma.payoutRequest.findUniqueOrThrow({
       where: { id: payoutId },
       select: {
         id: true,
-        beneficiaryUserId: true,
+        sellerId: true,
         amountCents: true,
         status: true,
-        requestedAt: true,
+        createdAt: true,
         approvedAt: true,
-        completedAt: true,
+        paidAt: true,
+        rejectedAt: true,
       },
     });
+  }
+
+  async getSellerPayoutability(currentUser: JwtPayload) {
+    if (currentUser.role !== 'SELLER') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const sellerId = await this.resolveSellerProfileId(businessId, userId);
+    if (!sellerId) {
+      throw new ForbiddenException('Aktif seller profili bulunamadi');
+    }
+
+    const payoutability = await this.getSellerPayoutabilityBySellerId(
+      businessId,
+      sellerId,
+    );
+
+    return {
+      sellerId,
+      ...payoutability,
+    };
+  }
+
+  async releasePendingToAvailable(
+    currentUser: JwtPayload,
+    params?: { limit?: number },
+  ) {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const limit = Math.max(Math.trunc(Number(params?.limit ?? 200)), 1);
+    const now = new Date();
+    const releaseThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const eligibleOrders = await this.prisma.order.findMany({
+      where: {
+        businessId,
+        deletedAt: null,
+        sellerId: { not: null },
+        payoutReleasedAt: null,
+        createdAt: { lte: releaseThreshold },
+        status: {
+          key: 'COMPLETED',
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        sellerId: true,
+        currency: true,
+        sellerPayoutCents: true,
+        platformRevenueCents: true,
+      },
+    });
+
+    let releasedOrderCount = 0;
+    for (const order of eligibleOrders) {
+      if (typeof order.sellerId !== 'number') continue;
+      const sellerId = order.sellerId;
+
+      await this.prisma.$transaction(async (tx) => {
+        const lock = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            businessId,
+            payoutReleasedAt: null,
+          },
+          data: {
+            payoutReleasedAt: now,
+          },
+        });
+
+        if (lock.count === 0) {
+          return;
+        }
+
+        await this.ledgerPostingService.postPendingToAvailableRelease(
+          {
+            businessId,
+            orderId: order.id,
+            sellerId,
+            currency: order.currency,
+            sellerPayoutCents: order.sellerPayoutCents,
+            platformRevenueCents: order.platformRevenueCents,
+            metadata: {
+              policy: 'COMPLETED_PLUS_T7',
+              releasedAt: now.toISOString(),
+            },
+          },
+          tx,
+        );
+
+        releasedOrderCount += 1;
+      });
+    }
+
+    return {
+      releaseThreshold,
+      scannedCount: eligibleOrders.length,
+      releasedOrderCount,
+    };
+  }
+
+  async getFinanceHealth(
+    currentUser: JwtPayload,
+    params?: { payoutAgingDays?: number },
+  ) {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const now = new Date();
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const todayStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const payoutAgingDays = Math.max(
+      Math.trunc(Number(params?.payoutAgingDays ?? 3)),
+      1,
+    );
+    const payoutAgingThreshold = new Date(
+      now.getTime() - payoutAgingDays * 24 * 60 * 60 * 1000,
+    );
+
+    const [
+      mismatchCount24h,
+      totalOrders24h,
+      negativeSellerWalletCount,
+      negativePlatformWalletCount,
+      payoutAgingCount,
+      openPayoutRequestCount,
+      orderSalesTodayAgg,
+      ledgerNetSalesRows,
+      imbalanceRows,
+      sellerWalletTotals,
+      platformWalletTotals,
+      refundVolume24hRows,
+    ] = await Promise.all([
+      this.prisma.order.count({
+        where: {
+          businessId,
+          deletedAt: null,
+          priceMismatch: true,
+          createdAt: { gte: last24h },
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          businessId,
+          deletedAt: null,
+          createdAt: { gte: last24h },
+        },
+      }),
+      this.prisma.sellerWallet.count({
+        where: {
+          businessId,
+          OR: [
+            { pendingBalanceCents: { lt: 0 } },
+            { availableBalanceCents: { lt: 0 } },
+          ],
+        },
+      }),
+      this.prisma.platformWallet.count({
+        where: {
+          businessId,
+          OR: [
+            { pendingBalanceCents: { lt: 0 } },
+            { availableBalanceCents: { lt: 0 } },
+            { reserveBalanceCents: { lt: 0 } },
+          ],
+        },
+      }),
+      this.prisma.payoutRequest.count({
+        where: {
+          businessId,
+          status: {
+            in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED],
+          },
+          createdAt: { lte: payoutAgingThreshold },
+        },
+      }),
+      this.prisma.payoutRequest.count({
+        where: {
+          businessId,
+          status: {
+            in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED],
+          },
+        },
+      }),
+      this.prisma.order.aggregate({
+        where: {
+          businessId,
+          deletedAt: null,
+          createdAt: { gte: todayStart },
+        },
+        _sum: { totalAmountCents: true },
+      }),
+      this.prisma.$queryRaw<Array<{ amount: bigint | number }>>`
+        SELECT COALESCE(
+          SUM(
+            CASE
+              WHEN "direction" = 'DEBIT' THEN "amountCents"
+              ELSE -"amountCents"
+            END
+          ),
+          0
+        )::bigint AS amount
+        FROM "FinanceLedgerEntry"
+        WHERE "businessId" = ${businessId}
+          AND "accountType" = 'CLEARING'
+          AND "createdAt" >= ${todayStart}
+      `,
+      this.prisma.$queryRaw<Array<{ count: bigint | number }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM (
+          SELECT "eventId"
+          FROM "FinanceLedgerEntry"
+          WHERE "businessId" = ${businessId}
+          GROUP BY "eventId"
+          HAVING
+            SUM(CASE WHEN "direction" = 'DEBIT' THEN "amountCents" ELSE 0 END) !=
+            SUM(CASE WHEN "direction" = 'CREDIT' THEN "amountCents" ELSE 0 END)
+        ) AS imbalances
+      `,
+      this.prisma.sellerWallet.aggregate({
+        where: { businessId },
+        _sum: {
+          pendingBalanceCents: true,
+          availableBalanceCents: true,
+        },
+      }),
+      this.prisma.platformWallet.aggregate({
+        where: { businessId },
+        _sum: {
+          pendingBalanceCents: true,
+          availableBalanceCents: true,
+        },
+      }),
+      this.prisma.$queryRaw<Array<{ amount: bigint | number }>>`
+        SELECT COALESCE(SUM("amountCents"), 0)::bigint AS amount
+        FROM "FinanceLedgerEntry"
+        WHERE "businessId" = ${businessId}
+          AND "eventType" = 'ORDER_REFUND'
+          AND "accountType" = 'CLEARING'
+          AND "direction" = 'CREDIT'
+          AND "createdAt" >= ${last24h}
+      `,
+    ]);
+
+    const orderNetSalesTodayCents = Number(
+      orderSalesTodayAgg._sum.totalAmountCents ?? 0,
+    );
+    const ledgerNetSalesTodayCents = Number(ledgerNetSalesRows[0]?.amount ?? 0);
+    const ledgerImbalanceEventCount = Number(imbalanceRows[0]?.count ?? 0);
+    const mismatchRate24h =
+      totalOrders24h > 0 ? mismatchCount24h / totalOrders24h : 0;
+    const sellerPendingTotalCents = Number(
+      sellerWalletTotals._sum.pendingBalanceCents ?? 0,
+    );
+    const sellerAvailableTotalCents = Number(
+      sellerWalletTotals._sum.availableBalanceCents ?? 0,
+    );
+    const platformPendingTotalCents = Number(
+      platformWalletTotals._sum.pendingBalanceCents ?? 0,
+    );
+    const platformAvailableTotalCents = Number(
+      platformWalletTotals._sum.availableBalanceCents ?? 0,
+    );
+    const refundVolume24hCents = Number(refundVolume24hRows[0]?.amount ?? 0);
+
+    return {
+      lastCheckedAt: now,
+      ledgerInvariant: {
+        ok: ledgerImbalanceEventCount === 0,
+        imbalanceEventCount: ledgerImbalanceEventCount,
+      },
+      walletHealth: {
+        negativeSellerWalletCount,
+        negativePlatformWalletCount,
+      },
+      risk: {
+        mismatchCount24h,
+        totalOrders24h,
+        mismatchRate24h,
+      },
+      payouts: {
+        payoutAgingDays,
+        agingOpenRequestCount: payoutAgingCount,
+        openRequestCount: openPayoutRequestCount,
+      },
+      wallets: {
+        sellerPendingTotalCents,
+        sellerAvailableTotalCents,
+        platformPendingTotalCents,
+        platformAvailableTotalCents,
+      },
+      refunds: {
+        volume24hCents: refundVolume24hCents,
+      },
+      reconciliation: {
+        orderNetSalesTodayCents,
+        ledgerNetSalesTodayCents,
+        deltaCents: orderNetSalesTodayCents - ledgerNetSalesTodayCents,
+      },
+    };
+  }
+
+  async listPriceMismatches(
+    currentUser: JwtPayload,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<{
+    data: Array<{
+      orderId: number;
+      sellerId?: number | null;
+      staffUserId: number;
+      source: string;
+      totalAmountCents: number;
+      createdAt: Date;
+      meta?: unknown;
+    }>;
+    meta: PaginationMeta;
+  }> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const where = {
+      businessId,
+      deletedAt: null as null,
+      priceMismatch: true,
+    };
+
+    const total = await this.prisma.order.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const rows = await this.prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+      select: {
+        id: true,
+        sellerId: true,
+        createdByUserId: true,
+        source: true,
+        totalAmountCents: true,
+        createdAt: true,
+        priceMismatchMetaJson: true,
+      },
+    });
+
+    return {
+      data: rows.map((row) => ({
+        orderId: row.id,
+        sellerId: row.sellerId,
+        staffUserId: row.createdByUserId,
+        source: row.source,
+        totalAmountCents: row.totalAmountCents,
+        createdAt: row.createdAt,
+        meta: row.priceMismatchMetaJson ?? undefined,
+      })),
+      meta,
+    };
+  }
+
+  async listFinanceLedger(
+    currentUser: JwtPayload,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      sellerId?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      type?: string;
+      channel?: string;
+      orderId?: number;
+    },
+  ): Promise<{
+    data: Array<{
+      id: number;
+      timestamp: Date;
+      accountType: string;
+      direction: string;
+      amountCents: number;
+      currency: string;
+      orderId?: number | null;
+      sellerId?: number | null;
+      eventType: string;
+      channel?: string | null;
+      reference: string;
+    }>;
+    meta: PaginationMeta;
+  }> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+    const normalizedSellerId =
+      typeof params?.sellerId === 'number' && Number.isFinite(params.sellerId)
+        ? Math.trunc(params.sellerId)
+        : undefined;
+    const normalizedOrderId =
+      typeof params?.orderId === 'number' && Number.isFinite(params.orderId)
+        ? Math.trunc(params.orderId)
+        : undefined;
+
+    if (normalizedSellerId !== undefined && normalizedSellerId <= 0) {
+      throw new BadRequestException('sellerId gecersiz');
+    }
+    if (normalizedOrderId !== undefined && normalizedOrderId <= 0) {
+      throw new BadRequestException('orderId gecersiz');
+    }
+
+    const { startAt, endAtExclusive } = this.parseOptionalDateRange({
+      dateFrom: params?.dateFrom,
+      dateTo: params?.dateTo,
+    });
+    const where: Prisma.FinanceLedgerEntryWhereInput = {
+      businessId,
+      ...(normalizedSellerId ? { sellerId: normalizedSellerId } : {}),
+      ...(normalizedOrderId ? { orderId: normalizedOrderId } : {}),
+      ...(startAt || endAtExclusive
+        ? {
+            createdAt: {
+              ...(startAt ? { gte: startAt } : {}),
+              ...(endAtExclusive ? { lt: endAtExclusive } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const typeRaw = (params?.type ?? '').trim().toUpperCase();
+    if (typeRaw) {
+      const groupedTypeMap: Record<string, FinanceLedgerEventType[]> = {
+        ORDER: [FinanceLedgerEventType.ORDER_SALE, FinanceLedgerEventType.RELEASE_AVAILABLE],
+        REFUND: [FinanceLedgerEventType.ORDER_REFUND],
+        PAYOUT: [FinanceLedgerEventType.PAYOUT_REQUEST, FinanceLedgerEventType.PAYOUT_PAID],
+      };
+
+      if (groupedTypeMap[typeRaw]) {
+        where.eventType = { in: groupedTypeMap[typeRaw] };
+      } else {
+        const normalizedEventType = typeRaw as FinanceLedgerEventType;
+        if (!Object.values(FinanceLedgerEventType).includes(normalizedEventType)) {
+          throw new BadRequestException('type gecersiz');
+        }
+        where.eventType = normalizedEventType;
+      }
+    }
+
+    const orderWhere: Prisma.OrderWhereInput = {};
+    const channelRaw = (params?.channel ?? '').trim().toUpperCase();
+    if (channelRaw) {
+      if (channelRaw === 'POS') {
+        orderWhere.source = OrderSource.POS;
+      } else if (
+        channelRaw === 'MARKETPLACE' ||
+        channelRaw === 'ONLINE' ||
+        channelRaw === 'WEB'
+      ) {
+        orderWhere.source = { in: [OrderSource.WEB, OrderSource.MOBILE] };
+      } else if (channelRaw === 'MANUAL') {
+        orderWhere.source = OrderSource.API;
+      } else {
+        throw new BadRequestException('channel gecersiz');
+      }
+    }
+    if (Object.keys(orderWhere).length > 0) {
+      where.order = orderWhere;
+    }
+
+    const total = await this.prisma.financeLedgerEntry.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const rows = await this.prisma.financeLedgerEntry.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take,
+      select: {
+        id: true,
+        eventType: true,
+        accountType: true,
+        direction: true,
+        amountCents: true,
+        currency: true,
+        orderId: true,
+        sellerId: true,
+        payoutRequestId: true,
+        eventId: true,
+        createdAt: true,
+        order: {
+          select: {
+            source: true,
+          },
+        },
+      },
+    });
+
+    return {
+      data: rows.map((row) => {
+        const source = row.order?.source;
+        const channel =
+          source === OrderSource.POS
+            ? 'POS'
+            : source === OrderSource.WEB || source === OrderSource.MOBILE
+              ? 'MARKETPLACE'
+              : source === OrderSource.API
+                ? 'MANUAL'
+                : null;
+        const reference = row.orderId
+          ? `ORDER#${row.orderId}`
+          : row.payoutRequestId
+            ? `PAYOUT#${row.payoutRequestId}`
+            : row.eventId;
+
+        return {
+          id: row.id,
+          timestamp: row.createdAt,
+          accountType: row.accountType,
+          direction: row.direction,
+          amountCents: row.amountCents,
+          currency: row.currency,
+          orderId: row.orderId,
+          sellerId: row.sellerId,
+          eventType: row.eventType,
+          channel,
+          reference,
+        };
+      }),
+      meta,
+    };
+  }
+
+  async listSellerWallets(
+    currentUser: JwtPayload,
+    params?: { page?: number; pageSize?: number },
+  ): Promise<{
+    data: Array<{
+      sellerId: number;
+      sellerName: string;
+      currency: string;
+      pendingBalanceCents: number;
+      availableBalanceCents: number;
+      totalEarnedCents: number;
+      totalPaidOutCents: number;
+      lastActivityAt?: Date | null;
+    }>;
+    meta: PaginationMeta;
+  }> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const where = { businessId };
+    const total = await this.prisma.sellerWallet.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const [walletRows, earnedRows, paidOutRows, activityRows] = await Promise.all([
+      this.prisma.sellerWallet.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        select: {
+          sellerId: true,
+          currency: true,
+          pendingBalanceCents: true,
+          availableBalanceCents: true,
+          seller: {
+            select: {
+              displayName: true,
+              user: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.financeLedgerEntry.groupBy({
+        by: ['sellerId'],
+        where: {
+          businessId,
+          sellerId: { not: null },
+          eventType: FinanceLedgerEventType.ORDER_SALE,
+          accountType: FinanceLedgerAccountType.SELLER_PENDING,
+          direction: FinanceLedgerDirection.CREDIT,
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.financeLedgerEntry.groupBy({
+        by: ['sellerId'],
+        where: {
+          businessId,
+          sellerId: { not: null },
+          eventType: FinanceLedgerEventType.PAYOUT_PAID,
+          accountType: FinanceLedgerAccountType.SELLER_AVAILABLE,
+          direction: FinanceLedgerDirection.DEBIT,
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.financeLedgerEntry.groupBy({
+        by: ['sellerId'],
+        where: {
+          businessId,
+          sellerId: { not: null },
+        },
+        _max: { createdAt: true },
+      }),
+    ]);
+
+    const earnedBySeller = new Map(
+      earnedRows
+        .filter((row) => typeof row.sellerId === 'number')
+        .map((row) => [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const),
+    );
+    const paidOutBySeller = new Map(
+      paidOutRows
+        .filter((row) => typeof row.sellerId === 'number')
+        .map((row) => [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const),
+    );
+    const activityBySeller = new Map(
+      activityRows
+        .filter((row) => typeof row.sellerId === 'number')
+        .map(
+          (row) =>
+            [Number(row.sellerId), (row._max.createdAt as Date | null) ?? null] as const,
+        ),
+    );
+
+    return {
+      data: walletRows.map((row) => ({
+        sellerId: row.sellerId,
+        sellerName:
+          row.seller.displayName ||
+          row.seller.user?.name ||
+          `Seller #${row.sellerId}`,
+        currency: row.currency,
+        pendingBalanceCents: row.pendingBalanceCents,
+        availableBalanceCents: row.availableBalanceCents,
+        totalEarnedCents: earnedBySeller.get(row.sellerId) ?? 0,
+        totalPaidOutCents: paidOutBySeller.get(row.sellerId) ?? 0,
+        lastActivityAt: activityBySeller.get(row.sellerId) ?? null,
+      })),
+      meta,
+    };
+  }
+
+  async listRefundRequests(
+    currentUser: JwtPayload,
+    params?: { status?: string; page?: number; pageSize?: number },
+  ): Promise<{
+    data: Array<{
+      id: number;
+      orderId: number;
+      sellerId?: number | null;
+      customerId: number;
+      status: string;
+      reason?: string | null;
+      responseNote?: string | null;
+      requestedAt: Date;
+      decidedAt?: Date | null;
+      originalSnapshot: {
+        subtotalAmountCents: number;
+        commissionAmountCents: number;
+        taxAmountCents: number;
+        totalAmountCents: number;
+      };
+      refundAmountCents: number;
+      ledgerPreview: Array<{
+        accountType: string;
+        direction: string;
+        amountCents: number;
+        createdAt: Date;
+      }>;
+    }>;
+    meta: PaginationMeta;
+  }> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const statusRaw = (params?.status ?? '').trim().toUpperCase();
+    const where: Prisma.ReturnRequestWhereInput = { businessId };
+    if (statusRaw) {
+      const status = statusRaw as ReturnRequestStatus;
+      if (!Object.values(ReturnRequestStatus).includes(status)) {
+        throw new BadRequestException('status gecersiz');
+      }
+      where.status = status;
+    }
+
+    const total = await (this.prisma as any).returnRequest.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const requests: Array<{
+      id: number;
+      orderId: number;
+      customerId: number;
+      status: string;
+      reason?: string | null;
+      responseNote?: string | null;
+      requestedAt: Date;
+      decidedAt?: Date | null;
+      order?: {
+        sellerId?: number | null;
+        subtotalAmountCents?: number;
+        commissionSnapshotCents?: number;
+        taxAmountCents?: number;
+        totalAmountCents?: number;
+      } | null;
+    }> = await (this.prisma as any).returnRequest.findMany({
+      where,
+      orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take,
+      select: {
+        id: true,
+        orderId: true,
+        customerId: true,
+        status: true,
+        reason: true,
+        responseNote: true,
+        requestedAt: true,
+        decidedAt: true,
+        order: {
+          select: {
+            sellerId: true,
+            subtotalAmountCents: true,
+            commissionSnapshotCents: true,
+            taxAmountCents: true,
+            totalAmountCents: true,
+          },
+        },
+      },
+    });
+
+    const orderIds = Array.from(new Set(requests.map((row) => Number(row.orderId))));
+    const refundLedgerRows =
+      orderIds.length > 0
+        ? await this.prisma.financeLedgerEntry.findMany({
+            where: {
+              businessId,
+              eventType: FinanceLedgerEventType.ORDER_REFUND,
+              orderId: { in: orderIds },
+            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            select: {
+              orderId: true,
+              accountType: true,
+              direction: true,
+              amountCents: true,
+              createdAt: true,
+            },
+          })
+        : [];
+
+    const ledgerByOrderId = new Map<
+      number,
+      Array<{
+        accountType: string;
+        direction: string;
+        amountCents: number;
+        createdAt: Date;
+      }>
+    >();
+    for (const row of refundLedgerRows) {
+      if (typeof row.orderId !== 'number') continue;
+      const bucket = ledgerByOrderId.get(row.orderId) ?? [];
+      bucket.push({
+        accountType: row.accountType,
+        direction: row.direction,
+        amountCents: row.amountCents,
+        createdAt: row.createdAt,
+      });
+      ledgerByOrderId.set(row.orderId, bucket);
+    }
+
+    return {
+      data: requests.map((row) => {
+        const snapshot = {
+          subtotalAmountCents: Number(row.order?.subtotalAmountCents ?? 0),
+          commissionAmountCents: Number(row.order?.commissionSnapshotCents ?? 0),
+          taxAmountCents: Number(row.order?.taxAmountCents ?? 0),
+          totalAmountCents: Number(row.order?.totalAmountCents ?? 0),
+        };
+        const ledgerPreview = (ledgerByOrderId.get(Number(row.orderId)) ?? []).slice(0, 8);
+        const refundAmountCents = ledgerPreview
+          .filter(
+            (item) =>
+              item.accountType === FinanceLedgerAccountType.CLEARING &&
+              item.direction === FinanceLedgerDirection.CREDIT,
+          )
+          .reduce((acc, item) => acc + Number(item.amountCents ?? 0), 0);
+
+        return {
+          id: row.id,
+          orderId: row.orderId,
+          sellerId: row.order?.sellerId ?? null,
+          customerId: row.customerId,
+          status: row.status,
+          reason: row.reason,
+          responseNote: row.responseNote,
+          requestedAt: row.requestedAt,
+          decidedAt: row.decidedAt,
+          originalSnapshot: snapshot,
+          refundAmountCents,
+          ledgerPreview,
+        };
+      }),
+      meta,
+    };
   }
 
   async getSellerFinanceOverview(
@@ -1048,6 +2065,8 @@ export class FinanceService {
       },
       data: {
         commissionSnapshotCents: commissionAmountCents,
+        platformRevenueCents: commissionAmountCents,
+        sellerPayoutCents: netAmountCents,
       },
     });
   }

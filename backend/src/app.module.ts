@@ -26,7 +26,9 @@ import { EmailModule } from './email/email.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
+import { CommerceRulesModule } from './modules/commerce-rules/commerce-rules.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
+import { CommerceModule } from './core/commerce';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     OutboxModule,
     EmailModule,
     HealthModule,
+    CommerceModule,
+    CommerceRulesModule,
     AuthModule,
     UsersModule,
     CustomersModule,

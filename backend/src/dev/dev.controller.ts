@@ -1,11 +1,15 @@
 import { Controller, ForbiddenException, Get, Headers, Query } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { ProductType, Role } from '@prisma/client';
+import { OrderSource, ProductType, Role } from '@prisma/client';
+import { CommerceCalculationService } from '../core/commerce';
 import bcrypt from 'bcryptjs';
 
 @Controller('dev')
 export class DevController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly commerceCalculationService: CommerceCalculationService,
+  ) {}
 
   private assertSeedAccess(apiKey?: string) {
     const isProduction = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
@@ -19,6 +23,116 @@ export class DevController {
     if (expectedKey && apiKey !== expectedKey) {
       throw new ForbiddenException('Invalid dev seed key');
     }
+  }
+
+  private mapSourceToChannel(source: OrderSource): 'MARKETPLACE' | 'POS' | 'MANUAL' {
+    if (source === OrderSource.POS) return 'POS';
+    if (source === OrderSource.WEB || source === OrderSource.MOBILE) {
+      return 'MARKETPLACE';
+    }
+    return 'MANUAL';
+  }
+
+  @Get('shadow-compare')
+  async shadowCompare(
+    @Headers('x-dev-seed-key') headerKey?: string,
+    @Query('key') queryKey?: string,
+    @Query('limit') limitRaw?: string,
+  ) {
+    this.assertSeedAccess(headerKey ?? queryKey);
+
+    const limit = Math.max(Math.min(Math.trunc(Number(limitRaw ?? 100)), 500), 1);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        businessId: true,
+        sellerId: true,
+        source: true,
+        currency: true,
+        subtotalAmountCents: true,
+        discountAmountCents: true,
+        taxAmountCents: true,
+        totalAmountCents: true,
+        shippingCostCents: true,
+        commissionSnapshotCents: true,
+        platformRevenueCents: true,
+        sellerPayoutCents: true,
+        items: {
+          select: {
+            productId: true,
+            variantId: true,
+            quantity: true,
+            unitPriceCents: true,
+            taxRateBps: true,
+          },
+        },
+      },
+    });
+
+    const rows = orders.map((order) => {
+      const commissionPolicyValue =
+        order.totalAmountCents > 0
+          ? Math.max(
+              Math.round((order.commissionSnapshotCents * 10_000) / order.totalAmountCents),
+              0,
+            )
+          : 0;
+
+      const recalculated = this.commerceCalculationService.calculate({
+        channel: this.mapSourceToChannel(order.source),
+        businessId: order.businessId,
+        sellerId: order.sellerId ?? null,
+        currency: order.currency || 'TRY',
+        taxInclusive: false,
+        items: order.items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          taxRateBps: item.taxRateBps,
+        })),
+        cartDiscountAmountCents: order.discountAmountCents,
+        shippingCostCents: order.shippingCostCents,
+        commissionPolicy: {
+          type: 'PERCENT',
+          value: commissionPolicyValue,
+        },
+      });
+
+      const delta = {
+        subtotalDeltaCents: recalculated.subtotalAmountCents - order.subtotalAmountCents,
+        discountDeltaCents: recalculated.discountAmountCents - order.discountAmountCents,
+        taxDeltaCents: recalculated.taxAmountCents - order.taxAmountCents,
+        totalDeltaCents: recalculated.totalAmountCents - order.totalAmountCents,
+        commissionDeltaCents:
+          recalculated.commissionAmountCents - order.commissionSnapshotCents,
+        platformRevenueDeltaCents:
+          recalculated.platformRevenueCents - order.platformRevenueCents,
+        sellerPayoutDeltaCents:
+          recalculated.sellerPayoutCents - order.sellerPayoutCents,
+      };
+
+      const hasDelta = Object.values(delta).some((value) => value !== 0);
+      return {
+        orderId: order.id,
+        hasDelta,
+        delta,
+      };
+    });
+
+    const mismatchRows = rows.filter((row) => row.hasDelta);
+
+    return {
+      checkedCount: rows.length,
+      mismatchCount: mismatchRows.length,
+      mismatchRate: rows.length > 0 ? mismatchRows.length / rows.length : 0,
+      rows: mismatchRows,
+    };
   }
 
   @Get('seed')

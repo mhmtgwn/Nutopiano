@@ -24,6 +24,7 @@ import { CreateProductDto } from '../products/dto/create-product.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
 import { AdminProductPublishForceDto } from './dto/admin-product-publish-force.dto';
 import { AdminProductStockForceDto } from './dto/admin-product-stock-force.dto';
+import { CreateSellerApplicationDto } from './dto/create-seller-application.dto';
 import { CreateSellerTeamInviteDto } from './dto/create-seller-team-invite.dto';
 import { SellerProductPublishDto } from './dto/seller-product-publish.dto';
 import { SellerProductStockDto } from './dto/seller-product-stock.dto';
@@ -37,6 +38,31 @@ import { SellersService } from './sellers.service';
 @Controller()
 export class SellersController {
   constructor(private readonly sellersService: SellersService) {}
+
+  @Post('sellers/applications')
+  @Roles('CUSTOMER', 'USER')
+  @ApiOperation({
+    summary: 'Create seller onboarding application',
+    description:
+      'CUSTOMER/USER can create or refresh their seller onboarding application. Application starts as pending (isActive=false).',
+  })
+  createSellerApplication(
+    @Req() req: { user: JwtPayload },
+    @Body() payload: CreateSellerApplicationDto,
+  ) {
+    return this.sellersService.createSellerApplication(req.user, payload);
+  }
+
+  @Get('sellers/applications/me')
+  @Roles('CUSTOMER', 'USER', 'SELLER')
+  @ApiOperation({
+    summary: 'Get my seller application',
+    description:
+      'Returns current user seller application (pending/approved) for the active business.',
+  })
+  getMySellerApplication(@Req() req: { user: JwtPayload }) {
+    return this.sellersService.getMySellerApplication(req.user);
+  }
 
   @Post('seller/team/invites')
   @Roles('SELLER')

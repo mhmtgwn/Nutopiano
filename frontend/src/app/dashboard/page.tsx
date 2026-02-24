@@ -1,292 +1,284 @@
-/* eslint-disable react/no-unescaped-entities */
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
-import { formatPrice } from '@/lib/format';
-import { getPanelLabelByRole } from '@/lib/role-routing';
+import { formatDateTime, formatPrice } from '@/lib/format';
 import { useAppSelector } from '@/store';
 
 interface SellerDashboardSummary {
-  activeProducts: number;
-  lowStockProducts: number;
-  ordersTotal: number;
   ordersToday: number;
   revenueTodayCents: number;
 }
 
-interface SellerReportsSummary {
-  range: {
-    from: string;
-    to: string;
-    days: number;
-  };
-  ordersCount: number;
-  revenueCents: number;
-  averageOrderValueCents: number;
-  topProducts: Array<{
-    productId: number;
-    name: string;
-    quantity: number;
-    revenueCents: number;
-  }>;
+interface SellerPayoutability {
+  pendingBalanceCents: number;
+  availableBalanceCents: number;
 }
 
-type QuickAction = {
-  label: string;
-  href: string;
-};
+interface OrderRow {
+  id: number;
+  source: string;
+  statusKey: string;
+  totalAmountCents: number;
+  commissionAmountCents?: number;
+  sellerNetAmountCents?: number;
+  priceMismatch?: boolean;
+  createdAt: string;
+}
 
-type SetupAction = QuickAction;
+interface PayoutRow {
+  id: number;
+  amountCents: number;
+  status: string;
+  requestedAt: string;
+}
+
+interface PaginationMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface PaginatedOrders {
+  data: OrderRow[];
+  meta: PaginationMeta;
+}
+
+interface PaginatedPayouts {
+  data: PayoutRow[];
+  meta: PaginationMeta;
+}
+
+const statusBadgeClassName = (status: string) => {
+  const key = String(status ?? '').trim().toUpperCase();
+  if (key === 'REQUESTED' || key === 'PENDING') return 'bg-[#FFF7E6] text-[#7A4B00]';
+  if (key === 'APPROVED') return 'bg-[#E8F1FF] text-[#0B3B91]';
+  if (key === 'PAID' || key === 'COMPLETED') return 'bg-[#E6FBF2] text-[#0F5132]';
+  if (key === 'REJECTED') return 'bg-[#FDECEC] text-[#9B1C1C]';
+  return 'bg-[#F3EEE3] text-[#3E2723]';
+};
 
 export default function SellerDashboardPage() {
   const user = useAppSelector((state) => state.user.user);
-  const isStaff = user?.role === 'USER';
-  const panelLabel = getPanelLabelByRole(user?.role);
-  const heroTag = isStaff ? 'Personel' : 'Satıcı';
-  const heroDescription = isStaff
-    ? 'İşletmenin günlük operasyon performansı ve son 30 günlük satış trendi.'
-    : 'Mağazanızın bugünkü performansı ve son 30 günlük satış trendi.';
-
-  const quickActions = useMemo<QuickAction[]>(() => {
-    if (isStaff) {
-      return [
-        { label: 'Siparişleri görüntüle', href: '/dashboard/orders' },
-        { label: 'Stok kontrolü', href: '/dashboard/inventory' },
-        { label: 'Tahsilat takibi', href: '/dashboard/finance' },
-        { label: 'POS ekranı', href: '/pos' },
-        { label: 'Raporlar', href: '/dashboard/reports' },
-      ];
-    }
-
-    return [
-      { label: 'Ürünleri yönet', href: '/dashboard/products' },
-      { label: 'Siparişleri görüntüle', href: '/dashboard/orders' },
-      { label: 'Finans', href: '/dashboard/finance' },
-      { label: 'Kampanyalar', href: '/dashboard/campaigns/coupons' },
-      { label: 'Raporlar', href: '/dashboard/reports' },
-      { label: 'Abonelik', href: '/dashboard/subscription' },
-    ];
-  }, [isStaff]);
-
-  const setupActions = useMemo<SetupAction[]>(() => {
-    if (isStaff) {
-      return [
-        { label: 'Sipariş ekranını aç', href: '/dashboard/orders' },
-        { label: 'Stok listesini kontrol et', href: '/dashboard/inventory' },
-        { label: 'POS ekranına geç', href: '/pos' },
-      ];
-    }
-
-    return [
-      { label: 'İlk ürünü ekle', href: '/dashboard/products' },
-      { label: 'Kampanya oluştur', href: '/dashboard/campaigns/coupons' },
-      { label: 'POS ekranına geç', href: '/pos' },
-    ];
-  }, [isStaff]);
+  const isSeller = user?.role === 'SELLER';
 
   const summaryQuery = useQuery<SellerDashboardSummary>({
-    queryKey: ['seller-dashboard-summary'],
+    queryKey: ['seller-dashboard-summary-v2'],
     queryFn: async () => {
       const res = await api.get<SellerDashboardSummary>('/dashboard/summary');
       return res.data;
     },
   });
 
-  const reportsQuery = useQuery<SellerReportsSummary>({
-    queryKey: ['seller-dashboard-reports-summary'],
+  const payoutabilityQuery = useQuery<SellerPayoutability>({
+    queryKey: ['seller-payoutability-dashboard'],
+    enabled: isSeller,
     queryFn: async () => {
-      const res = await api.get<SellerReportsSummary>('/dashboard/reports/summary');
+      const res = await api.get<SellerPayoutability>('/seller/finance/payoutability');
       return res.data;
     },
   });
 
-  const isLoading = summaryQuery.isLoading || reportsQuery.isLoading;
-  const isError = summaryQuery.isError || reportsQuery.isError;
+  const latestOrdersQuery = useQuery<PaginatedOrders>({
+    queryKey: ['seller-dashboard-latest-orders'],
+    queryFn: async () => {
+      const res = await api.get<PaginatedOrders>('/orders', {
+        params: { page: 1, pageSize: 10 },
+      });
+      return res.data;
+    },
+  });
 
-  const data = summaryQuery.data;
-  const reports = reportsQuery.data;
-  const topProducts = reports?.topProducts ?? [];
-  const showSetupGuide = Boolean(data && data.ordersTotal === 0 && data.activeProducts === 0);
+  const latestPayoutQuery = useQuery<PaginatedPayouts>({
+    queryKey: ['seller-dashboard-latest-payout'],
+    enabled: isSeller,
+    queryFn: async () => {
+      const res = await api.get<PaginatedPayouts>('/seller/finance/payouts', {
+        params: { page: 1, pageSize: 1 },
+      });
+      return res.data;
+    },
+  });
+
+  const isLoading =
+    summaryQuery.isLoading ||
+    latestOrdersQuery.isLoading ||
+    (isSeller && payoutabilityQuery.isLoading) ||
+    (isSeller && latestPayoutQuery.isLoading);
+
+  const isError = summaryQuery.isError || latestOrdersQuery.isError;
+  const latestOrders = latestOrdersQuery.data?.data ?? [];
+  const mismatchCount = latestOrders.filter((row) => Boolean(row.priceMismatch)).length;
+  const latestPayout = latestPayoutQuery.data?.data?.[0];
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
+      <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-          {heroTag}
+          Seller
         </p>
-        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Genel bakış</h1>
+        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Dashboard</h1>
         <p className="mt-2 text-sm text-[var(--neutral-600)]">
-          {heroDescription}
+          Bugun satis performansi, mismatch sinyalleri ve son payout durumunu izleyin.
         </p>
-        <div className="mt-3 inline-flex rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)]">
-          {panelLabel}
-        </div>
-      </div>
+      </section>
 
-      <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-        {isLoading && <Spinner fullscreen label="Yükleniyor..." />}
+      {isLoading ? <Spinner fullscreen label="Dashboard yukleniyor..." /> : null}
 
-        {isError && !isLoading && (
-          <div className="rounded-[var(--radius-lg)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Özet bilgiler yüklenemedi. Yetki veya bağlantı problemi olabilir.
-          </div>
-        )}
+      {isError ? (
+        <section className="rounded-[var(--radius-xl)] border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
+          Dashboard verileri alinamadi.
+        </section>
+      ) : null}
 
-        {!isLoading && !isError && data && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Bugün Sipariş
-              </div>
-              <div className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {data.ordersToday}
-              </div>
+      {!isLoading && !isError ? (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                Today Sales
+              </p>
+              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+                {formatPrice(summaryQuery.data?.revenueTodayCents ?? 0)}
+              </p>
             </div>
-
-            <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Bugün Ciro
-              </div>
-              <div className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {formatPrice(data.revenueTodayCents / 100)}
-              </div>
+            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                Today Orders
+              </p>
+              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+                {summaryQuery.data?.ordersToday ?? 0}
+              </p>
             </div>
-
-            <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Toplam Sipariş
-              </div>
-              <div className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {data.ordersTotal}
-              </div>
+            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                Pending Balance
+              </p>
+              <p className="mt-2 text-2xl font-serif text-[#7A4B00]">
+                {formatPrice(payoutabilityQuery.data?.pendingBalanceCents ?? 0)}
+              </p>
             </div>
-
-            <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Aktif Ürün
-              </div>
-              <div className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {data.activeProducts}
-              </div>
-            </div>
-
-            <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                Düşük Stok
-              </div>
-              <div className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {data.lowStockProducts}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-        {showSetupGuide ? (
-          <section className="xl:col-span-2 rounded-[var(--radius-xl)] border border-[#CFAE74] bg-[#FFF9EE] px-6 py-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#7A5A24]">
-              İlk Kurulum
-            </p>
-            <h2 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-              {isStaff ? 'Operasyon başlangıç adımları' : 'Satış başlangıç adımları'}
-            </h2>
-            <p className="mt-2 text-sm text-[var(--neutral-700)]">
-              Henüz satış verisi oluşmamış. Aşağıdaki adımlarla paneli aktif kullanıma alın.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {setupActions.map((action) => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[#D9C08F] bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:bg-[#FFFCF4]"
-                >
-                  {action.label}
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              ))}
+            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                Available Balance
+              </p>
+              <p className="mt-2 text-2xl font-serif text-[#0F5132]">
+                {formatPrice(payoutabilityQuery.data?.availableBalanceCents ?? 0)}
+              </p>
             </div>
           </section>
-        ) : null}
 
-        <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-          <h2 className="text-xl font-serif text-[var(--primary-800)]">Hızlı işlemler</h2>
-          <div className="mt-4 grid gap-3">
-            {quickActions.map((action) => (
-              <Link
-                key={action.href}
-                href={action.href}
-                className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+          <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-serif text-[var(--primary-800)]">Son 10 siparis</h2>
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                  mismatchCount > 0 ? 'bg-[#FDECEC] text-[#9B1C1C]' : 'bg-[#E6FBF2] text-[#0F5132]'
+                }`}
               >
-                {action.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-          <h2 className="text-xl font-serif text-[var(--primary-800)]">
-            {isStaff ? 'Operasyon özeti' : 'Satış özeti'}
-          </h2>
-          {!reports ? (
-            <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4">
-              <p className="text-sm text-[var(--neutral-600)]">Rapor verisi bulunamadı.</p>
-              <div className="mt-3 grid gap-2">
-                {setupActions.slice(0, 2).map((action) => (
-                  <Link
-                    key={action.href}
-                    href={action.href}
-                    className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
-                  >
-                    {action.label}
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                ))}
-              </div>
+                Mismatch {mismatchCount}
+              </span>
             </div>
-          ) : (
-            <div className="mt-3 space-y-3">
-              <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                  30 gün ciro
-                </p>
-                <p className="mt-1 text-lg font-serif text-[var(--primary-800)]">
-                  {formatPrice(reports.revenueCents / 100)}
-                </p>
-              </div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--neutral-200)] text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
+                    <th className="py-3 pr-4">Order</th>
+                    <th className="py-3 pr-4">Channel</th>
+                    <th className="py-3 pr-4">Status</th>
+                    <th className="py-3 pr-4">Total</th>
+                    <th className="py-3 pr-4">Commission</th>
+                    <th className="py-3 pr-4">Seller Net</th>
+                    <th className="py-3 pr-4">Mismatch</th>
+                    <th className="py-3">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestOrders.map((row) => (
+                    <tr key={row.id} className="border-b border-[var(--neutral-100)]">
+                      <td className="py-3 pr-4 font-semibold text-[var(--primary-800)]">#{row.id}</td>
+                      <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.source}</td>
+                      <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.statusKey}</td>
+                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                        {formatPrice(row.totalAmountCents)}
+                      </td>
+                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                        {formatPrice(row.commissionAmountCents ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                        {formatPrice(row.sellerNetAmountCents ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${
+                            row.priceMismatch ? 'bg-[#FDECEC] text-[#9B1C1C]' : 'bg-[#E6FBF2] text-[#0F5132]'
+                          }`}
+                        >
+                          {row.priceMismatch ? 'Flag' : 'OK'}
+                        </span>
+                      </td>
+                      <td className="py-3 text-[var(--neutral-600)]">{formatDateTime(row.createdAt)}</td>
+                    </tr>
+                  ))}
+                  {latestOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-5 text-center text-sm text-[var(--neutral-600)]">
+                        Siparis kaydi bulunamadi.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            <Link
+              href="/dashboard/orders"
+              className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
+            >
+              Tum siparisleri goruntule
+            </Link>
+          </section>
 
-              <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                  Ortalama sipariş
-                </p>
-                <p className="mt-1 text-lg font-serif text-[var(--primary-800)]">
-                  {formatPrice(reports.averageOrderValueCents / 100)}
-                </p>
-              </div>
-
-              {topProducts.length > 0 ? (
-                <div className="rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                    {isStaff ? 'En hareketli ürün' : 'En çok satan'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--primary-800)]">
-                    {topProducts[0].name}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--neutral-600)]">
-                    {topProducts[0].quantity} adet
-                  </p>
+          <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">Son payout talebi</h2>
+            {!isSeller ? (
+              <p className="mt-3 text-sm text-[var(--neutral-600)]">
+                Bu alan sadece SELLER hesabinda aktif.
+              </p>
+            ) : latestPayout ? (
+              <div className="mt-3 flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--primary-800)]">#{latestPayout.id}</p>
+                  <p className="text-xs text-[var(--neutral-600)]">{formatDateTime(latestPayout.requestedAt)}</p>
                 </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-[var(--primary-800)]">
+                    {formatPrice(latestPayout.amountCents)}
+                  </p>
+                  <span
+                    className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${statusBadgeClassName(
+                      latestPayout.status,
+                    )}`}
+                  >
+                    {latestPayout.status}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--neutral-600)]">Payout kaydi bulunamadi.</p>
+            )}
+            <Link
+              href="/dashboard/finance"
+              className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
+            >
+              Payout ekranina git
+            </Link>
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

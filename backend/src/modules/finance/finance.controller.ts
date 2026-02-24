@@ -91,6 +91,18 @@ export class FinanceController {
     return this.financeService.requestPayout(req.user, payload.amountCents);
   }
 
+  @Get('seller/finance/payoutability')
+  @Roles('SELLER')
+  @ApiOperation({
+    summary: 'Get seller payoutability',
+    description:
+      'Returns pending/available balances and currently requestable payout amount for the current seller.',
+  })
+  @ApiOkResponse({ description: 'Seller payoutability payload.' })
+  getSellerPayoutability(@Req() req: { user: JwtPayload }) {
+    return this.financeService.getSellerPayoutability(req.user);
+  }
+
   @Patch('platform/finance/payouts/:id/approve')
   @Roles('ADMIN')
   @ApiOperation({
@@ -105,13 +117,149 @@ export class FinanceController {
   @Patch('platform/finance/payouts/:id/complete')
   @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Complete a payout request',
+    summary: 'Mark payout as paid',
     description:
-      'Marks an approved payout request as completed after manual EFT.',
+      'Marks an approved payout request as paid after manual bank transfer and posts immutable ledger entries.',
   })
-  @ApiOkResponse({ description: 'Completed payout request.' })
+  @ApiOkResponse({ description: 'Paid payout request.' })
   completePayout(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.financeService.completePayout(req.user, Number(id));
+  }
+
+  @Patch('platform/finance/payouts/:id/reject')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Reject payout request',
+    description:
+      'Rejects a REQUESTED/APPROVED payout request without posting paid ledger entries.',
+  })
+  @ApiOkResponse({ description: 'Rejected payout request.' })
+  rejectPayout(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
+    return this.financeService.rejectPayout(req.user, Number(id));
+  }
+
+  @Post('platform/finance/payouts/release-pending')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Run pending->available release job',
+    description:
+      'Runs T+7 release policy for completed orders and moves pending balances to available balances.',
+  })
+  @ApiOkResponse({ description: 'Release job summary.' })
+  releasePendingToAvailable(
+    @Req() req: { user: JwtPayload },
+    @Query('limit') limit?: string,
+  ) {
+    return this.financeService.releasePendingToAvailable(req.user, {
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('platform/finance/health')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Finance health snapshot',
+    description:
+      'Returns ledger invariant, wallet negativity, mismatch rate and reconciliation health metrics.',
+  })
+  @ApiOkResponse({ description: 'Finance health payload.' })
+  getFinanceHealth(
+    @Req() req: { user: JwtPayload },
+    @Query('payoutAgingDays') payoutAgingDays?: string,
+  ) {
+    return this.financeService.getFinanceHealth(req.user, {
+      payoutAgingDays: payoutAgingDays ? Number(payoutAgingDays) : undefined,
+    });
+  }
+
+  @Get('platform/risk/price-mismatches')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'List price mismatch orders',
+    description:
+      'Returns flagged POS/commerce orders that were accepted with price mismatch policy.',
+  })
+  @ApiOkResponse({ description: 'Paginated price mismatch list.' })
+  listPriceMismatches(
+    @Req() req: { user: JwtPayload },
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.financeService.listPriceMismatches(req.user, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Get('platform/finance/ledger')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'List finance ledger entries',
+    description:
+      'Returns paginated immutable ledger entries with optional seller/date/type/channel/order filters.',
+  })
+  @ApiOkResponse({ description: 'Paginated ledger entries.' })
+  listFinanceLedger(
+    @Req() req: { user: JwtPayload },
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sellerId') sellerId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('type') type?: string,
+    @Query('channel') channel?: string,
+    @Query('orderId') orderId?: string,
+  ) {
+    return this.financeService.listFinanceLedger(req.user, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      sellerId: sellerId ? Number(sellerId) : undefined,
+      dateFrom,
+      dateTo,
+      type,
+      channel,
+      orderId: orderId ? Number(orderId) : undefined,
+    });
+  }
+
+  @Get('platform/finance/wallets')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'List seller wallets',
+    description:
+      'Returns paginated seller wallet balances with derived earned/paid totals.',
+  })
+  @ApiOkResponse({ description: 'Paginated seller wallets.' })
+  listSellerWallets(
+    @Req() req: { user: JwtPayload },
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.financeService.listSellerWallets(req.user, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Get('platform/finance/refunds')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'List refund requests with snapshot/ledger preview',
+    description:
+      'Returns paginated refund requests and original order snapshot fields for finance review.',
+  })
+  @ApiOkResponse({ description: 'Paginated refund requests.' })
+  listRefundRequests(
+    @Req() req: { user: JwtPayload },
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.financeService.listRefundRequests(req.user, {
+      status,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
   }
 
   @Get('seller/finance/overview')

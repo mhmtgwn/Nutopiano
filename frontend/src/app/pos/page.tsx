@@ -250,6 +250,38 @@ type PosInvoicePayload = {
   };
 };
 
+type PosMismatchDecision = 'continue' | 'cancel';
+
+type PosMismatchModalState = {
+  expectedCents?: number;
+  actualCents: number;
+};
+
+const MAX_QUEUE_RETRY_ATTEMPTS = 8;
+
+const extractNestedMetaValue = (payload: unknown, keyPath: string) => {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const parts = keyPath.split('.');
+  let cursor: unknown = payload;
+  for (const part of parts) {
+    if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return undefined;
+    cursor = (cursor as Record<string, unknown>)[part];
+  }
+  return cursor;
+};
+
+const extractMetaNumber = (payload: unknown, candidates: string[]) => {
+  for (const candidate of candidates) {
+    const raw = extractNestedMetaValue(payload, candidate);
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+    if (typeof raw === 'string') {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+};
+
 const createIdempotencyKey = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -733,6 +765,8 @@ export default function PosPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [recentSyncedCount, setRecentSyncedCount] = useState<number | null>(null);
+  const [showSyncSuccessBanner, setShowSyncSuccessBanner] = useState(false);
   const [queueItems, setQueueItems] = useState<PosOrderQueueItem[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
@@ -759,6 +793,10 @@ export default function PosPage() {
   const [invoicePayload, setInvoicePayload] = useState<PosInvoicePayload | null>(null);
   const [isInvoiceBusy, setIsInvoiceBusy] = useState(false);
   const [conflictDetail, setConflictDetail] = useState<string | null>(null);
+  const [mismatchModal, setMismatchModal] = useState<PosMismatchModalState | null>(null);
+  const mismatchDecisionResolverRef = useRef<
+    ((decision: PosMismatchDecision) => void) | null
+  >(null);
 
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>(
     defaultReceiptSettings,
@@ -811,6 +849,8 @@ export default function PosPage() {
 
       await refreshQueue();
       if (successCount > 0) {
+        setRecentSyncedCount(successCount);
+        setShowSyncSuccessBanner(true);
         toast.success(`${successCount} bekleyen satis senkronize edildi.`);
       }
     } finally {
@@ -1069,8 +1109,7 @@ export default function PosPage() {
   ]);
 
   const ensureShiftSession = useCallback(async () => {
-    if (!isAuthed) return;
-    const normalizedRegisterCode = registerCode.trim().toUpperCase() || 'MAIN';
+    if (!isAuthed) return false;
     try {
       const currentRes = await api.get<PosShiftRow | null>('/pos/register-session/current');
       const current = currentRes.data;
@@ -1079,24 +1118,14 @@ export default function PosPage() {
         if (!registerCode.trim()) {
           setRegisterCode(current.registerCode);
         }
-        return;
+        return true;
       }
-
-      await api.post('/pos/register-session/open', {
-        registerCode: normalizedRegisterCode,
-        openingCashCents: 0,
-        note: 'AUTO_OPEN_ON_LOGIN',
-      });
+      setActiveShift(null);
       await loadShiftRows();
-    } catch (error) {
-      const message = resolveApiErrorMessage(error, '');
-      const normalizedMessage = message.toLowerCase();
-      if (
-        !normalizedMessage.includes('zaten') &&
-        !normalizedMessage.includes('already')
-      ) {
-        await loadShiftRows();
-      }
+      return false;
+    } catch {
+      await loadShiftRows();
+      return false;
     }
   }, [isAuthed, loadShiftRows, registerCode]);
 
@@ -1134,6 +1163,14 @@ export default function PosPage() {
       window.removeEventListener('offline', updateOnlineState);
     };
   }, [refreshQueue, syncQueuedSales]);
+
+  useEffect(() => {
+    if (!showSyncSuccessBanner) return;
+    const timeout = window.setTimeout(() => {
+      setShowSyncSuccessBanner(false);
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [showSyncSuccessBanner]);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -1230,6 +1267,41 @@ export default function PosPage() {
     typeof estimatedPayableCents === 'number'
       ? Math.max(estimatedPayableCents - splitTotalCents, 0)
       : undefined;
+
+  const resolveQueueStatus = (item: PosOrderQueueItem) => {
+    const attempts = Math.max(0, Math.trunc(item.attempts ?? 0));
+    if (attempts >= MAX_QUEUE_RETRY_ATTEMPTS) return 'FAILED';
+    if (attempts > 0) return 'RETRYING';
+    return 'QUEUED';
+  };
+
+  const waitForMismatchDecision = useCallback(
+    (payload: PosMismatchModalState) =>
+      new Promise<PosMismatchDecision>((resolve) => {
+        mismatchDecisionResolverRef.current = resolve;
+        setMismatchModal(payload);
+      }),
+    [],
+  );
+
+  const resolveMismatchDecision = useCallback((decision: PosMismatchDecision) => {
+    const resolver = mismatchDecisionResolverRef.current;
+    mismatchDecisionResolverRef.current = null;
+    setMismatchModal(null);
+    if (resolver) {
+      resolver(decision);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const resolver = mismatchDecisionResolverRef.current;
+      mismatchDecisionResolverRef.current = null;
+      if (resolver) {
+        resolver('cancel');
+      }
+    };
+  }, []);
 
   const saveReceiptSettings = () => {
     if (typeof window === 'undefined') return;
@@ -1701,7 +1773,11 @@ export default function PosPage() {
 
   const handleCreateSale = async () => {
     if (!isAuthed) return;
-    await ensureShiftSession();
+    const hasActiveShift = await ensureShiftSession();
+    if (!hasActiveShift) {
+      toast.error('Vardiya baslatmadan satis yapilamaz.');
+      return;
+    }
 
     const parsedCustomerId =
       customerMode === 'CUSTOMER' ? selectedCustomer?.id ?? Number(customerId) : undefined;
@@ -1893,6 +1969,8 @@ export default function PosPage() {
         totalAmountCents: number;
         createdAt: string;
         creditLimitWarned?: boolean;
+        priceMismatch?: boolean;
+        priceMismatchMetaJson?: unknown;
         items?: Array<{
           productId: number;
           quantity: number;
@@ -1908,6 +1986,31 @@ export default function PosPage() {
       setLastOnlineOrderId(data.id);
       setInvoiceOrderId(String(data.id));
 
+      let continueWithPayment = true;
+      if (data.priceMismatch) {
+        const expectedCents = extractMetaNumber(data.priceMismatchMetaJson, [
+          'expectedTotalAmountCents',
+          'expectedTotalCents',
+          'expectedPriceCents',
+          'pricing.expectedTotalAmountCents',
+          'pricing.expectedPriceCents',
+        ]);
+        const actualCents =
+          extractMetaNumber(data.priceMismatchMetaJson, [
+            'actualTotalAmountCents',
+            'actualTotalCents',
+            'actualPriceCents',
+            'pricing.actualTotalAmountCents',
+            'pricing.actualPriceCents',
+          ]) ?? data.totalAmountCents;
+
+        const decision = await waitForMismatchDecision({
+          expectedCents,
+          actualCents,
+        });
+        continueWithPayment = decision === 'continue';
+      }
+
       let splitApplied:
         | { appliedAmountCents: number; remainingDueCents: number }
         | undefined;
@@ -1915,7 +2018,7 @@ export default function PosPage() {
         | { amountCents: number; method: string }
         | undefined;
       let creditSaleApplied = false;
-      if (splitPaymentPayload.lines.length > 0) {
+      if (continueWithPayment && splitPaymentPayload.lines.length > 0) {
         const splitRes = await api.post<{
           appliedAmountCents: number;
           remainingDueCents: number;
@@ -1927,6 +2030,7 @@ export default function PosPage() {
           remainingDueCents: splitRes.data.remainingDueCents,
         };
       } else if (
+        continueWithPayment &&
         (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD') &&
         data.totalAmountCents > 0
       ) {
@@ -1941,7 +2045,7 @@ export default function PosPage() {
           amountCents: paymentRes.data.amountCents,
           method: paymentRes.data.method,
         };
-      } else if (quickPaymentMethod === 'CREDIT') {
+      } else if (continueWithPayment && quickPaymentMethod === 'CREDIT') {
         creditSaleApplied = true;
       }
 
@@ -1995,6 +2099,8 @@ export default function PosPage() {
         );
       } else if (creditSaleApplied) {
         toast.success('Veresiye satis olusturuldu.');
+      } else if (!continueWithPayment) {
+        toast('Fiyat degisikligi nedeniyle odeme adimi iptal edildi. Siparis risk paneline kaydedildi.');
       } else {
         toast.success('Satis olusturuldu.');
       }
@@ -2066,6 +2172,9 @@ export default function PosPage() {
 
       <section className="space-y-4 rounded-3xl border border-[#E5E5E0] bg-[#F6F7F3] px-3 py-4 md:px-5 md:py-5">
         <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-[#D8DED8] bg-white px-3 py-1 text-xs font-semibold text-[#1A3C34]">
+            {activeShift ? `Vardiya: ${activeShift.registerCode}` : 'Vardiya: Kapali'}
+          </span>
           <span
             className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${onlineBadgeClass}`}
           >
@@ -2089,6 +2198,16 @@ export default function PosPage() {
             {isFocusMode ? 'Focus kapat' : 'Focus mode'}
           </Button>
         </div>
+        {!isOnline ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Offline - {queueCount} islem kuyruga alindi.
+          </div>
+        ) : null}
+        {isOnline && showSyncSuccessBanner && recentSyncedCount ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {recentSyncedCount} islem basariyla senkronize edildi.
+          </div>
+        ) : null}
         {isFocusMode ? (
           <p className="text-xs text-[#1A3C34]/70">
             Focus mode aktif: ikincil operasyon panelleri gizlendi.
@@ -2096,6 +2215,61 @@ export default function PosPage() {
         ) : null}
 
         {isAuthed ? (
+          !activeShift ? (
+            <div className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-5 md:px-5 md:py-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Vardiya Baslat
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1A3C34]">Session Gate</h2>
+              <p className="mt-2 text-sm text-[#5C5C5C]">
+                Kasa kodu ve acilis kasa sayimi olmadan satis ekrani acilmaz.
+              </p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                  Kasa Kodu
+                  <input
+                    value={registerCode}
+                    onChange={(e) => setRegisterCode(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                    placeholder="MAIN"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                  Acilis Nakit (kurus)
+                  <input
+                    value={openingCashCents}
+                    onChange={(e) => setOpeningCashCents(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                    placeholder="0"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                  Acilis Notu
+                  <input
+                    value={shiftNote}
+                    onChange={(e) => setShiftNote(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                    placeholder="Opsiyonel"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={() => void openShift()} disabled={isShiftBusy}>
+                  {isShiftBusy ? 'Islem...' : 'Vardiyayi Baslat'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void ensureShiftSession()}
+                  disabled={isShiftBusy}
+                >
+                  Yenile
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div
             className={`rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5 ${
               isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''
@@ -2426,6 +2600,7 @@ export default function PosPage() {
               </div>
             </div>
           </div>
+          )
         ) : null}
 
         {isAuthed && isProductSearchModalOpen ? (
@@ -3327,32 +3502,33 @@ export default function PosPage() {
               {queueItems.length === 0 ? (
                 <p className="mt-2 text-sm text-[#5C5C5C]">Bekleyen satis yok.</p>
               ) : (
-                <div className="mt-3 space-y-2">
-                  {queueItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
-                    >
-                      <p>
-                        {item.createdAt} • customer:{' '}
-                        {typeof item.payload.customerId === 'number'
-                          ? item.payload.customerId
-                          : 'Misafir'}{' '}
-                        • kalem: {item.payload.items.length}
-                      </p>
-                      {item.lastError ? (
-                        <p className="mt-1 text-xs text-[#9A4A1B]">
-                          Son hata: {item.lastError} (deneme: {item.attempts})
-                        </p>
-                      ) : null}
-                      <p className="mt-1 text-xs text-[#5C5C5C]">
-                        Sonraki deneme:{' '}
-                        {item.nextRetryAt
-                          ? new Date(item.nextRetryAt).toLocaleString('tr-TR')
-                          : 'Hemen'}
-                      </p>
-                    </div>
-                  ))}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#E5E5E0] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5C5C5C]">
+                        <th className="py-2 pr-3">Order ID</th>
+                        <th className="py-2 pr-3">Retry Count</th>
+                        <th className="py-2 pr-3">Last Error</th>
+                        <th className="py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {queueItems.map((item) => (
+                        <tr key={item.id} className="border-b border-[#F0F0EA]">
+                          <td className="py-2 pr-3 text-xs text-[#1A3C34]">
+                            {item.payload.idempotencyKey ?? `Q-${item.id.slice(0, 8)}`}
+                          </td>
+                          <td className="py-2 pr-3 text-xs text-[#1A3C34]">{item.attempts}</td>
+                          <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
+                            {item.lastError || '-'}
+                          </td>
+                          <td className="py-2 text-xs font-semibold text-[#1A3C34]">
+                            {resolveQueueStatus(item)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -3369,6 +3545,45 @@ export default function PosPage() {
             </Button>
           </div>
         )}
+
+        {mismatchModal ? (
+          <div className="fixed inset-0 z-50">
+            <button
+              type="button"
+              onClick={() => resolveMismatchDecision('cancel')}
+              className="absolute inset-0 bg-black/45"
+              aria-label="Mismatch modalini kapat"
+            />
+            <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#E5E5E0] bg-white px-6 py-6 shadow-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9B1C1C]">
+                Fiyat Degisikligi Algilandi
+              </p>
+              <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
+                <p>
+                  Beklenen:{' '}
+                  <span className="font-semibold">
+                    {typeof mismatchModal.expectedCents === 'number'
+                      ? formatMoney(mismatchModal.expectedCents)
+                      : '-'}
+                  </span>
+                </p>
+                <p>
+                  Guncel:{' '}
+                  <span className="font-semibold">{formatMoney(mismatchModal.actualCents)}</span>
+                </p>
+              </div>
+              <p className="mt-4 text-sm text-[#5C5C5C]">
+                Satis devam edecek. Bu islem risk paneline kaydedilecek.
+              </p>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => resolveMismatchDecision('cancel')}>
+                  Iptal
+                </Button>
+                <Button onClick={() => resolveMismatchDecision('continue')}>Devam Et</Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <ConflictResolutionModal
           isOpen={Boolean(conflictDetail)}
