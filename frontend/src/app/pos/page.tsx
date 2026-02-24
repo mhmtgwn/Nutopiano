@@ -79,7 +79,7 @@ type PosCartDraftItem = {
   expectedUnitPriceCents?: number;
   discountAmountCents?: number;
 };
-type PosQuickPaymentMethod = 'NONE' | 'CASH' | 'CARD';
+type PosQuickPaymentMethod = 'NONE' | 'CASH' | 'CARD' | 'CREDIT';
 type PosCustomerMode = 'GUEST' | 'CUSTOMER';
 type PosPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 type PosSplitPaymentDraft = {
@@ -1110,13 +1110,15 @@ export default function PosPage() {
 
   useEffect(() => {
     if (!isAuthed) return;
+    if (user?.role === 'USER') return;
     void loadStaffSalesReport();
-  }, [isAuthed, loadStaffSalesReport]);
+  }, [isAuthed, loadStaffSalesReport, user?.role]);
 
   useEffect(() => {
     if (!isAuthed) return;
+    if (user?.role === 'USER') return;
     void loadSalesReport();
-  }, [isAuthed, loadSalesReport]);
+  }, [isAuthed, loadSalesReport, user?.role]);
 
 
   const queueCount = queueItems.length;
@@ -1561,6 +1563,10 @@ export default function PosPage() {
       toast.error('Musteri secin veya yeni musteri ekleyin.');
       return;
     }
+    if (quickPaymentMethod === 'CREDIT' && typeof normalizedCustomerId !== 'number') {
+      toast.error('Veresiye satis icin musteri secimi zorunlu.');
+      return;
+    }
 
     if (saleDraftItems.length === 0) {
       const parsedProductId = Number(productId);
@@ -1640,6 +1646,11 @@ export default function PosPage() {
       notes: note.trim() || undefined,
       items: payloadItems,
     };
+    if (splitPaymentPayload.lines.length > 0) {
+      payload.paymentMode = 'SPLIT';
+    } else if (quickPaymentMethod !== 'NONE') {
+      payload.paymentMode = quickPaymentMethod;
+    }
     if (typeof normalizedCustomerId === 'number') {
       payload.customerId = normalizedCustomerId;
     }
@@ -1660,7 +1671,7 @@ export default function PosPage() {
     if (
       typeof navigator !== 'undefined' &&
       !navigator.onLine &&
-      quickPaymentMethod !== 'NONE'
+      (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD')
     ) {
       toast.error(
         'Offline modda nakit/kart odeme kaydi anlik islenemez. Baglanti ile tekrar deneyin.',
@@ -1724,6 +1735,7 @@ export default function PosPage() {
         customerId?: number;
         totalAmountCents: number;
         createdAt: string;
+        creditLimitWarned?: boolean;
         items?: Array<{
           productId: number;
           quantity: number;
@@ -1745,6 +1757,7 @@ export default function PosPage() {
       let quickPaymentApplied:
         | { amountCents: number; method: string }
         | undefined;
+      let creditSaleApplied = false;
       if (splitPaymentPayload.lines.length > 0) {
         const splitRes = await api.post<{
           appliedAmountCents: number;
@@ -1756,7 +1769,10 @@ export default function PosPage() {
           appliedAmountCents: splitRes.data.appliedAmountCents,
           remainingDueCents: splitRes.data.remainingDueCents,
         };
-      } else if (quickPaymentMethod !== 'NONE' && data.totalAmountCents > 0) {
+      } else if (
+        (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD') &&
+        data.totalAmountCents > 0
+      ) {
         const paymentRes = await api.post<{
           amountCents: number;
           method: string;
@@ -1768,6 +1784,8 @@ export default function PosPage() {
           amountCents: paymentRes.data.amountCents,
           method: paymentRes.data.method,
         };
+      } else if (quickPaymentMethod === 'CREDIT') {
+        creditSaleApplied = true;
       }
 
       const nextReceipt: ReceiptRecord = {
@@ -1818,22 +1836,27 @@ export default function PosPage() {
         toast.success(
           `Satis olusturuldu. ${quickPaymentApplied.method} tahsilat: ${formatMoney(quickPaymentApplied.amountCents)}`,
         );
+      } else if (creditSaleApplied) {
+        toast.success('Veresiye satis olusturuldu.');
       } else {
         toast.success('Satis olusturuldu.');
       }
+      if (data.creditLimitWarned) {
+        toast('Veresiye limiti asildi, satis WARN politikasiyla devam etti.');
+      }
     } catch (error) {
       if (isNetworkError(error)) {
-        if (splitPaymentPayload.lines.length > 0) {
-          toast.error(
-            'Baglanti kesildi. Split odeme satirlari varken offline kuyruga alinmaz.',
-          );
-          return;
-        }
-        if (quickPaymentMethod !== 'NONE') {
-          toast.error(
-            'Baglanti kesildi. Hizli nakit/kart seciliyken satis offline kuyruga alinmaz.',
-          );
-          return;
+                if (splitPaymentPayload.lines.length > 0) {
+                  toast.error(
+                    'Baglanti kesildi. Split odeme satirlari varken offline kuyruga alinmaz.',
+                  );
+                  return;
+                }
+                if (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD') {
+                  toast.error(
+                    'Baglanti kesildi. Hizli nakit/kart seciliyken satis offline kuyruga alinmaz.',
+                  );
+                  return;
         }
         const queued = await enqueuePosOrder(payload);
         await refreshQueue();
@@ -2167,6 +2190,7 @@ export default function PosPage() {
                       <option value="NONE">Odeme secilmedi</option>
                       <option value="CASH">Nakit</option>
                       <option value="CARD">Kart</option>
+                      <option value="CREDIT">Veresiye</option>
                     </select>
                   </label>
                   <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
@@ -2396,7 +2420,7 @@ export default function PosPage() {
           </div>
         ) : null}
 
-        {isAuthed ? (
+        {isAuthed && user?.role !== 'USER' ? (
           <details className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4" open={false}>
             <summary className="cursor-pointer list-none text-sm font-semibold text-[#1A3C34]">
               Detayli POS operasyon paneli (vardiya, split, analitik, fatura)

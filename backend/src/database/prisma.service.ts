@@ -41,6 +41,12 @@ export class PrismaService
     'Commission',
     'Payout',
     'RefreshToken',
+    'SellerTeamMember',
+    'SellerInvite',
+    'SellerInviteDelivery',
+    'CustomerLedgerEntry',
+    'AuditLog',
+    'OutboxEvent',
   ]);
 
   private static readonly SOFT_DELETE_MODELS = new Set<string>([

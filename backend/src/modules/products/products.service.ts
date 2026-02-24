@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Prisma, ProductType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
@@ -14,20 +20,28 @@ import {
   paginationToSkipTake,
   type PaginationMeta,
 } from '../../common/utils/pagination';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTION_TYPES } from '../audit/audit.constants';
+import { OUTBOX_EVENT_TYPES } from '../outbox/outbox.constants';
+import { OutboxService } from '../outbox/outbox.service';
 
 export interface ProductSummary {
   id: number;
   categoryId?: number | null;
+  ownerSellerId?: number | null;
   name: string;
   subtitle?: string | null;
   sku?: string | null;
   type: string;
   priceCents: number;
+  costPriceCents?: number;
   description?: string | null;
   features?: string[];
   imageUrl?: string | null;
   images?: string[];
   stock?: number | null;
+  isPublished?: boolean;
+  publishedAt?: Date | null;
   tags?: string[];
   seoTitle?: string | null;
   seoDescription?: string | null;
@@ -64,7 +78,11 @@ type CsvImportError = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+    private readonly outboxService: OutboxService,
+  ) {}
 
   private csvEscape(value: unknown): string {
     if (value === null || value === undefined) return '';
@@ -223,6 +241,140 @@ export class ProductsService {
         isPrimary: params.primaryUrl ? params.primaryUrl === url : index === 0,
       })),
     });
+  }
+
+  private async resolveSellerProfileId(
+    businessId: number,
+    userId: number,
+  ): Promise<number | null> {
+    const seller = await this.prisma.seller.findFirst({
+      where: { businessId, userId, isActive: true },
+      select: { id: true },
+    });
+    return seller?.id ?? null;
+  }
+
+  private async resolveUserTeamSellerIds(
+    businessId: number,
+    userId: number,
+  ): Promise<number[]> {
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+      },
+      select: { sellerId: true },
+    });
+
+    return Array.from(new Set(rows.map((row) => row.sellerId)));
+  }
+
+  private async resolveAllowedSellerIdsForActor(
+    currentUser: JwtPayload,
+  ): Promise<number[]> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    if (currentUser.role === 'SELLER') {
+      const sellerId = await this.resolveSellerProfileId(businessId, userId);
+      if (!sellerId) {
+        throw new ForbiddenException('Seller profili bulunamadi');
+      }
+      return [sellerId];
+    }
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
+      if (!sellerIds.length) {
+        throw new ForbiddenException('Aktif seller yetkisi bulunamadi');
+      }
+      return sellerIds;
+    }
+
+    return [];
+  }
+
+  private async resolveOwnerSellerIdForWrite(
+    currentUser: JwtPayload,
+    payloadOwnerSellerId?: number,
+  ): Promise<number | null> {
+    const requested =
+      typeof payloadOwnerSellerId === 'number' && payloadOwnerSellerId > 0
+        ? Math.trunc(payloadOwnerSellerId)
+        : null;
+
+    if (currentUser.role === 'SELLER') {
+      const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
+      const ownSellerId = sellerIds[0];
+      if (requested && requested !== ownSellerId) {
+        throw new ForbiddenException('Sadece kendi magazaniz icin urun yazabilirsiniz');
+      }
+      return ownSellerId;
+    }
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
+      if (requested) {
+        if (!sellerIds.includes(requested)) {
+          throw new ForbiddenException('Bu seller icin urun yazma yetkiniz yok');
+        }
+        return requested;
+      }
+      if (sellerIds.length === 1) {
+        return sellerIds[0];
+      }
+      throw new BadRequestException(
+        'Birden fazla seller yetkisi var. ownerSellerId belirtin',
+      );
+    }
+
+    return requested;
+  }
+
+  private async applyManageScopeWhere(
+    currentUser: JwtPayload,
+    baseWhere: Prisma.ProductWhereInput,
+  ): Promise<Prisma.ProductWhereInput> {
+    const userId = Number(currentUser.userId);
+
+    if (currentUser.role === 'SELLER') {
+      const [sellerId] = await this.resolveAllowedSellerIdsForActor(currentUser);
+      return {
+        AND: [
+          baseWhere,
+          {
+            OR: [
+              { ownerSellerId: sellerId },
+              { ownerSellerId: null, createdByUserId: userId },
+            ],
+          },
+        ],
+      };
+    }
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
+      return {
+        AND: [baseWhere, { ownerSellerId: { in: sellerIds } }],
+      };
+    }
+
+    return baseWhere;
+  }
+
+  private validatePublishState(
+    data: { stock?: number | null; isPublished?: boolean },
+    nextIsPublished?: boolean,
+  ) {
+    const publish = typeof nextIsPublished === 'boolean' ? nextIsPublished : data.isPublished;
+    if (!publish) return;
+    const stock = typeof data.stock === 'number' ? data.stock : null;
+    if (stock === null || stock <= 0) {
+      throw new UnprocessableEntityException(
+        'Stok 0 veya daha az oldugu icin urun yayina acilamaz',
+      );
+    }
   }
 
   async exportProductsCsv(currentUser: JwtPayload): Promise<string> {
@@ -501,6 +653,7 @@ export class ProductsService {
   private async assertCategoryScoped(
     currentUser: JwtPayload,
     categoryId: number,
+    ownerSellerId?: number | null,
   ) {
     const businessId = Number(currentUser.businessId);
 
@@ -509,6 +662,14 @@ export class ProductsService {
         id: categoryId,
         businessId,
         isActive: true,
+        ...(typeof ownerSellerId === 'number'
+          ? {
+              OR: [
+                { scopeType: 'GLOBAL' as const },
+                { sellerId: ownerSellerId, scopeType: 'SELLER_STORE' as const },
+              ],
+            }
+          : {}),
       },
       select: { id: true },
     });
@@ -525,9 +686,18 @@ export class ProductsService {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
     const priceCents = Number(payload.price);
+    const ownerSellerId = await this.resolveOwnerSellerIdForWrite(
+      currentUser,
+      payload.ownerSellerId,
+    );
+
+    this.validatePublishState(
+      { stock: payload.stock, isPublished: payload.isPublished },
+      payload.isPublished,
+    );
 
     // categoryId is now required
-    await this.assertCategoryScoped(currentUser, payload.categoryId);
+    await this.assertCategoryScoped(currentUser, payload.categoryId, ownerSellerId);
 
     const normalizedImages = this.normalizeImageUrls(payload.images, payload.imageUrl);
     const images =
@@ -539,16 +709,20 @@ export class ProductsService {
         businessId,
         createdByUserId,
         categoryId: payload.categoryId,
+        ownerSellerId: ownerSellerId ?? undefined,
         name: payload.name,
         subtitle: payload.subtitle,
         sku: payload.sku,
         type: payload.type,
         priceCents,
+        costPriceCents: Math.max(Math.trunc(Number(payload.costPriceCents ?? 0)), 0),
         description: payload.description,
         features: payload.features,
         imageUrl,
         images,
         stock: payload.stock,
+        isPublished: Boolean(payload.isPublished),
+        publishedAt: payload.isPublished ? new Date() : null,
         tags: payload.tags,
         seoTitle: payload.seoTitle,
         seoDescription: payload.seoDescription,
@@ -556,16 +730,20 @@ export class ProductsService {
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -658,10 +836,11 @@ export class ProductsService {
 
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
-    const where = {
+    const whereBase: Prisma.ProductWhereInput = {
       businessId,
       isActive: true,
     };
+    const where = await this.applyManageScopeWhere(currentUser, whereBase);
 
     const total = await this.prisma.product.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
@@ -672,16 +851,20 @@ export class ProductsService {
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -728,6 +911,7 @@ export class ProductsService {
     const where = {
       businessId: business.id,
       isActive: true,
+      isPublished: true,
     };
 
     const total = await this.prisma.product.count({ where });
@@ -739,16 +923,20 @@ export class ProductsService {
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -766,13 +954,12 @@ export class ProductsService {
 
   private async findByIdScoped(currentUser: JwtPayload, id: number) {
     const businessId = Number(currentUser.businessId);
-
-    const product = await this.prisma.product.findFirst({
-      where: {
-        id,
-        businessId,
-      },
+    const scopedWhere = await this.applyManageScopeWhere(currentUser, {
+      id,
+      businessId,
     });
+
+    const product = await this.prisma.product.findFirst({ where: scopedWhere });
 
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -1006,16 +1193,20 @@ export class ProductsService {
     const {
       id: productId,
       categoryId,
+      ownerSellerId,
       name,
       subtitle,
       sku,
       type,
       priceCents,
+      costPriceCents,
       description,
       features,
       imageUrl,
       images,
       stock,
+      isPublished,
+      publishedAt,
       tags,
       seoTitle,
       seoDescription,
@@ -1024,16 +1215,20 @@ export class ProductsService {
     return {
       id: productId,
       categoryId,
+      ownerSellerId,
       name,
       subtitle,
       sku,
       type,
       priceCents,
+      costPriceCents,
       description,
       features,
       imageUrl,
       images,
       stock,
+      isPublished,
+      publishedAt,
       tags,
       seoTitle,
       seoDescription,
@@ -1064,20 +1259,25 @@ export class ProductsService {
       where: {
         id,
         businessId: business.id,
+        isPublished: true,
       },
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -1097,9 +1297,24 @@ export class ProductsService {
     id: number,
     payload: UpdateProductDto,
   ): Promise<ProductSummary> {
-    await this.findByIdScoped(currentUser, id);
+    const existing = await this.findByIdScoped(currentUser, id);
+    const isCriticalPublishChange = payload.isPublished !== undefined;
+    const isCriticalStockChange = payload.stock !== undefined;
+
+    if (
+      currentUser.role === 'ADMIN' &&
+      (isCriticalPublishChange || isCriticalStockChange)
+    ) {
+      throw new ForbiddenException(
+        'ADMIN varsayilan read-only. publish-force veya stock-adjust-force override endpointini kullanin.',
+      );
+    }
 
     const data: Prisma.ProductUncheckedUpdateInput = {};
+    const nextOwnerSellerId =
+      payload.ownerSellerId !== undefined
+        ? await this.resolveOwnerSellerIdForWrite(currentUser, payload.ownerSellerId)
+        : existing.ownerSellerId ?? null;
 
     if (payload.categoryId !== undefined) {
       if (payload.categoryId === null) {
@@ -1107,8 +1322,15 @@ export class ProductsService {
         throw new NotFoundException('Category not found');
       }
 
-      await this.assertCategoryScoped(currentUser, payload.categoryId);
+      await this.assertCategoryScoped(
+        currentUser,
+        payload.categoryId,
+        nextOwnerSellerId,
+      );
       data.categoryId = payload.categoryId;
+    }
+    if (payload.ownerSellerId !== undefined) {
+      data.ownerSellerId = nextOwnerSellerId ?? null;
     }
     if (payload.name) data.name = payload.name;
     if (payload.subtitle !== undefined) data.subtitle = payload.subtitle;
@@ -1116,6 +1338,9 @@ export class ProductsService {
     if (payload.type) data.type = payload.type;
     if (payload.price !== undefined) {
       data.priceCents = Number(payload.price);
+    }
+    if (payload.costPriceCents !== undefined) {
+      data.costPriceCents = Math.max(Math.trunc(Number(payload.costPriceCents)), 0);
     }
     if (payload.description !== undefined)
       data.description = payload.description;
@@ -1138,22 +1363,64 @@ export class ProductsService {
       data.seoDescription = payload.seoDescription;
     }
 
+    const nextStock =
+      payload.stock !== undefined
+        ? payload.stock
+        : typeof existing.stock === 'number'
+          ? existing.stock
+          : null;
+    const requestedPublish =
+      payload.isPublished !== undefined ? payload.isPublished : existing.isPublished;
+    const effectivePublish =
+      payload.isPublished === undefined &&
+      payload.stock !== undefined &&
+      (payload.stock === null || payload.stock <= 0)
+        ? false
+        : requestedPublish;
+
+    this.validatePublishState(
+      {
+        stock: nextStock,
+        isPublished: effectivePublish,
+      },
+      effectivePublish,
+    );
+
+    if (payload.isPublished !== undefined) {
+      data.isPublished = payload.isPublished;
+      data.publishedAt =
+        payload.isPublished && !existing.isPublished ? new Date() : payload.isPublished ? existing.publishedAt : null;
+    }
+
+    if (
+      payload.stock !== undefined &&
+      (payload.stock === null || payload.stock <= 0) &&
+      requestedPublish
+    ) {
+      data.isPublished = false;
+      data.publishedAt = null;
+    }
+
     const updated = await this.prisma.product.update({
       where: { id },
       data,
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -1172,6 +1439,64 @@ export class ProductsService {
       primaryUrl: normalizedImages.primary,
     });
 
+    if (isCriticalPublishChange && updated.isPublished !== existing.isPublished) {
+      await this.outboxService.enqueueEvent({
+        businessId: Number(currentUser.businessId),
+        aggregateType: 'PRODUCT',
+        aggregateId: updated.id,
+        eventType: OUTBOX_EVENT_TYPES.PRODUCT_PUBLISH_CHANGED,
+        idempotencyKey: `product:${updated.id}:publish:${updated.isPublished ? 1 : 0}`,
+        payloadJson: {
+          productId: updated.id,
+          isPublished: updated.isPublished,
+          previousIsPublished: existing.isPublished,
+          actorUserId: Number(currentUser.userId),
+        },
+      });
+    }
+
+    if (currentUser.role === 'SUPER_ADMIN') {
+      if (isCriticalPublishChange && updated.isPublished !== existing.isPublished) {
+        await this.auditService.logFromActor(currentUser, {
+          actionType: AUDIT_ACTION_TYPES.PUBLISH_FORCE,
+          targetType: 'PRODUCT',
+          targetId: updated.id,
+          payloadJson: {
+            source: 'products.update',
+            reason: 'super-admin-normal-endpoint',
+            before: {
+              isPublished: existing.isPublished,
+              stock: existing.stock,
+            },
+            after: {
+              isPublished: updated.isPublished,
+              stock: updated.stock,
+            },
+          },
+        });
+      }
+
+      if (isCriticalStockChange && updated.stock !== existing.stock) {
+        await this.auditService.logFromActor(currentUser, {
+          actionType: AUDIT_ACTION_TYPES.STOCK_ADJUST_FORCE,
+          targetType: 'PRODUCT',
+          targetId: updated.id,
+          payloadJson: {
+            source: 'products.update',
+            reason: 'super-admin-normal-endpoint',
+            before: {
+              stock: existing.stock,
+              isPublished: existing.isPublished,
+            },
+            after: {
+              stock: updated.stock,
+              isPublished: updated.isPublished,
+            },
+          },
+        });
+      }
+    }
+
     return updated;
   }
 
@@ -1182,20 +1507,26 @@ export class ProductsService {
       where: { id },
       data: {
         isActive: false,
+        isPublished: false,
+        publishedAt: null,
       },
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,
@@ -1244,6 +1575,7 @@ export class ProductsService {
     const whereConditions: Prisma.ProductWhereInput = {
       businessId: business.id,
       isActive: true,
+      isPublished: true,
     };
 
     // Text search
@@ -1301,16 +1633,20 @@ export class ProductsService {
       select: {
         id: true,
         categoryId: true,
+        ownerSellerId: true,
         name: true,
         subtitle: true,
         sku: true,
         type: true,
         priceCents: true,
+        costPriceCents: true,
         description: true,
         features: true,
         imageUrl: true,
         images: true,
         stock: true,
+        isPublished: true,
+        publishedAt: true,
         tags: true,
         seoTitle: true,
         seoDescription: true,

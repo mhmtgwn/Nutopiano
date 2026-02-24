@@ -30,15 +30,15 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get()
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'List settings for current business',
     description:
-      'ADMIN and STAFF can list all settings for their business. Values are arbitrary JSON objects stored per key.',
+      'ADMIN and USER can list all settings for their business. Values are arbitrary JSON objects stored per key.',
   })
   @ApiOkResponse({ description: 'Array of settings for the current business.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN or STAFF.',
+    description: 'Forbidden for roles other than ADMIN or USER.',
   })
   async findAll(@Req() req: { user: JwtPayload }) {
     const businessId = Number(req.user.businessId);
@@ -46,11 +46,11 @@ export class SettingsController {
   }
 
   @Get(':key')
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Get setting by key',
     description:
-      'ADMIN and STAFF can read a specific setting by key for their business. Cross-tenant access is not allowed.',
+      'ADMIN and USER can read a specific setting by key for their business. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description: 'Setting for the given key in the current business.',
@@ -95,3 +95,4 @@ export class SettingsController {
     );
   }
 }
+

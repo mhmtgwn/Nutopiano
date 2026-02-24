@@ -1,0 +1,10 @@
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN "shippingCostCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "commissionSnapshotCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "returnCostCents" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "OrderItem" ADD COLUMN "shippingAllocationCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "commissionAllocationCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "returnAllocationCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "netProfitV2Cents" INTEGER NOT NULL DEFAULT 0;

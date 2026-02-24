@@ -30,7 +30,7 @@ import type { Response } from 'express';
 @ApiTags('pos')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'STAFF')
+@Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
 @Controller('pos')
 export class PosController {
   constructor(private readonly posService: PosService) {}
@@ -168,6 +168,7 @@ export class PosController {
   }
 
   @Get('reports/end-of-day')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'End-of-day POS report',
     description:
@@ -184,6 +185,7 @@ export class PosController {
   }
 
   @Get('reports/shifts')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Shift list report',
     description:
@@ -216,6 +218,7 @@ export class PosController {
   }
 
   @Get('reports/staff-sales')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Staff sales report',
     description:
@@ -242,6 +245,7 @@ export class PosController {
   }
 
   @Get('reports/sales')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'POS sales analytics report',
     description:
@@ -270,6 +274,7 @@ export class PosController {
   }
 
   @Get('reports/sales/export')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Export POS sales analytics (CSV)',
     description:
@@ -373,3 +378,4 @@ export class PosController {
     return this.posService.applySplitPayments(req.user, Number(id), payload);
   }
 }
+

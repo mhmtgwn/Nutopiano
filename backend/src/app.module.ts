@@ -24,6 +24,8 @@ import { PosModule } from './modules/pos/pos.module';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { HealthModule } from './modules/health/health.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
@@ -54,6 +56,8 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
       },
     }),
     DatabaseModule,
+    AuditModule,
+    OutboxModule,
     EmailModule,
     HealthModule,
     AuthModule,

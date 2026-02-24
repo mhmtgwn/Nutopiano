@@ -149,7 +149,7 @@ export default function AdminSellerDetailPage() {
 
             <div className="mt-6">
               <Link
-                href={`/sellers/${seller.slug}`}
+                href={`/magaza/${seller.slug}`}
                 target="_blank"
                 className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
               >

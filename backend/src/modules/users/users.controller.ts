@@ -20,7 +20,8 @@ import { AdminOrStaffSelf, Roles } from '@common/decorators';
 import { JwtAuthGuard, RolesGuard, StaffSelfGuard } from '@common/guards';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { UsersService } from './users.service';
-import { Role } from '@prisma/client';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateUserRoleOverrideDto } from './dto/update-user-role-override.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -34,11 +35,11 @@ export class UsersController {
   @ApiOperation({
     summary: 'List users (ADMIN only)',
     description:
-      'ADMIN can list all users within their business. STAFF is forbidden.',
+      'ADMIN can list all users within their business. USER is forbidden.',
   })
   @ApiOkResponse({ description: 'Array of users in the current business.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for STAFF or missing ADMIN role.',
+    description: 'Forbidden for USER or missing ADMIN role.',
   })
   findAll(@Req() req: { user: JwtPayload }) {
     return this.usersService.findAll(req.user);
@@ -49,13 +50,13 @@ export class UsersController {
   @ApiOperation({
     summary: 'Get user by phone',
     description:
-      'ADMIN can fetch any user by phone within their business. STAFF can only access their own user by phone (self-only).',
+      'ADMIN can fetch any user by phone within their business. USER can only access their own user by phone (self-only).',
   })
   @ApiOkResponse({
     description: 'User matching the given phone in the current business.',
   })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to access another user by phone.',
+    description: 'USER trying to access another user by phone.',
   })
   @ApiNotFoundResponse({
     description:
@@ -70,13 +71,13 @@ export class UsersController {
   @ApiOperation({
     summary: 'Get user by id',
     description:
-      'ADMIN can fetch any user by id within their business. STAFF can only access their own user by id (self-only).',
+      'ADMIN can fetch any user by id within their business. USER can only access their own user by id (self-only).',
   })
   @ApiOkResponse({
     description: 'User matching the given id in the current business.',
   })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to access another user by id.',
+    description: 'USER trying to access another user by id.',
   })
   @ApiNotFoundResponse({
     description:
@@ -90,22 +91,49 @@ export class UsersController {
   }
 
   @Patch(':id/role')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @ApiOperation({
-    summary: 'Update user role (ADMIN only)',
-    description: 'ADMIN can change role of a user within their business.',
+    summary: 'Update user role',
+    description:
+      'SUPER_ADMIN can change role directly (audited). ADMIN must use override endpoint for controlled role-change.',
   })
   @ApiOkResponse({ description: 'Updated user summary.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN.',
+    description:
+      'Forbidden for roles other than ADMIN/SUPER_ADMIN or blocked ADMIN normal role-change.',
   })
   @ApiNotFoundResponse({ description: 'User not found in current business.' })
   updateRole(
     @Req() req: { user: JwtPayload },
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { role: Role },
+    @Body() body: UpdateUserRoleDto,
   ) {
     return this.usersService.updateRole(req.user, id, body.role);
+  }
+
+  @Patch(':id/role/override')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Override user role change (ADMIN/SUPER_ADMIN)',
+    description:
+      'Controlled override endpoint for role-change. reason zorunludur ve audit log yazilir.',
+  })
+  @ApiOkResponse({ description: 'Updated user summary.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN/SUPER_ADMIN.',
+  })
+  @ApiNotFoundResponse({ description: 'User not found in current business.' })
+  overrideRole(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserRoleOverrideDto,
+  ) {
+    return this.usersService.updateRoleWithOverride(
+      req.user,
+      id,
+      body.role,
+      body.reason,
+    );
   }
 
   @Patch(':id/active')
@@ -127,3 +155,4 @@ export class UsersController {
     return this.usersService.updateActive(req.user, id, Boolean(body.isActive));
   }
 }
+

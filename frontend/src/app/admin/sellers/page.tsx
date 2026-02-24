@@ -193,7 +193,7 @@ export default function AdminSellersPage() {
                     <td className="px-4 py-3 text-xs text-[var(--neutral-600)]">{formatDate(row.updatedAt)}</td>
                     <td className="px-4 py-3 text-right">
                       <Link
-                        href={`/sellers/${row.slug}`}
+                        href={`/magaza/${row.slug}`}
                         className="text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
                         target="_blank"
                       >

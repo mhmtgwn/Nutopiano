@@ -46,7 +46,7 @@ export class PlatformOrdersController {
   }
 
   @Get('platform/return-requests')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'List return requests (platform)',
     description:
@@ -63,7 +63,7 @@ export class PlatformOrdersController {
   }
 
   @Patch('platform/return-requests/:id/resolve')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Resolve return request (platform)',
     description:
@@ -82,3 +82,4 @@ export class PlatformOrdersController {
     );
   }
 }
+

@@ -59,7 +59,7 @@ export class DevController {
         name: 'Demo Seller',
       },
       {
-        role: Role.STAFF,
+        role: Role.USER,
         phone: '5550000003',
         name: 'Demo Staff',
       },
@@ -367,3 +367,4 @@ export class DevController {
     };
   }
 }
+

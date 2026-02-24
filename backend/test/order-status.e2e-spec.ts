@@ -67,7 +67,7 @@ describe('OrderStatus (e2e)', () => {
         name: 'OrderStatus Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -143,7 +143,7 @@ describe('OrderStatus (e2e)', () => {
       });
     });
 
-    it('STAFF cannot create order status (403)', async () => {
+    it('USER cannot create order status (403)', async () => {
       await request(app.getHttpServer())
         .post('/order-status')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -154,7 +154,7 @@ describe('OrderStatus (e2e)', () => {
         .expect(403);
     });
 
-    it('ADMIN and STAFF can list statuses only for their business', async () => {
+    it('ADMIN and USER can list statuses only for their business', async () => {
       const adminRes = await request(app.getHttpServer())
         .get('/order-status')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -178,7 +178,7 @@ describe('OrderStatus (e2e)', () => {
       expect(staffKeys).not.toContain('OTHER_CREATED');
     });
 
-    it('STAFF cannot update or delete order status (403)', async () => {
+    it('USER cannot update or delete order status (403)', async () => {
       await request(app.getHttpServer())
         .patch(`/order-status/${createdStatus.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -234,3 +234,4 @@ describe('OrderStatus (e2e)', () => {
     });
   });
 });
+

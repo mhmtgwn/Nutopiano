@@ -38,7 +38,7 @@ export class DashboardService {
       currentUser.role !== 'SUPER_ADMIN' &&
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SELLER' &&
-      currentUser.role !== 'STAFF'
+      currentUser.role !== 'USER'
     ) {
       throw new ForbiddenException('Access denied');
     }
@@ -51,7 +51,7 @@ export class DashboardService {
     startOfToday.setHours(0, 0, 0, 0);
 
     const orderScopeWhere =
-      currentUser.role === 'STAFF'
+      currentUser.role === 'USER'
         ? { businessId, createdByUserId: userId, deletedAt: null as null }
         : { businessId, deletedAt: null as null };
 
@@ -114,7 +114,7 @@ export class DashboardService {
       currentUser.role !== 'SUPER_ADMIN' &&
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SELLER' &&
-      currentUser.role !== 'STAFF'
+      currentUser.role !== 'USER'
     ) {
       throw new ForbiddenException('Access denied');
     }
@@ -128,7 +128,7 @@ export class DashboardService {
     from.setDate(from.getDate() - days);
 
     const orderScopeWhere =
-      currentUser.role === 'STAFF'
+      currentUser.role === 'USER'
         ? { businessId, createdByUserId: userId, deletedAt: null as null }
         : { businessId, deletedAt: null as null };
 
@@ -197,3 +197,4 @@ export class DashboardService {
     };
   }
 }
+

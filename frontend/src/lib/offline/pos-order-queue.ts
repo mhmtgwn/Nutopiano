@@ -1,6 +1,7 @@
 export type PosOrderQueuePayload = {
   customerId?: number;
   idempotencyKey?: string;
+  paymentMode?: 'CASH' | 'CARD' | 'CREDIT' | 'SPLIT';
   items: Array<{
     productId: number;
     quantity: number;

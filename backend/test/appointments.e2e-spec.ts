@@ -73,7 +73,7 @@ describe('Appointments (e2e)', () => {
         name: 'Appointments Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -84,7 +84,7 @@ describe('Appointments (e2e)', () => {
         name: 'Appointments Other Staff',
         phone: OTHER_STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -192,7 +192,7 @@ describe('Appointments (e2e)', () => {
       adminAppointment = res.body;
     });
 
-    it('STAFF can create appointment for themselves when allowStaffCreate=true', async () => {
+    it('USER can create appointment for themselves when allowStaffCreate=true', async () => {
       const startAt = new Date().toISOString();
 
       const res = await request(app.getHttpServer())
@@ -215,7 +215,7 @@ describe('Appointments (e2e)', () => {
       staffAppointment = res.body;
     });
 
-    it('ADMIN lists all appointments in business, STAFF lists only own (assigned) appointments', async () => {
+    it('ADMIN lists all appointments in business, USER lists only own (assigned) appointments', async () => {
       const adminRes = await request(app.getHttpServer())
         .get('/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -236,7 +236,7 @@ describe('Appointments (e2e)', () => {
       expect(staffIds).not.toContain(adminAppointment.id);
     });
 
-    it('STAFF cannot access appointment assigned to another staff (403)', async () => {
+    it('USER cannot access appointment assigned to another staff (403)', async () => {
       await request(app.getHttpServer())
         .get(`/appointments/${adminAppointment.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -250,7 +250,7 @@ describe('Appointments (e2e)', () => {
         .expect(404);
     });
 
-    it('STAFF can update status and notes on their own appointment', async () => {
+    it('USER can update status and notes on their own appointment', async () => {
       const res = await request(app.getHttpServer())
         .patch(`/appointments/${staffAppointment.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -279,3 +279,4 @@ describe('Appointments (e2e)', () => {
     });
   });
 });
+

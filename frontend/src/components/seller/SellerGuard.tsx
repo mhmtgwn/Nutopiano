@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Spinner from '@/components/common/Spinner';
@@ -38,8 +38,12 @@ interface SellerGuardProps {
   children: ReactNode;
 }
 
+const isUserAllowedDashboardPath = (pathname: string) =>
+  pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/');
+
 export default function SellerGuard({ children }: SellerGuardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useAppDispatch();
   const { user, status } = useAppSelector((state) => state.user);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
@@ -50,6 +54,17 @@ export default function SellerGuard({ children }: SellerGuardProps) {
       if (!isSellerPanelRole(user.role)) {
         router.replace('/');
         toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
+        return;
+      }
+      if (user.role === 'USER') {
+        if (pathname === '/dashboard') {
+          router.replace('/dashboard/orders');
+          return;
+        }
+        if (!isUserAllowedDashboardPath(pathname)) {
+          router.replace('/dashboard/orders');
+          toast.error('Bu sekme sadece satici rolune aciktir.');
+        }
       }
       return;
     }
@@ -79,6 +94,17 @@ export default function SellerGuard({ children }: SellerGuardProps) {
         if (!isSellerPanelRole(profile.role)) {
           router.replace('/');
           toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
+          return;
+        }
+        if (profile.role === 'USER') {
+          if (pathname === '/dashboard') {
+            router.replace('/dashboard/orders');
+            return;
+          }
+          if (!isUserAllowedDashboardPath(pathname)) {
+            router.replace('/dashboard/orders');
+            toast.error('Bu sekme sadece satici rolune aciktir.');
+          }
         }
       } catch (error: unknown) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme başarısız.');
@@ -91,7 +117,7 @@ export default function SellerGuard({ children }: SellerGuardProps) {
     };
 
     fetchProfile();
-  }, [user, dispatch, router]);
+  }, [user, dispatch, router, pathname]);
 
   if (isLoading && !user) {
     return (

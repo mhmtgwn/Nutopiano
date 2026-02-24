@@ -56,7 +56,7 @@ describe('Auth & Users (e2e)', () => {
         name: 'Staff User',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -83,14 +83,14 @@ describe('Auth & Users (e2e)', () => {
       });
     });
 
-    it('STAFF can see own profile', async () => {
+    it('USER can see own profile', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/profile')
         .set('Authorization', `Bearer ${staffToken}`)
         .expect(200);
 
       expect(res.body).toMatchObject({
-        role: 'STAFF',
+        role: 'USER',
         phone: STAFF_PHONE,
       });
     });
@@ -110,7 +110,7 @@ describe('Auth & Users (e2e)', () => {
       );
     });
 
-    it('STAFF cannot list all users (403)', async () => {
+    it('USER cannot list all users (403)', async () => {
       await request(app.getHttpServer())
         .get('/users')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -127,7 +127,7 @@ describe('Auth & Users (e2e)', () => {
         });
     });
 
-    it('STAFF can get own user by id', async () => {
+    it('USER can get own user by id', async () => {
       await request(app.getHttpServer())
         .get(`/users/${staffUser.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -137,7 +137,7 @@ describe('Auth & Users (e2e)', () => {
         });
     });
 
-    it("STAFF cannot get other user's id (403)", async () => {
+    it("USER cannot get other user's id (403)", async () => {
       await request(app.getHttpServer())
         .get(`/users/${adminUser.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -162,7 +162,7 @@ describe('Auth & Users (e2e)', () => {
         });
     });
 
-    it('STAFF can get own user by phone', async () => {
+    it('USER can get own user by phone', async () => {
       await request(app.getHttpServer())
         .get(`/users/by-phone/${STAFF_PHONE}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -172,7 +172,7 @@ describe('Auth & Users (e2e)', () => {
         });
     });
 
-    it("STAFF cannot get other user's phone (403)", async () => {
+    it("USER cannot get other user's phone (403)", async () => {
       await request(app.getHttpServer())
         .get(`/users/by-phone/${ADMIN_PHONE}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -203,3 +203,4 @@ describe('Auth & Users (e2e)', () => {
     });
   });
 });
+

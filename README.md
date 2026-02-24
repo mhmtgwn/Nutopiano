@@ -51,10 +51,13 @@ Nutopiano, **Türk pazarı için multi-tenant SaaS e-ticaret platformu**. İşle
 
 ```
 ADMIN      → İşletme sahibi (tüm erişim)
-STAFF      → Satış danışmanı (kısıtlı erişim)
+USER       → Satış personeli (seller team izinlerine bağlı)
 CUSTOMER   → Normal müşteri (readonly profile)
 SELLER     → Satıcı (commission-based)
 ```
+
+Not (24 Subat 2026): Rol modelinde `STAFF` kaldirildi, aktif teknik rol `USER` olarak kullanilmaktadir.
+Seller vitrini route'u `/magaza/{sellerSlug}` seklindedir.
 
 ---
 

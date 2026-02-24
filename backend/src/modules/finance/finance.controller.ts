@@ -30,7 +30,7 @@ export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
   @Get('seller/finance/payouts')
-  @Roles('SELLER', 'STAFF')
+  @Roles('SELLER')
   @ApiOperation({
     summary: 'List payout requests for current seller',
     description:
@@ -74,7 +74,7 @@ export class FinanceController {
   }
 
   @Post('seller/finance/payout-request')
-  @Roles('SELLER', 'STAFF')
+  @Roles('SELLER')
   @ApiOperation({
     summary: 'Request a payout',
     description:
@@ -82,7 +82,7 @@ export class FinanceController {
   })
   @ApiOkResponse({ description: 'Created payout request.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than STAFF.',
+    description: 'Forbidden for roles other than USER.',
   })
   requestPayout(
     @Req() req: { user: JwtPayload },
@@ -113,4 +113,70 @@ export class FinanceController {
   completePayout(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
     return this.financeService.completePayout(req.user, Number(id));
   }
+
+  @Get('seller/finance/overview')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Seller finance overview',
+    description:
+      'Returns revenue/profit/collection/credit KPI summary scoped by seller access and date range.',
+  })
+  @ApiOkResponse({ description: 'Seller finance overview payload.' })
+  getSellerFinanceOverview(
+    @Req() req: { user: JwtPayload },
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('sellerId') sellerId?: string,
+  ) {
+    return this.financeService.getSellerFinanceOverview(req.user, {
+      dateFrom,
+      dateTo,
+      sellerId: sellerId ? Number(sellerId) : undefined,
+    });
+  }
+
+  @Get('seller/finance/reports/users')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'User-based seller sales report',
+    description:
+      'Returns order/revenue/profit totals grouped by user for the selected date range.',
+  })
+  @ApiOkResponse({ description: 'Grouped user sales report payload.' })
+  getSellerUserSalesReport(
+    @Req() req: { user: JwtPayload },
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('sellerId') sellerId?: string,
+  ) {
+    return this.financeService.getSellerUserSalesReport(req.user, {
+      dateFrom,
+      dateTo,
+      sellerId: sellerId ? Number(sellerId) : undefined,
+    });
+  }
+
+  @Get('seller/finance/reports/products')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Product-based seller profit report',
+    description:
+      'Returns quantity/sales/cost/profit grouped by product for the selected date range.',
+  })
+  @ApiOkResponse({ description: 'Grouped product profit report payload.' })
+  getSellerProductProfitReport(
+    @Req() req: { user: JwtPayload },
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('sellerId') sellerId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.financeService.getSellerProductProfitReport(req.user, {
+      dateFrom,
+      dateTo,
+      sellerId: sellerId ? Number(sellerId) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
 }
+

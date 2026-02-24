@@ -74,7 +74,7 @@ export class AppointmentsService {
       throw new ForbiddenException('Business context is required');
     }
 
-    if (currentUser.role === 'STAFF') {
+    if (currentUser.role === 'USER') {
       const allowStaffCreate = await this.settingsService.getJson<boolean>(
         businessId,
         APPOINTMENT_ALLOW_STAFF_CREATE_KEY,
@@ -100,7 +100,7 @@ export class AppointmentsService {
         where: {
           id: payload.staffUserId,
           businessId,
-          role: 'STAFF',
+          role: 'USER',
         },
         select: { id: true },
       });
@@ -109,15 +109,15 @@ export class AppointmentsService {
         throw new NotFoundException('Staff user not found');
       }
 
-      if (currentUser.role === 'STAFF' && staffUser.id !== createdByUserId) {
+      if (currentUser.role === 'USER' && staffUser.id !== createdByUserId) {
         throw new ForbiddenException(
           'Staff cannot create appointments for other staff',
         );
       }
 
       staffUserId = staffUser.id;
-    } else if (currentUser.role === 'STAFF') {
-      // STAFF creating without explicit staffUserId is implicitly assigning to themselves
+    } else if (currentUser.role === 'USER') {
+      // USER creating without explicit staffUserId is implicitly assigning to themselves
       staffUserId = createdByUserId;
     }
 
@@ -233,7 +233,7 @@ export class AppointmentsService {
       throw new NotFoundException('Appointment not found');
     }
 
-    if (currentUser.role === 'STAFF' && appointment.staffUserId !== userId) {
+    if (currentUser.role === 'USER' && appointment.staffUserId !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -282,7 +282,7 @@ export class AppointmentsService {
           where: {
             id: payload.staffUserId,
             businessId: appointment.businessId,
-            role: 'STAFF',
+            role: 'USER',
           },
           select: { id: true },
         });
@@ -316,3 +316,4 @@ export class AppointmentsService {
     return this.mapToSummary(updated);
   }
 }
+

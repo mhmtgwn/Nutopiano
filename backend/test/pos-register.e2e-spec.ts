@@ -67,7 +67,7 @@ describe('POS Register Session (e2e)', () => {
         name: 'POS Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -80,6 +80,36 @@ describe('POS Register Session (e2e)', () => {
         passwordHash,
         role: 'ADMIN',
         isActive: true,
+      },
+    });
+
+    const sellerProfile = await prisma.seller.create({
+      data: {
+        businessId: business1.id,
+        userId: adminUser.id,
+        slug: `pos-e2e-seller-${RUN_ID}`,
+        displayName: 'POS E2E Seller',
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    await prisma.sellerTeamMember.create({
+      data: {
+        businessId: business1.id,
+        sellerId: sellerProfile.id,
+        userId: staffUser.id,
+        invitedByUserId: adminUser.id,
+        isActive: true,
+        permissionsJson: {
+          permissions: [
+            'tab.sales',
+            'tab.orders',
+            'pos.sale.create',
+            'orders.read',
+            'orders.updateStatus',
+          ],
+        },
       },
     });
 
@@ -860,3 +890,4 @@ describe('POS Register Session (e2e)', () => {
     expect(invoiceRes.body.totals.remainingAmountCents).toBe(6000);
   });
 });
+

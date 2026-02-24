@@ -10,10 +10,13 @@ import { JwtPayload } from '../../auth/types/jwt-payload';
 import { SettingsService } from '../settings/settings.service';
 import { FinanceService } from '../finance/finance.service';
 import { EmailService } from '../../email/email.service';
+import { OUTBOX_EVENT_TYPES } from '../outbox/outbox.constants';
+import { OutboxService } from '../outbox/outbox.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { OrderPaymentMode } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { OrderSource } from '@prisma/client';
+import { OrderSource, Prisma } from '@prisma/client';
 import {
   ResolveReturnRequestAction,
   ResolveReturnRequestDto,
@@ -49,6 +52,7 @@ export interface OrderDetail extends OrderSummary {
     unitPriceCents: number;
     totalAmountCents: number;
   }>;
+  creditLimitWarned?: boolean;
 }
 
 export interface PaymentSummary {
@@ -101,6 +105,7 @@ export class OrdersService {
     private readonly settingsService: SettingsService,
     private readonly financeService: FinanceService,
     private readonly emailService: EmailService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   private aggregateStockLines(lines: OrderItemStockLine[]) {
@@ -155,7 +160,12 @@ export class OrdersService {
         typeof payload.customerId === 'number' && Number.isFinite(payload.customerId)
           ? Number(payload.customerId)
           : null,
+      sellerId:
+        typeof payload.sellerId === 'number' && Number.isFinite(payload.sellerId)
+          ? Number(payload.sellerId)
+          : null,
       source: payload.source ?? null,
+      paymentMode: payload.paymentMode ?? null,
       notes: payload.notes?.trim() ?? null,
       couponCode: payload.couponCode?.trim().toUpperCase() ?? null,
       cartDiscountAmountCents: Number(payload.cartDiscountAmountCents ?? 0),
@@ -443,15 +453,355 @@ export class OrdersService {
     throw new NotFoundException('Customer is required');
   }
 
-  async findAllPaginated(
+  private async resolveSellerProfileId(
+    businessId: number,
+    userId: number,
+  ): Promise<number | null> {
+    const seller = await this.prisma.seller.findFirst({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    return seller?.id ?? null;
+  }
+
+  private async resolveUserTeamSellerIds(
+    businessId: number,
+    userId: number,
+  ): Promise<number[]> {
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+      },
+      select: { sellerId: true },
+    });
+    return Array.from(new Set(rows.map((row) => row.sellerId)));
+  }
+
+  private normalizePermissionsJson(value: unknown): string[] {
+    if (!value || typeof value !== 'object') {
+      return [];
+    }
+    const maybePermissions = (value as { permissions?: unknown }).permissions;
+    if (!Array.isArray(maybePermissions)) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        maybePermissions
+          .map((item) => String(item ?? '').trim())
+          .filter((item) => item.length > 0),
+      ),
+    );
+  }
+
+  private async resolveUserTeamPermissionRows(
+    businessId: number,
+    userId: number,
+  ) {
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+        seller: {
+          isActive: true,
+        },
+      },
+      select: {
+        sellerId: true,
+        permissionsJson: true,
+      },
+    });
+
+    return rows
+      .map((row) => ({
+        sellerId: Number(row.sellerId),
+        permissions: this.normalizePermissionsJson(row.permissionsJson),
+      }))
+      .filter((row) => Number.isFinite(row.sellerId) && row.sellerId > 0);
+  }
+
+  private async assertUserPermission(
     currentUser: JwtPayload,
-    params?: { page?: number; pageSize?: number },
-  ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
+    permissionKey: string,
+    sellerId?: number | null,
+  ) {
+    if (currentUser.role !== 'USER') {
+      return;
+    }
+
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
+    const rows = await this.resolveUserTeamPermissionRows(businessId, userId);
+    if (!rows.length) {
+      throw new ForbiddenException('Aktif seller team uyeligi bulunamadi');
+    }
+
+    const normalizedSellerId =
+      typeof sellerId === 'number' && Number.isFinite(sellerId) && sellerId > 0
+        ? Math.trunc(sellerId)
+        : null;
+
+    const scopedRows =
+      normalizedSellerId !== null
+        ? rows.filter((row) => row.sellerId === normalizedSellerId)
+        : rows;
+
+    if (!scopedRows.length) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const hasPermission = scopedRows.some((row) =>
+      row.permissions.includes(permissionKey),
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Bu islem icin yetkiniz yok');
+    }
+  }
+
+  private async resolveSellerIdForCreate(
+    currentUser: JwtPayload,
+    payload: CreateOrderDto,
+  ): Promise<number | null> {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const requestedSellerId =
+      typeof payload.sellerId === 'number' && payload.sellerId > 0
+        ? Math.trunc(payload.sellerId)
+        : null;
+
+    if (currentUser.role === 'SELLER') {
+      const sellerId = await this.resolveSellerProfileId(businessId, userId);
+      if (!sellerId) {
+        throw new ForbiddenException('Seller profili bulunamadi');
+      }
+      if (requestedSellerId && requestedSellerId !== sellerId) {
+        throw new ForbiddenException('Sadece kendi seller kapsaminda siparis acabilirsiniz');
+      }
+      return sellerId;
+    }
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
+      if (!sellerIds.length) {
+        throw new ForbiddenException('Aktif seller team uyeligi bulunamadi');
+      }
+      if (requestedSellerId) {
+        if (!sellerIds.includes(requestedSellerId)) {
+          throw new ForbiddenException('Bu seller kapsaminda siparis acamazsiniz');
+        }
+        return requestedSellerId;
+      }
+      if (sellerIds.length === 1) {
+        return sellerIds[0];
+      }
+      throw new BadRequestException(
+        'Birden fazla seller uyeligi var. sellerId belirtin',
+      );
+    }
+
+    return requestedSellerId;
+  }
+
+  private async buildOrderReadScopeWhere(currentUser: JwtPayload) {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
+      if (!sellerIds.length) {
+        throw new ForbiddenException('Aktif seller team uyeligi bulunamadi');
+      }
+      await this.assertUserPermission(currentUser, 'orders.read');
+      return {
+        businessId,
+        sellerId: { in: sellerIds },
+        deletedAt: null as null,
+      };
+    }
+
+    if (currentUser.role === 'SELLER') {
+      const sellerId = await this.resolveSellerProfileId(businessId, userId);
+      if (!sellerId) {
+        return {
+          businessId,
+          id: { in: [-1] },
+          deletedAt: null as null,
+        };
+      }
+      return {
+        businessId,
+        sellerId,
+        deletedAt: null as null,
+      };
+    }
+
+    return { businessId, deletedAt: null as null };
+  }
+
+  private async isGuestCustomer(businessId: number, customerId: number) {
+    const customer = await this.prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        businessId,
+      },
+      select: { phone: true },
+    });
+    return customer?.phone === POS_GUEST_CUSTOMER_PHONE;
+  }
+
+  private async getCustomerDebtCents(params: {
+    tx: any;
+    businessId: number;
+    sellerId: number;
+    customerId: number;
+  }) {
+    const [debitAggregate, creditAggregate] = await Promise.all([
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId: params.sellerId,
+          customerId: params.customerId,
+          type: 'DEBIT',
+        },
+        _sum: { amountCents: true },
+      }),
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId: params.sellerId,
+          customerId: params.customerId,
+          type: 'CREDIT',
+        },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    const totalDebit = Number(debitAggregate?._sum?.amountCents ?? 0);
+    const totalCredit = Number(creditAggregate?._sum?.amountCents ?? 0);
+    return Math.max(totalDebit - totalCredit, 0);
+  }
+
+  private async createCustomerLedgerEntry(params: {
+    tx: any;
+    businessId: number;
+    sellerId: number;
+    customerId: number;
+    orderId: number;
+    type: 'DEBIT' | 'CREDIT';
+    sourceType:
+      | 'SALE_DEBIT'
+      | 'PAYMENT_CREDIT'
+      | 'RETURN_REVERSAL'
+      | 'CANCEL_REVERSAL'
+      | 'MANUAL_ADJUSTMENT';
+    amountCents: number;
+    createdByUserId?: number;
+  }) {
+    const normalizedAmount = Math.max(Math.trunc(Math.abs(params.amountCents)), 0);
+    if (normalizedAmount <= 0) {
+      return null;
+    }
+
+    const currentBalance = await this.getCustomerDebtCents({
+      tx: params.tx,
+      businessId: params.businessId,
+      sellerId: params.sellerId,
+      customerId: params.customerId,
+    });
+    const nextBalance =
+      params.type === 'DEBIT'
+        ? currentBalance + normalizedAmount
+        : Math.max(currentBalance - normalizedAmount, 0);
+
+    return (params.tx as any).customerLedgerEntry.create({
+      data: {
+        businessId: params.businessId,
+        sellerId: params.sellerId,
+        customerId: params.customerId,
+        orderId: params.orderId,
+        type: params.type,
+        sourceType: params.sourceType,
+        amountCents: normalizedAmount,
+        balanceAfterCents: nextBalance,
+        createdByUserId: params.createdByUserId ?? null,
+      },
+      select: {
+        id: true,
+      },
+    });
+  }
+
+  async findAllPaginated(
+    currentUser: JwtPayload,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      source?: string;
+      statusKey?: string;
+      customerId?: number;
+      createdByUserId?: number;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
+    const businessId = Number(currentUser.businessId);
+
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+    const sourceRaw = (params?.source ?? '').trim().toUpperCase();
+    const statusKeyRaw = (params?.statusKey ?? '').trim().toUpperCase();
+
+    const isValidSource =
+      sourceRaw.length > 0 &&
+      (Object.values(OrderSource) as string[]).includes(sourceRaw);
+
+    const requestedCustomerId =
+      typeof params?.customerId === 'number' && Number.isFinite(params.customerId)
+        ? Math.trunc(params.customerId)
+        : null;
+    const requestedCreatedByUserId =
+      typeof params?.createdByUserId === 'number' &&
+      Number.isFinite(params.createdByUserId)
+        ? Math.trunc(params.createdByUserId)
+        : null;
+
+    const fromRaw = (params?.dateFrom ?? '').trim();
+    const toRaw = (params?.dateTo ?? '').trim();
+    let dateFrom: Date | undefined;
+    let dateToExclusive: Date | undefined;
+
+    if (fromRaw) {
+      dateFrom = new Date(`${fromRaw}T00:00:00.000Z`);
+      if (Number.isNaN(dateFrom.getTime())) {
+        throw new BadRequestException('dateFrom gecersiz');
+      }
+    }
+    if (toRaw) {
+      dateToExclusive = new Date(`${toRaw}T00:00:00.000Z`);
+      if (Number.isNaN(dateToExclusive.getTime())) {
+        throw new BadRequestException('dateTo gecersiz');
+      }
+      dateToExclusive.setUTCDate(dateToExclusive.getUTCDate() + 1);
+    }
+    if (dateFrom && dateToExclusive && dateToExclusive <= dateFrom) {
+      throw new BadRequestException('dateTo, dateFrom tarihinden once olamaz');
+    }
+
+    const createdAtFilter =
+      dateFrom || dateToExclusive
+        ? {
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateToExclusive ? { lt: dateToExclusive } : {}),
+          }
+        : undefined;
 
     if (currentUser.role === 'CUSTOMER') {
       const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
@@ -460,10 +810,13 @@ export class OrdersService {
         return { data: [], meta };
       }
 
-      const where = {
+      const where: Prisma.OrderWhereInput = {
         businessId,
         customerId,
         deletedAt: null as null,
+        ...(isValidSource ? { source: sourceRaw as OrderSource } : {}),
+        ...(statusKeyRaw ? { status: { key: statusKeyRaw } } : {}),
+        ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
       };
 
       const total = await this.prisma.order.count({ where });
@@ -506,10 +859,19 @@ export class OrdersService {
       };
     }
 
-    const where =
-      currentUser.role === 'STAFF'
-        ? { businessId, createdByUserId: userId, deletedAt: null as null }
-        : { businessId, deletedAt: null as null };
+    const baseWhere = await this.buildOrderReadScopeWhere(currentUser);
+    const where: Prisma.OrderWhereInput = {
+      ...baseWhere,
+      ...(isValidSource ? { source: sourceRaw as OrderSource } : {}),
+      ...(statusKeyRaw ? { status: { key: statusKeyRaw } } : {}),
+      ...(requestedCustomerId && requestedCustomerId > 0
+        ? { customerId: requestedCustomerId }
+        : {}),
+      ...(requestedCreatedByUserId && requestedCreatedByUserId > 0
+        ? { createdByUserId: requestedCreatedByUserId }
+        : {}),
+      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+    };
 
     const total = await this.prisma.order.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
@@ -624,6 +986,7 @@ export class OrdersService {
   ): Promise<OrderDetail> {
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
+    const source: OrderSource = payload.source ?? OrderSource.POS;
     const normalizedIdempotencyKey =
       this.normalizeIdempotencyKey(idempotencyKeyHeader);
     const idempotencyHash = normalizedIdempotencyKey
@@ -662,6 +1025,18 @@ export class OrdersService {
       createdByUserId,
       payload,
     );
+    const sellerId = await this.resolveSellerIdForCreate(currentUser, payload);
+
+    if (currentUser.role === 'USER') {
+      if (source !== OrderSource.POS) {
+        throw new ForbiddenException('USER sadece POS siparisi olusturabilir');
+      }
+      await this.assertUserPermission(
+        currentUser,
+        'pos.sale.create',
+        sellerId,
+      );
+    }
 
     const defaultStatusKey =
       (await this.settingsService.getJson<string>(
@@ -713,10 +1088,13 @@ export class OrdersService {
         businessId,
         id: { in: productIds },
         isActive: true,
+        ...(typeof sellerId === 'number' ? { ownerSellerId: sellerId } : {}),
       },
       select: {
         id: true,
         priceCents: true,
+        costPriceCents: true,
+        ownerSellerId: true,
         stock: true,
         name: true,
       },
@@ -774,7 +1152,29 @@ export class OrdersService {
       }
     }
 
-    const source: OrderSource = payload.source ?? OrderSource.POS;
+    const isCreditPosSale =
+      source === OrderSource.POS &&
+      payload.paymentMode === OrderPaymentMode.CREDIT;
+
+    if (isCreditPosSale) {
+      const creditCustomer = await this.prisma.customer.findFirst({
+        where: {
+          id: resolvedCustomerId,
+          businessId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          phone: true,
+        },
+      });
+      if (!creditCustomer || creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE) {
+        throw new BadRequestException('Veresiye satis icin musteri secimi zorunlu');
+      }
+      if (typeof sellerId !== 'number') {
+        throw new BadRequestException('Veresiye satis icin seller kapsami zorunlu');
+      }
+    }
 
     let result: {
       order: {
@@ -789,6 +1189,7 @@ export class OrdersService {
         shipmentTrackingNumber?: string | null;
       };
       items: OrderDetail['items'];
+      creditLimitWarned?: boolean;
     };
 
     try {
@@ -796,9 +1197,16 @@ export class OrdersService {
       // Fetch products with row-level locking (SELECT ... FOR UPDATE NOWAIT)
       // This prevents concurrent requests from reading stale stock values
       const productsLocked = await tx.$queryRaw<
-        Array<{ id: number; priceCents: number; stock: number | null; name: string }>
+        Array<{
+          id: number;
+          priceCents: number;
+          costPriceCents: number;
+          ownerSellerId: number | null;
+          stock: number | null;
+          name: string;
+        }>
       >`
-        SELECT id, "priceCents", stock, name FROM "Product"
+        SELECT id, "priceCents", "costPriceCents", "ownerSellerId", stock, name FROM "Product"
         WHERE "businessId" = ${businessId}
           AND id = ANY(${productIds}::int[])
           AND "isActive" = true
@@ -834,6 +1242,12 @@ export class OrdersService {
       for (const item of payload.items) {
         const product = productMapLocked.get(item.productId);
         if (!product) {
+          throw new NotFoundException(`Product not found: ${item.productId}`);
+        }
+        if (
+          typeof sellerId === 'number' &&
+          Number(product.ownerSellerId ?? 0) !== sellerId
+        ) {
           throw new NotFoundException(`Product not found: ${item.productId}`);
         }
 
@@ -896,6 +1310,7 @@ export class OrdersService {
         taxAmountCents: number;
         taxRateBps: number;
         totalAmountCents: number;
+        costSnapshotCents: number;
       }> = [];
 
       for (const item of payload.items) {
@@ -932,6 +1347,7 @@ export class OrdersService {
           taxAmountCents: lineTax,
           taxRateBps,
           totalAmountCents: lineTotal,
+          costSnapshotCents: Math.max(Math.trunc(Number(product.costPriceCents ?? 0)), 0),
         });
       }
 
@@ -1057,11 +1473,17 @@ export class OrdersService {
         couponToConsume = { id: coupon.id, code: coupon.code };
       }
 
+      const shippingCostCents = Math.max(
+        Math.trunc(Number(payload.shippingCostCents ?? 0)),
+        0,
+      );
+
       const order = await (tx as any).order.create({
         data: {
           businessId,
           customerId: resolvedCustomerId,
           createdByUserId,
+          sellerId: sellerId ?? null,
           statusId: status.id,
           subtotalAmountCents,
           taxAmountCents,
@@ -1069,6 +1491,7 @@ export class OrdersService {
           discountAmountCents,
           couponCode: couponToConsume?.code ?? null,
           totalAmountCents,
+          shippingCostCents,
           source,
           notes: payload.notes ?? null,
           idempotencyKey: normalizedIdempotencyKey,
@@ -1100,6 +1523,7 @@ export class OrdersService {
           taxAmountCents: i.taxAmountCents,
           taxRateBps: i.taxRateBps,
           totalAmountCents: i.totalAmountCents,
+          costSnapshotCents: i.costSnapshotCents,
         })),
       });
 
@@ -1108,6 +1532,46 @@ export class OrdersService {
           where: { id: couponToConsume.id },
           data: { usedCount: { increment: 1 } },
         });
+      }
+
+      let creditLimitWarned = false;
+      if (isCreditPosSale && typeof sellerId === 'number') {
+        const creditCustomer = await tx.customer.findFirst({
+          where: {
+            id: resolvedCustomerId,
+            businessId,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            phone: true,
+            creditLimitCents: true,
+            creditBlockPolicy: true,
+          },
+        });
+        if (!creditCustomer || creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE) {
+          throw new BadRequestException('Veresiye satis icin musteri secimi zorunlu');
+        }
+
+        const currentDebt = await this.getCustomerDebtCents({
+          tx,
+          businessId,
+          sellerId,
+          customerId: resolvedCustomerId,
+        });
+        const projectedDebt = currentDebt + totalAmountCents;
+        if (
+          typeof creditCustomer.creditLimitCents === 'number' &&
+          creditCustomer.creditLimitCents >= 0 &&
+          projectedDebt > creditCustomer.creditLimitCents
+        ) {
+          if (
+            creditCustomer.creditBlockPolicy === 'WARN' ||
+            creditCustomer.creditBlockPolicy === 'BLOCK'
+          ) {
+            creditLimitWarned = true;
+          }
+        }
       }
 
       const items = await (tx as any).orderItem.findMany({
@@ -1123,7 +1587,21 @@ export class OrdersService {
         },
       });
 
-        return { order, items };
+      if (isCreditPosSale && typeof sellerId === 'number') {
+        await this.createCustomerLedgerEntry({
+          tx,
+          businessId,
+          sellerId,
+          customerId: resolvedCustomerId,
+          orderId: order.id,
+          type: 'DEBIT',
+          sourceType: 'SALE_DEBIT',
+          amountCents: order.totalAmountCents,
+          createdByUserId,
+        });
+      }
+
+        return { order, items, creditLimitWarned };
       });
     } catch (error) {
       if (
@@ -1171,6 +1649,7 @@ export class OrdersService {
       shipmentCarrier: result.order.shipmentCarrier ?? undefined,
       shipmentTrackingNumber: result.order.shipmentTrackingNumber ?? undefined,
       items: result.items,
+      creditLimitWarned: Boolean(result.creditLimitWarned),
     };
 
     void this.sendOrderCreatedNotification(
@@ -1179,12 +1658,27 @@ export class OrdersService {
       createdOrderDetail.totalAmountCents,
     );
 
+    await this.outboxService.enqueueEvent({
+      businessId,
+      aggregateType: 'ORDER',
+      aggregateId: createdOrderDetail.id,
+      eventType: OUTBOX_EVENT_TYPES.ORDER_CREATED,
+      idempotencyKey: `order:${createdOrderDetail.id}`,
+      payloadJson: {
+        orderId: createdOrderDetail.id,
+        customerId: createdOrderDetail.customerId,
+        sellerId: sellerId ?? null,
+        totalAmountCents: createdOrderDetail.totalAmountCents,
+        source: createdOrderDetail.source,
+        createdByUserId: createdOrderDetail.createdByUserId,
+      },
+    });
+
     return createdOrderDetail;
   }
 
   async findAll(currentUser: JwtPayload): Promise<OrderSummary[]> {
     const businessId = Number(currentUser.businessId);
-    const userId = Number(currentUser.userId);
 
     if (currentUser.role === 'CUSTOMER') {
       const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
@@ -1227,10 +1721,7 @@ export class OrdersService {
       }));
     }
 
-    const where =
-      currentUser.role === 'STAFF'
-        ? { businessId, createdByUserId: userId, deletedAt: null as null }
-        : { businessId, deletedAt: null as null };
+    const where = await this.buildOrderReadScopeWhere(currentUser);
 
     const orders = await this.prisma.order.findMany({
       where,
@@ -1282,8 +1773,23 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    if (currentUser.role === 'STAFF' && order.createdByUserId !== userId) {
-      throw new ForbiddenException('Access denied');
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
+      if (!sellerIds.length || !sellerIds.includes(Number(order.sellerId ?? 0))) {
+        throw new ForbiddenException('Access denied');
+      }
+      await this.assertUserPermission(
+        currentUser,
+        'orders.read',
+        Number(order.sellerId ?? 0),
+      );
+    }
+
+    if (currentUser.role === 'SELLER') {
+      const sellerId = await this.resolveSellerProfileId(businessId, userId);
+      if (!sellerId || Number(order.sellerId ?? 0) !== sellerId) {
+        throw new ForbiddenException('Access denied');
+      }
     }
 
     if (currentUser.role === 'CUSTOMER') {
@@ -1481,12 +1987,15 @@ export class OrdersService {
     if (
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SUPER_ADMIN' &&
-      currentUser.role !== 'STAFF'
+      currentUser.role !== 'USER'
     ) {
       throw new ForbiddenException('Access denied');
     }
 
     const businessId = Number(currentUser.businessId);
+    if (currentUser.role === 'USER') {
+      await this.assertUserPermission(currentUser, 'orders.read');
+    }
     const status = (params?.status ?? '').trim().toUpperCase();
 
     const rows = await (this.prisma as any).returnRequest.findMany({
@@ -1519,7 +2028,7 @@ export class OrdersService {
     if (
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SUPER_ADMIN' &&
-      currentUser.role !== 'STAFF'
+      currentUser.role !== 'USER'
     ) {
       throw new ForbiddenException('Access denied');
     }
@@ -1539,6 +2048,9 @@ export class OrdersService {
         status: true,
         order: {
           select: {
+            id: true,
+            sellerId: true,
+            customerId: true,
             status: {
               select: {
                 key: true,
@@ -1552,6 +2064,14 @@ export class OrdersService {
 
     if (!request) {
       throw new NotFoundException('Return request not found');
+    }
+
+    if (currentUser.role === 'USER') {
+      await this.assertUserPermission(
+        currentUser,
+        'orders.updateStatus',
+        Number(request.order?.sellerId ?? 0),
+      );
     }
 
     if (String(request.status).toUpperCase() !== 'PENDING') {
@@ -1605,6 +2125,43 @@ export class OrdersService {
             where: { id: productId, stock: { not: null } },
             data: { stock: { increment: quantity } },
           });
+        }
+
+        if (typeof request.order?.sellerId === 'number') {
+          const debitAggregate = await (tx as any).customerLedgerEntry.aggregate({
+            where: {
+              businessId,
+              sellerId: request.order.sellerId,
+              orderId: request.orderId,
+              type: 'DEBIT',
+            },
+            _sum: { amountCents: true },
+          });
+          const creditAggregate = await (tx as any).customerLedgerEntry.aggregate({
+            where: {
+              businessId,
+              sellerId: request.order.sellerId,
+              orderId: request.orderId,
+              type: 'CREDIT',
+            },
+            _sum: { amountCents: true },
+          });
+          const totalDebit = Number(debitAggregate?._sum?.amountCents ?? 0);
+          const totalCredit = Number(creditAggregate?._sum?.amountCents ?? 0);
+          const outstanding = Math.max(totalDebit - totalCredit, 0);
+          if (outstanding > 0) {
+            await this.createCustomerLedgerEntry({
+              tx,
+              businessId,
+              sellerId: request.order.sellerId,
+              customerId: request.order.customerId,
+              orderId: request.orderId,
+              type: 'CREDIT',
+              sourceType: 'RETURN_REVERSAL',
+              amountCents: outstanding,
+              createdByUserId: decidedByUserId,
+            });
+          }
         }
       }
 
@@ -1738,6 +2295,13 @@ export class OrdersService {
     payload: UpdateOrderDto,
   ): Promise<OrderDetail> {
     const order = await this.findAccessibleOrder(currentUser, id);
+    if (currentUser.role === 'USER') {
+      await this.assertUserPermission(
+        currentUser,
+        'orders.updateStatus',
+        Number(order.sellerId ?? 0),
+      );
+    }
     const wasCancelled = this.isCancelledStatus(order.status?.key);
     const wasFinal = Boolean(order.status?.isFinal);
 
@@ -1816,6 +2380,43 @@ export class OrdersService {
             where: { id: productId, stock: { not: null } },
             data: { stock: { increment: quantity } },
           });
+        }
+
+        if (typeof updated.sellerId === 'number') {
+          const debitAggregate = await (tx as any).customerLedgerEntry.aggregate({
+            where: {
+              businessId: updated.businessId,
+              sellerId: updated.sellerId,
+              orderId: updated.id,
+              type: 'DEBIT',
+            },
+            _sum: { amountCents: true },
+          });
+          const creditAggregate = await (tx as any).customerLedgerEntry.aggregate({
+            where: {
+              businessId: updated.businessId,
+              sellerId: updated.sellerId,
+              orderId: updated.id,
+              type: 'CREDIT',
+            },
+            _sum: { amountCents: true },
+          });
+          const totalDebit = Number(debitAggregate?._sum?.amountCents ?? 0);
+          const totalCredit = Number(creditAggregate?._sum?.amountCents ?? 0);
+          const outstanding = Math.max(totalDebit - totalCredit, 0);
+          if (outstanding > 0) {
+            await this.createCustomerLedgerEntry({
+              tx,
+              businessId: updated.businessId,
+              sellerId: updated.sellerId,
+              customerId: updated.customerId,
+              orderId: updated.id,
+              type: 'CREDIT',
+              sourceType: 'CANCEL_REVERSAL',
+              amountCents: outstanding,
+              createdByUserId: Number(currentUser.userId),
+            });
+          }
         }
       }
 
@@ -1910,6 +2511,14 @@ export class OrdersService {
     payload: CreatePaymentDto,
   ): Promise<PaymentSummary> {
     const order = await this.findAccessibleOrder(currentUser, id);
+    if (currentUser.role === 'USER') {
+      await this.assertUserPermission(
+        currentUser,
+        'pos.sale.create',
+        Number(order.sellerId ?? 0),
+      );
+    }
+    const actorUserId = Number(currentUser.userId);
 
     const amountCents = Number(payload.amount);
 
@@ -1944,6 +2553,8 @@ export class OrdersService {
         data: {
           businessId: order.businessId,
           orderId: order.id,
+          sellerId: order.sellerId ?? null,
+          createdByUserId: Number.isFinite(actorUserId) ? actorUserId : null,
           amountCents,
           method: payload.method,
           reference: payload.reference ?? null,
@@ -1957,6 +2568,46 @@ export class OrdersService {
         },
       });
     });
+
+    if (typeof order.sellerId === 'number') {
+      const debitAggregate = await this.prisma.customerLedgerEntry.aggregate({
+        where: {
+          businessId: order.businessId,
+          orderId: order.id,
+          sellerId: order.sellerId,
+          type: 'DEBIT',
+        },
+        _sum: { amountCents: true },
+      });
+      const totalDebit = Number(debitAggregate._sum.amountCents ?? 0);
+      if (totalDebit > 0) {
+        const creditAggregate = await this.prisma.customerLedgerEntry.aggregate({
+          where: {
+            businessId: order.businessId,
+            orderId: order.id,
+            sellerId: order.sellerId,
+            type: 'CREDIT',
+          },
+          _sum: { amountCents: true },
+        });
+        const totalCredit = Number(creditAggregate._sum.amountCents ?? 0);
+        const remainingDebt = Math.max(totalDebit - totalCredit, 0);
+        const creditAmount = Math.min(remainingDebt, payment.amountCents);
+        if (creditAmount > 0) {
+          await this.createCustomerLedgerEntry({
+            tx: this.prisma,
+            businessId: order.businessId,
+            sellerId: order.sellerId,
+            customerId: order.customerId,
+            orderId: order.id,
+            type: 'CREDIT',
+            sourceType: 'PAYMENT_CREDIT',
+            amountCents: creditAmount,
+            createdByUserId: Number.isFinite(actorUserId) ? actorUserId : undefined,
+          });
+        }
+      }
+    }
 
     const paymentSummary: PaymentSummary = {
       id: payment.id,
@@ -1973,6 +2624,23 @@ export class OrdersService {
       paymentSummary.method,
     );
 
+    await this.outboxService.enqueueEvent({
+      businessId: order.businessId,
+      aggregateType: 'PAYMENT',
+      aggregateId: paymentSummary.id,
+      eventType: OUTBOX_EVENT_TYPES.PAYMENT_CREATED,
+      idempotencyKey: `payment:${paymentSummary.id}`,
+      payloadJson: {
+        paymentId: paymentSummary.id,
+        orderId: order.id,
+        amountCents: paymentSummary.amountCents,
+        method: paymentSummary.method,
+        sellerId: order.sellerId ?? null,
+        createdByUserId: Number(currentUser.userId),
+      },
+    });
+
     return paymentSummary;
   }
 }
+

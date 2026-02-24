@@ -71,7 +71,7 @@ describe('Customers (e2e)', () => {
         name: 'Customers Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -107,7 +107,7 @@ describe('Customers (e2e)', () => {
   });
 
   describe('/customers', () => {
-    it('ADMIN and STAFF can create customers', async () => {
+    it('ADMIN and USER can create customers', async () => {
       const adminRes = await request(app.getHttpServer())
         .post('/customers')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -157,7 +157,7 @@ describe('Customers (e2e)', () => {
       expect(phones).not.toContain(OTHER_BUS_CUSTOMER_PHONE);
     });
 
-    it('STAFF can only list own customers', async () => {
+    it('USER can only list own customers', async () => {
       const res = await request(app.getHttpServer())
         .get('/customers')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -171,7 +171,7 @@ describe('Customers (e2e)', () => {
       expect(phones).not.toContain(OTHER_BUS_CUSTOMER_PHONE);
     });
 
-    it('STAFF cannot get other user customer by id (403)', async () => {
+    it('USER cannot get other user customer by id (403)', async () => {
       await request(app.getHttpServer())
         .get(`/customers/${adminCustomer.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -217,3 +217,4 @@ describe('Customers (e2e)', () => {
     });
   });
 });
+

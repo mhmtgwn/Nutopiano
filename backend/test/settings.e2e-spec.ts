@@ -64,7 +64,7 @@ describe('Settings (e2e)', () => {
         name: 'Settings Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
       },
     });
@@ -124,7 +124,7 @@ describe('Settings (e2e)', () => {
       });
     });
 
-    it('STAFF can read settings but cannot write', async () => {
+    it('USER can read settings but cannot write', async () => {
       // Read
       await request(app.getHttpServer())
         .get(`/settings/${SETTING_KEY}`)
@@ -139,7 +139,7 @@ describe('Settings (e2e)', () => {
         .expect(403);
     });
 
-    it('ADMIN and STAFF only see settings for their business', async () => {
+    it('ADMIN and USER only see settings for their business', async () => {
       const adminRes = await request(app.getHttpServer())
         .get('/settings')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -180,3 +180,4 @@ describe('Settings (e2e)', () => {
     });
   });
 });
+

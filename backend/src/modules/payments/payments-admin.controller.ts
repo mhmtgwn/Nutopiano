@@ -17,7 +17,7 @@ export class PaymentsAdminController {
   ) {}
 
   @Get('webhook-events')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'List payment webhook events',
     description:
@@ -37,7 +37,7 @@ export class PaymentsAdminController {
   }
 
   @Post('process-webhooks')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Process received payment webhooks',
     description:
@@ -56,3 +56,4 @@ export class PaymentsAdminController {
     });
   }
 }
+

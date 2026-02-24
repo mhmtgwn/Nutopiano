@@ -31,7 +31,7 @@ export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
   @Post()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Create appointment',
     description:
@@ -40,7 +40,7 @@ export class AppointmentsController {
   @ApiOkResponse({ description: 'The created appointment.' })
   @ApiForbiddenResponse({
     description:
-      'Forbidden for roles other than ADMIN or STAFF, or when STAFF is not allowed to create appointments (appointment.allowStaffCreate=false).',
+      'Forbidden for roles other than ADMIN or USER, or when USER is not allowed to create appointments (appointment.allowStaffCreate=false).',
   })
   create(
     @Req() req: { user: JwtPayload },
@@ -50,29 +50,29 @@ export class AppointmentsController {
   }
 
   @Get()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'List appointments',
     description:
-      'ADMIN sees all appointments in their business. STAFF sees only appointments assigned to them (staffUserId = current user). Cross-tenant access is not allowed.',
+      'ADMIN sees all appointments in their business. USER sees only appointments assigned to them (staffUserId = current user). Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description:
       'Array of appointments for the current business and RBAC scope.',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN or STAFF.',
+    description: 'Forbidden for roles other than ADMIN or USER.',
   })
   findAll(@Req() req: { user: JwtPayload }) {
     return this.appointmentsService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Get appointment by id',
     description:
-      'ADMIN can fetch any appointment by id in their business. STAFF can fetch only appointments assigned to them. Cross-tenant access is not allowed and results in 404.',
+      'ADMIN can fetch any appointment by id in their business. USER can fetch only appointments assigned to them. Cross-tenant access is not allowed and results in 404.',
   })
   @ApiOkResponse({
     description:
@@ -80,7 +80,7 @@ export class AppointmentsController {
   })
   @ApiForbiddenResponse({
     description:
-      'STAFF trying to access an appointment assigned to another staff or unassigned appointment.',
+      'USER trying to access an appointment assigned to another staff or unassigned appointment.',
   })
   @ApiNotFoundResponse({
     description:
@@ -91,16 +91,16 @@ export class AppointmentsController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Update appointment',
     description:
-      'ADMIN can update any appointment in their business, including status, notes and staff assignment. STAFF can update status and notes only for appointments assigned to them. Cross-tenant access is not allowed.',
+      'ADMIN can update any appointment in their business, including status, notes and staff assignment. USER can update status and notes only for appointments assigned to them. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({ description: 'Updated appointment.' })
   @ApiForbiddenResponse({
     description:
-      'STAFF trying to update an appointment not assigned to them, or trying to change staff assignment, or roles other than ADMIN/STAFF.',
+      'USER trying to update an appointment not assigned to them, or trying to change staff assignment, or roles other than ADMIN/USER.',
   })
   @ApiNotFoundResponse({
     description:
@@ -114,3 +114,4 @@ export class AppointmentsController {
     return this.appointmentsService.update(req.user, Number(id), payload);
   }
 }
+

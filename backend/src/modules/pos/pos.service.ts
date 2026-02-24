@@ -47,10 +47,321 @@ export class PosService {
       currentUser.role !== 'ADMIN' &&
       currentUser.role !== 'SUPER_ADMIN' &&
       currentUser.role !== 'SELLER' &&
-      currentUser.role !== 'STAFF'
+      currentUser.role !== 'USER'
     ) {
       throw new ForbiddenException('Access denied');
     }
+  }
+
+  private async resolveSellerProfileId(businessId: number, userId: number) {
+    const seller = await this.prisma.seller.findFirst({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    return seller?.id ?? null;
+  }
+
+  private async resolveUserTeamSellerIds(businessId: number, userId: number) {
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+        seller: {
+          isActive: true,
+        },
+      },
+      select: { sellerId: true },
+    });
+
+    return Array.from(
+      new Set(rows.map((row) => Number(row.sellerId)).filter((id) => id > 0)),
+    );
+  }
+
+  private normalizePermissionsJson(value: Prisma.JsonValue | null | undefined) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return [] as string[];
+    }
+
+    const maybePermissions = (value as { permissions?: unknown }).permissions;
+    if (!Array.isArray(maybePermissions)) {
+      return [] as string[];
+    }
+
+    const normalized = maybePermissions
+      .map((item) => String(item ?? '').trim())
+      .filter((item) => item.length > 0);
+
+    return Array.from(new Set(normalized));
+  }
+
+  private async resolveUserTeamPermissionRows(businessId: number, userId: number) {
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        userId,
+        isActive: true,
+        seller: {
+          isActive: true,
+        },
+      },
+      select: {
+        sellerId: true,
+        permissionsJson: true,
+      },
+    });
+
+    return rows
+      .map((row) => ({
+        sellerId: Number(row.sellerId),
+        permissions: this.normalizePermissionsJson(row.permissionsJson),
+      }))
+      .filter((row) => row.sellerId > 0);
+  }
+
+  private async assertUserPermission(
+    currentUser: JwtPayload,
+    permissionKey: string,
+    sellerId?: number | null,
+  ) {
+    if (currentUser.role !== 'USER') {
+      return;
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    if (!Number.isFinite(businessId) || !Number.isFinite(userId) || userId <= 0) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const rows = await this.resolveUserTeamPermissionRows(businessId, userId);
+    if (!rows.length) {
+      throw new ForbiddenException('Seller team yetkisi bulunamadi');
+    }
+
+    const targetRows =
+      typeof sellerId === 'number' && sellerId > 0
+        ? rows.filter((row) => row.sellerId === sellerId)
+        : rows;
+    if (!targetRows.length) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const hasPermission = targetRows.some((row) =>
+      row.permissions.includes(permissionKey),
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException(`Missing permission: ${permissionKey}`);
+    }
+  }
+
+  private async resolveAllowedSellerIdsForActor(currentUser: JwtPayload) {
+    const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+
+    if (
+      currentUser.role === 'ADMIN' ||
+      currentUser.role === 'SUPER_ADMIN'
+    ) {
+      return null;
+    }
+
+    if (currentUser.role === 'SELLER') {
+      const sellerId = await this.resolveSellerProfileId(businessId, userId);
+      if (!sellerId) {
+        throw new ForbiddenException('Aktif seller profili bulunamadi');
+      }
+      return [sellerId];
+    }
+
+    if (currentUser.role === 'USER') {
+      const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
+      if (!sellerIds.length) {
+        throw new ForbiddenException('Seller team yetkisi bulunamadi');
+      }
+      return sellerIds;
+    }
+
+    throw new ForbiddenException('Access denied');
+  }
+
+  private async assertOrderScopeAccess(
+    currentUser: JwtPayload,
+    order: { sellerId: number | null; createdByUserId: number },
+  ) {
+    if (
+      currentUser.role === 'ADMIN' ||
+      currentUser.role === 'SUPER_ADMIN'
+    ) {
+      return;
+    }
+
+    const userId = Number(currentUser.userId);
+    const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
+    const orderSellerId =
+      typeof order.sellerId === 'number' ? Number(order.sellerId) : null;
+
+    if (Array.isArray(sellerIds) && orderSellerId && sellerIds.includes(orderSellerId)) {
+      return;
+    }
+
+    // Legacy orders may not have sellerId populated.
+    if (orderSellerId === null && Number(order.createdByUserId) === userId) {
+      return;
+    }
+
+    throw new ForbiddenException('Access denied');
+  }
+
+  private async getCustomerDebtCents(params: {
+    tx: Prisma.TransactionClient | PrismaService;
+    businessId: number;
+    sellerId: number;
+    customerId: number;
+  }) {
+    const [debitAggregate, creditAggregate] = await Promise.all([
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId: params.sellerId,
+          customerId: params.customerId,
+          type: 'DEBIT',
+        },
+        _sum: { amountCents: true },
+      }),
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId: params.sellerId,
+          customerId: params.customerId,
+          type: 'CREDIT',
+        },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    const totalDebit = Number(debitAggregate?._sum?.amountCents ?? 0);
+    const totalCredit = Number(creditAggregate?._sum?.amountCents ?? 0);
+    return Math.max(totalDebit - totalCredit, 0);
+  }
+
+  private async createCustomerLedgerEntry(params: {
+    tx: Prisma.TransactionClient | PrismaService;
+    businessId: number;
+    sellerId: number;
+    customerId: number;
+    orderId?: number | null;
+    type: 'DEBIT' | 'CREDIT';
+    sourceType:
+      | 'SALE_DEBIT'
+      | 'PAYMENT_CREDIT'
+      | 'RETURN_REVERSAL'
+      | 'CANCEL_REVERSAL'
+      | 'MANUAL_ADJUSTMENT';
+    amountCents: number;
+    createdByUserId?: number | null;
+  }) {
+    const normalizedAmount = Math.max(Math.trunc(Number(params.amountCents)), 0);
+    if (normalizedAmount <= 0) {
+      return null;
+    }
+
+    const currentBalance = await this.getCustomerDebtCents({
+      tx: params.tx,
+      businessId: params.businessId,
+      sellerId: params.sellerId,
+      customerId: params.customerId,
+    });
+
+    const nextBalance =
+      params.type === 'DEBIT'
+        ? currentBalance + normalizedAmount
+        : Math.max(currentBalance - normalizedAmount, 0);
+
+    return (params.tx as any).customerLedgerEntry.create({
+      data: {
+        businessId: params.businessId,
+        sellerId: params.sellerId,
+        customerId: params.customerId,
+        orderId: params.orderId ?? null,
+        type: params.type,
+        sourceType: params.sourceType,
+        amountCents: normalizedAmount,
+        balanceAfterCents: nextBalance,
+        createdByUserId:
+          typeof params.createdByUserId === 'number'
+            ? params.createdByUserId
+            : null,
+      },
+    });
+  }
+
+  private async applyCreditLedgerForPayment(params: {
+    tx: Prisma.TransactionClient | PrismaService;
+    businessId: number;
+    sellerId: number | null | undefined;
+    customerId: number;
+    orderId: number;
+    amountCents: number;
+    createdByUserId?: number | null;
+    sourceType?: 'PAYMENT_CREDIT' | 'RETURN_REVERSAL' | 'CANCEL_REVERSAL';
+  }) {
+    const sellerId =
+      typeof params.sellerId === 'number' && params.sellerId > 0
+        ? params.sellerId
+        : null;
+    const amount = Math.max(Math.trunc(Number(params.amountCents)), 0);
+
+    if (!sellerId || amount <= 0) {
+      return null;
+    }
+
+    const [debitAggregate, creditAggregate] = await Promise.all([
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId,
+          orderId: params.orderId,
+          type: 'DEBIT',
+        },
+        _sum: { amountCents: true },
+      }),
+      (params.tx as any).customerLedgerEntry.aggregate({
+        where: {
+          businessId: params.businessId,
+          sellerId,
+          orderId: params.orderId,
+          type: 'CREDIT',
+        },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    const totalDebit = Number(debitAggregate?._sum?.amountCents ?? 0);
+    const totalCredit = Number(creditAggregate?._sum?.amountCents ?? 0);
+    const outstandingDebt = Math.max(totalDebit - totalCredit, 0);
+    const creditAmount = Math.min(outstandingDebt, amount);
+
+    if (creditAmount <= 0) {
+      return null;
+    }
+
+    return this.createCustomerLedgerEntry({
+      tx: params.tx,
+      businessId: params.businessId,
+      sellerId,
+      customerId: params.customerId,
+      orderId: params.orderId,
+      type: 'CREDIT',
+      sourceType: params.sourceType ?? 'PAYMENT_CREDIT',
+      amountCents: creditAmount,
+      createdByUserId: params.createdByUserId,
+    });
   }
 
   private normalizeSalesPeriod(raw?: string): SalesBucketPeriod {
@@ -127,6 +438,7 @@ export class PosService {
 
   async getCurrentSession(currentUser: JwtPayload) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
 
     const session = await this.prisma.cashRegisterSession.findFirst({
@@ -161,6 +473,7 @@ export class PosService {
 
   async listSessions(currentUser: JwtPayload, limit = 20) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
@@ -193,6 +506,7 @@ export class PosService {
 
   async openSession(currentUser: JwtPayload, payload: OpenRegisterSessionDto) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const registerCode = (payload.registerCode ?? 'MAIN').trim().toUpperCase();
@@ -233,6 +547,7 @@ export class PosService {
     payload: CloseRegisterSessionDto,
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const registerCode = payload.registerCode?.trim().toUpperCase();
@@ -273,7 +588,7 @@ export class PosService {
         orderBy: { openedAt: 'desc' },
       });
 
-      if (currentUser.role === 'STAFF') {
+      if (currentUser.role === 'USER') {
         active =
           activeRows.find((row) => row.openedByUserId === userId) ?? null;
       } else {
@@ -290,7 +605,7 @@ export class PosService {
       throw new NotFoundException('Kapatilacak aktif vardiya bulunamadi');
     }
 
-    if (currentUser.role === 'STAFF' && active.openedByUserId !== userId) {
+    if (currentUser.role === 'USER' && active.openedByUserId !== userId) {
       throw new ForbiddenException('Bu kasayi kapatamazsiniz');
     }
 
@@ -784,8 +1099,8 @@ export class PosService {
 
   async getOrderInvoice(currentUser: JwtPayload, orderId: number) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
-    const userId = Number(currentUser.userId);
 
     const order = await this.prisma.order.findFirst({
       where: {
@@ -845,9 +1160,11 @@ export class PosService {
       throw new NotFoundException('POS siparisi bulunamadi');
     }
 
-    if (currentUser.role === 'STAFF' && order.createdByUserId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertOrderScopeAccess(currentUser, {
+      sellerId: order.sellerId,
+      createdByUserId: order.createdByUserId,
+    });
+    await this.assertUserPermission(currentUser, 'orders.read', order.sellerId);
 
     const [business, settingsRows, billingAddress] = await Promise.all([
       this.prisma.business.findUnique({
@@ -1029,6 +1346,7 @@ export class PosService {
     payload: PosReturnOrderDto,
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -1049,9 +1367,15 @@ export class PosService {
       throw new NotFoundException('Order not found');
     }
 
-    if (currentUser.role === 'STAFF' && order.createdByUserId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertOrderScopeAccess(currentUser, {
+      sellerId: order.sellerId,
+      createdByUserId: order.createdByUserId,
+    });
+    await this.assertUserPermission(
+      currentUser,
+      'orders.updateStatus',
+      order.sellerId,
+    );
 
     if (order.source !== 'POS') {
       throw new BadRequestException('Sadece POS siparisleri iade edilebilir');
@@ -1123,13 +1447,18 @@ export class PosService {
 
       await tx.order.update({
         where: { id: order.id },
-        data: { statusId: targetStatusId },
+        data: {
+          statusId: targetStatusId,
+          returnCostCents: { increment: refundAmountCents },
+        },
       });
 
       const refundPayment = await tx.payment.create({
         data: {
           businessId,
           orderId: order.id,
+          sellerId: order.sellerId ?? null,
+          createdByUserId: userId,
           amountCents: -refundAmountCents,
           method: refundMethod,
           reference: `POS_RETURN:${order.id}`,
@@ -1141,6 +1470,17 @@ export class PosService {
           reference: true,
           createdAt: true,
         },
+      });
+
+      await this.applyCreditLedgerForPayment({
+        tx,
+        businessId,
+        sellerId: order.sellerId,
+        customerId: order.customerId,
+        orderId: order.id,
+        amountCents: refundAmountCents,
+        createdByUserId: userId,
+        sourceType: 'RETURN_REVERSAL',
       });
 
       const existingRequest = await (tx as any).returnRequest.findFirst({
@@ -1292,18 +1632,39 @@ export class PosService {
 
   async findProductByBarcode(currentUser: JwtPayload, barcode: string) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
     const code = barcode.trim();
     if (!code) {
       throw new BadRequestException('Barkod bos olamaz');
     }
 
+    const productWhere: Prisma.ProductWhereInput = {
+      businessId,
+      isActive: true,
+      archivedAt: null,
+      sku: code,
+    };
+    if (sellerIds) {
+      if (currentUser.role === 'SELLER') {
+        const sellerId = sellerIds[0];
+        productWhere.AND = [
+          {
+            OR: [
+              { ownerSellerId: sellerId },
+              { ownerSellerId: null, createdByUserId: userId },
+            ],
+          },
+        ];
+      } else if (currentUser.role === 'USER') {
+        productWhere.ownerSellerId = { in: sellerIds };
+      }
+    }
+
     const product = await this.prisma.product.findFirst({
-      where: {
-        businessId,
-        isActive: true,
-        sku: code,
-      },
+      where: productWhere,
       select: {
         id: true,
         name: true,
@@ -1325,12 +1686,34 @@ export class PosService {
       };
     }
 
-    const variant = await (this.prisma as any).productVariant.findFirst({
-      where: {
+    const variantWhere: any = {
+      businessId,
+      isActive: true,
+      sku: code,
+      product: {
         businessId,
         isActive: true,
-        sku: code,
+        archivedAt: null,
       },
+    };
+    if (sellerIds) {
+      if (currentUser.role === 'SELLER') {
+        const sellerId = sellerIds[0];
+        variantWhere.product.AND = [
+          {
+            OR: [
+              { ownerSellerId: sellerId },
+              { ownerSellerId: null, createdByUserId: userId },
+            ],
+          },
+        ];
+      } else if (currentUser.role === 'USER') {
+        variantWhere.product.ownerSellerId = { in: sellerIds };
+      }
+    }
+
+    const variant = await (this.prisma as any).productVariant.findFirst({
+      where: variantWhere,
       select: {
         id: true,
         productId: true,
@@ -1361,7 +1744,10 @@ export class PosService {
     params?: { q?: string; limit?: number },
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
     const q = (params?.q ?? '').trim();
     const limit = Math.min(Math.max(Number(params?.limit ?? 12), 1), 50);
     const qNumber = q && /^[0-9]+$/.test(q) ? Number(q) : null;
@@ -1371,6 +1757,21 @@ export class PosService {
       isActive: true,
       archivedAt: null,
     };
+    if (sellerIds) {
+      if (currentUser.role === 'SELLER') {
+        const sellerId = sellerIds[0];
+        productWhere.AND = [
+          {
+            OR: [
+              { ownerSellerId: sellerId },
+              { ownerSellerId: null, createdByUserId: userId },
+            ],
+          },
+        ];
+      } else if (currentUser.role === 'USER') {
+        productWhere.ownerSellerId = { in: sellerIds };
+      }
+    }
 
     if (q) {
       productWhere.OR = [
@@ -1392,6 +1793,21 @@ export class PosService {
         archivedAt: null,
       },
     };
+    if (sellerIds) {
+      if (currentUser.role === 'SELLER') {
+        const sellerId = sellerIds[0];
+        variantWhere.product.AND = [
+          {
+            OR: [
+              { ownerSellerId: sellerId },
+              { ownerSellerId: null, createdByUserId: userId },
+            ],
+          },
+        ];
+      } else if (currentUser.role === 'USER') {
+        variantWhere.product.ownerSellerId = { in: sellerIds };
+      }
+    }
     if (q) {
       const or: any[] = [
         { name: { contains: q, mode: 'insensitive' } },
@@ -1492,12 +1908,41 @@ export class PosService {
     params?: { q?: string; limit?: number },
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
     const q = (params?.q ?? '').trim();
     const limit = Math.min(Math.max(Number(params?.limit ?? 20), 1), 100);
     const qNumber = q && /^[0-9]+$/.test(q) ? Number(q) : null;
 
     const where: any = { businessId, deletedAt: null };
+    if (sellerIds) {
+      where.AND = [
+        {
+          OR: [
+            { createdByUserId: userId },
+            {
+              orders: {
+                some: {
+                  businessId,
+                  deletedAt: null,
+                  sellerId: { in: sellerIds },
+                },
+              },
+            },
+            {
+              ledgerEntries: {
+                some: {
+                  businessId,
+                  sellerId: { in: sellerIds },
+                },
+              },
+            },
+          ],
+        },
+      ];
+    }
     if (q) {
       const or: any[] = [
         { name: { contains: q, mode: 'insensitive' } },
@@ -1522,14 +1967,46 @@ export class PosService {
 
   async findCustomerById(currentUser: JwtPayload, customerId: number) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
+    const userId = Number(currentUser.userId);
+    const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
+
+    const where: any = {
+      id: customerId,
+      businessId,
+      deletedAt: null,
+    };
+
+    if (sellerIds) {
+      where.AND = [
+        {
+          OR: [
+            { createdByUserId: userId },
+            {
+              orders: {
+                some: {
+                  businessId,
+                  deletedAt: null,
+                  sellerId: { in: sellerIds },
+                },
+              },
+            },
+            {
+              ledgerEntries: {
+                some: {
+                  businessId,
+                  sellerId: { in: sellerIds },
+                },
+              },
+            },
+          ],
+        },
+      ];
+    }
 
     const customer = await this.prisma.customer.findFirst({
-      where: {
-        id: customerId,
-        businessId,
-        deletedAt: null,
-      },
+      where,
       select: {
         id: true,
         name: true,
@@ -1546,6 +2023,7 @@ export class PosService {
 
   async createCustomer(currentUser: JwtPayload, payload: CreatePosCustomerDto) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
     const name = payload.name.trim();
@@ -1654,6 +2132,7 @@ export class PosService {
     payload: ApplySplitPaymentsDto,
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -1687,6 +2166,8 @@ export class PosService {
         select: {
           id: true,
           createdByUserId: true,
+          sellerId: true,
+          customerId: true,
           totalAmountCents: true,
         },
       });
@@ -1694,9 +2175,15 @@ export class PosService {
       if (!order) {
         throw new NotFoundException('Order not found');
       }
-      if (currentUser.role === 'STAFF' && order.createdByUserId !== userId) {
-        throw new ForbiddenException('Access denied');
-      }
+      await this.assertOrderScopeAccess(currentUser, {
+        sellerId: order.sellerId,
+        createdByUserId: order.createdByUserId,
+      });
+      await this.assertUserPermission(
+        currentUser,
+        'pos.sale.create',
+        order.sellerId,
+      );
 
       await tx.$queryRaw`SELECT 1 FROM "Order" WHERE "id" = ${order.id} FOR UPDATE`;
 
@@ -1733,6 +2220,8 @@ export class PosService {
           data: {
             businessId,
             orderId: order.id,
+            sellerId: order.sellerId ?? null,
+            createdByUserId: userId,
             amountCents: line.amountCents,
             method: line.method,
             reference: line.reference,
@@ -1744,6 +2233,16 @@ export class PosService {
             reference: true,
             createdAt: true,
           },
+        });
+        await this.applyCreditLedgerForPayment({
+          tx,
+          businessId,
+          sellerId: order.sellerId,
+          customerId: order.customerId,
+          orderId: order.id,
+          amountCents: line.amountCents,
+          createdByUserId: userId,
+          sourceType: 'PAYMENT_CREDIT',
         });
         createdPayments.push(payment);
       }
@@ -1764,6 +2263,7 @@ export class PosService {
     payload: ApplyCustomerBalanceDto,
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'tab.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -1776,6 +2276,7 @@ export class PosService {
       select: {
         id: true,
         customerId: true,
+        sellerId: true,
         totalAmountCents: true,
         createdByUserId: true,
       },
@@ -1784,9 +2285,15 @@ export class PosService {
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    if (currentUser.role === 'STAFF' && order.createdByUserId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertOrderScopeAccess(currentUser, {
+      sellerId: order.sellerId,
+      createdByUserId: order.createdByUserId,
+    });
+    await this.assertUserPermission(
+      currentUser,
+      'pos.sale.create',
+      order.sellerId,
+    );
 
     const [customer, paymentAggregate] = await Promise.all([
       this.prisma.customer.findFirst({
@@ -1835,6 +2342,8 @@ export class PosService {
         data: {
           businessId,
           orderId: order.id,
+          sellerId: order.sellerId ?? null,
+          createdByUserId: userId,
           amountCents: applyAmount,
           method: PaymentMethod.OTHER,
           reference: 'CUSTOMER_BALANCE',
@@ -1846,6 +2355,17 @@ export class PosService {
           reference: true,
           createdAt: true,
         },
+      });
+
+      await this.applyCreditLedgerForPayment({
+        tx,
+        businessId,
+        sellerId: order.sellerId,
+        customerId: order.customerId,
+        orderId: order.id,
+        amountCents: applyAmount,
+        createdByUserId: userId,
+        sourceType: 'PAYMENT_CREDIT',
       });
 
       const newPaidNet = paidNet + applyAmount;
@@ -1867,3 +2387,4 @@ export class PosService {
     };
   }
 }
+

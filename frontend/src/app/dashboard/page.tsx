@@ -46,7 +46,7 @@ type SetupAction = QuickAction;
 
 export default function SellerDashboardPage() {
   const user = useAppSelector((state) => state.user.user);
-  const isStaff = user?.role === 'STAFF';
+  const isStaff = user?.role === 'USER';
   const panelLabel = getPanelLabelByRole(user?.role);
   const heroTag = isStaff ? 'Personel' : 'Satıcı';
   const heroDescription = isStaff
@@ -290,3 +290,4 @@ export default function SellerDashboardPage() {
     </div>
   );
 }
+

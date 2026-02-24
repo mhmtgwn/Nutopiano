@@ -13,11 +13,23 @@ import {
 import { OrderSource } from '@prisma/client';
 import { CreateOrderItemDto } from './create-order-item.dto';
 
+export enum OrderPaymentMode {
+  CASH = 'CASH',
+  CARD = 'CARD',
+  CREDIT = 'CREDIT',
+  SPLIT = 'SPLIT',
+}
+
 export class CreateOrderDto {
   @IsOptional()
   @IsInt()
   @Min(1)
   customerId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  sellerId?: number;
 
   @IsOptional()
   @IsEnum(OrderSource)
@@ -38,6 +50,15 @@ export class CreateOrderDto {
   @IsInt()
   @Min(0)
   cartDiscountAmountCents?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  shippingCostCents?: number;
+
+  @IsOptional()
+  @IsEnum(OrderPaymentMode)
+  paymentMode?: OrderPaymentMode;
 
   @IsArray()
   @ValidateNested({ each: true })

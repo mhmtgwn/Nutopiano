@@ -119,6 +119,30 @@ export class EmailService {
     });
   }
 
+  async sendSellerTeamInviteEmail(params: {
+    to: string;
+    sellerName: string;
+    inviteUrl: string;
+    expiresAt: Date;
+    targetName?: string;
+  }): Promise<void> {
+    const expireText = params.expiresAt.toISOString();
+    await this.sendEmail({
+      to: params.to,
+      subject: `${params.sellerName} | Seller Team Daveti`,
+      text: `Merhaba ${params.targetName ?? ''}, ${params.sellerName} seller ekibine davet edildiniz. Daveti kabul etmek icin: ${params.inviteUrl}. Son gecerlilik: ${expireText}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2 style="margin:0 0 12px">Seller Team Daveti</h2>
+          <p>Merhaba ${params.targetName ?? ''},</p>
+          <p><strong>${params.sellerName}</strong> seller ekibine davet edildiniz.</p>
+          <p>Davet baglantisi: <a href="${params.inviteUrl}">${params.inviteUrl}</a></p>
+          <p style="color:#666;font-size:12px">Son gecerlilik: ${expireText}</p>
+        </div>
+      `,
+    });
+  }
+
   async sendOrderCreatedEmail(params: {
     to: string;
     customerName: string;

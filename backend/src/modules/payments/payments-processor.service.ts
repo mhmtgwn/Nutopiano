@@ -170,6 +170,21 @@ export class PaymentsProcessorService {
               const amountCents = Number.isFinite(paidPrice)
                 ? Math.round(Number(paidPrice) * 100)
                 : Number(session.amountCents);
+              const order = await this.prisma.order.findFirst({
+                where: {
+                  id: Number(session.orderId),
+                  businessId: Number(session.businessId),
+                  deletedAt: null,
+                },
+                select: {
+                  id: true,
+                  sellerId: true,
+                },
+              });
+
+              if (!order) {
+                throw new Error('Order not found for payment session');
+              }
 
               const existing = await this.prisma.payment.findFirst({
                 where: {
@@ -183,7 +198,9 @@ export class PaymentsProcessorService {
                 await this.prisma.payment.create({
                   data: {
                     businessId: Number(session.businessId),
-                    orderId: Number(session.orderId),
+                    orderId: order.id,
+                    sellerId: order.sellerId ?? null,
+                    createdByUserId: null,
                     amountCents,
                     method: 'CARD',
                     reference: paymentId,

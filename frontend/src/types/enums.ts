@@ -7,7 +7,7 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   SELLER = 'SELLER',
   CUSTOMER = 'CUSTOMER',
-  STAFF = 'STAFF',
+  USER = 'USER',
 }
 
 export enum OrderStatus {
@@ -90,5 +90,6 @@ export const UserRoleDisplay: Record<UserRole, string> = {
   [UserRole.ADMIN]: 'Admin',
   [UserRole.SELLER]: 'Satıcı',
   [UserRole.CUSTOMER]: 'Müşteri',
-  [UserRole.STAFF]: 'Personel',
+  [UserRole.USER]: 'Personel',
 };
+

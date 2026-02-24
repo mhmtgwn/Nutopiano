@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { ForbiddenException } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/types/jwt-payload';
 import { Role } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTION_TYPES } from '../audit/audit.constants';
 
 export interface UserSummary {
   id: number;
@@ -14,7 +20,10 @@ export interface UserSummary {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   findAll(currentUser: JwtPayload): Promise<UserSummary[]> {
     const businessId = Number(currentUser.businessId);
@@ -89,6 +98,38 @@ export class UsersService {
     id: number,
     role: Role,
   ): Promise<UserSummary> {
+    return this.updateRoleInternal(currentUser, id, role, {
+      isOverride: false,
+    });
+  }
+
+  async updateRoleWithOverride(
+    currentUser: JwtPayload,
+    id: number,
+    role: Role,
+    reason: string,
+  ): Promise<UserSummary> {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const normalizedReason = String(reason ?? '').trim();
+    if (normalizedReason.length < 3) {
+      throw new BadRequestException('reason en az 3 karakter olmali');
+    }
+
+    return this.updateRoleInternal(currentUser, id, role, {
+      isOverride: true,
+      reason: normalizedReason,
+    });
+  }
+
+  private async updateRoleInternal(
+    currentUser: JwtPayload,
+    id: number,
+    role: Role,
+    options: { isOverride: boolean; reason?: string },
+  ): Promise<UserSummary> {
     const businessId = Number(currentUser.businessId);
     const currentUserId = Number(currentUser.userId);
     if (!Number.isFinite(businessId)) {
@@ -101,25 +142,11 @@ export class UsersService {
       );
     }
 
-    const existing = await this.prisma.user.findFirst({
-      where: {
-        id,
-        businessId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('User not found');
-    }
-
     const allowedRoles = new Set<Role>([
       Role.SUPER_ADMIN,
       Role.ADMIN,
       Role.SELLER,
-      Role.STAFF,
+      Role.USER,
       Role.CUSTOMER,
     ]);
     if (!allowedRoles.has(role)) {
@@ -132,13 +159,23 @@ export class UsersService {
       );
     }
 
+    if (!options.isOverride && currentUser.role === 'ADMIN') {
+      throw new ForbiddenException(
+        'ADMIN varsayilan read-only. role-change icin override endpointini kullanin.',
+      );
+    }
+
     const target = await this.prisma.user.findFirst({
       where: {
         id,
         businessId,
       },
       select: {
+        id: true,
+        name: true,
+        phone: true,
         role: true,
+        isActive: true,
       },
     });
 
@@ -152,17 +189,44 @@ export class UsersService {
       );
     }
 
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { role },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        role: true,
-        isActive: true,
-      },
-    });
+    const updated =
+      target.role === role
+        ? {
+            id: target.id,
+            name: target.name,
+            phone: target.phone ?? undefined,
+            role: target.role,
+            isActive: target.isActive,
+          }
+        : await this.prisma.user.update({
+            where: { id },
+            data: { role },
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              role: true,
+              isActive: true,
+            },
+          });
+
+    if (options.isOverride || currentUser.role === 'SUPER_ADMIN') {
+      await this.auditService.logFromActor(currentUser, {
+        actionType: AUDIT_ACTION_TYPES.ROLE_CHANGE,
+        targetType: 'USER',
+        targetId: id,
+        payloadJson: {
+          source: options.isOverride ? 'users.role.override' : 'users.role',
+          reason: options.reason ?? 'super-admin-normal-endpoint',
+          before: {
+            role: target.role,
+          },
+          after: {
+            role: updated.role,
+          },
+        },
+      });
+    }
 
     return updated;
   }
@@ -213,3 +277,4 @@ export class UsersService {
     return updated;
   }
 }
+

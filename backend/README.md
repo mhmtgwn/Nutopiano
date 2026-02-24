@@ -36,7 +36,9 @@ import { JwtAuthGuard, RolesGuard, StaffSelfGuard } from './core/guards';
 
 ### AdminOrStaffSelf usage
 
-Use this decorator to allow ADMIN access or STAFF access to their own resource.
+Use this decorator to allow ADMIN access or USER access to their own resource.
+Not: Decorator/guard isimlerinde geriye donuk uyumluluk nedeniyle "staff" ifadesi gecse de
+aktif rol modeli `USER` uzerinden calisir.
 
 ```ts
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -133,3 +135,4 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+

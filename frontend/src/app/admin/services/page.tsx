@@ -24,7 +24,7 @@ type AppointmentRow = {
   updatedAt: string;
 };
 
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER' | 'CUSTOMER';
 
 type UserRow = {
   id: number;
@@ -194,7 +194,7 @@ export default function AdminServicesPage() {
   });
 
   const staffOptions = useMemo(
-    () => (usersQuery.data ?? []).filter((u) => u.role === 'STAFF' && u.isActive),
+    () => (usersQuery.data ?? []).filter((u) => u.role === 'USER' && u.isActive),
     [usersQuery.data],
   );
 
@@ -537,3 +537,4 @@ export default function AdminServicesPage() {
     </div>
   );
 }
+

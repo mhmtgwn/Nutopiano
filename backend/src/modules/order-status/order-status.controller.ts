@@ -50,28 +50,28 @@ export class OrderStatusController {
   }
 
   @Get()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'List order statuses',
     description:
-      'ADMIN and STAFF can list all order statuses for their business. The flow is config-driven per business and ordered by orderIndex.',
+      'ADMIN and USER can list all order statuses for their business. The flow is config-driven per business and ordered by orderIndex.',
   })
   @ApiOkResponse({
     description: 'Array of order statuses for the current business.',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN or STAFF.',
+    description: 'Forbidden for roles other than ADMIN or USER.',
   })
   findAll(@Req() req: { user: JwtPayload }) {
     return this.orderStatusService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Get order status by id',
     description:
-      'ADMIN and STAFF can fetch any order status by id within their business. Cross-tenant access is not allowed.',
+      'ADMIN and USER can fetch any order status by id within their business. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description: 'Order status matching the given id in the current business.',
@@ -126,3 +126,4 @@ export class OrderStatusController {
     return this.orderStatusService.remove(req.user, Number(id));
   }
 }
+

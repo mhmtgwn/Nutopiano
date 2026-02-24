@@ -7,7 +7,7 @@ export const ROLES = {
   ADMIN: 'ADMIN',
   SELLER: 'SELLER',
   CUSTOMER: 'CUSTOMER',
-  STAFF: 'STAFF',
+  USER: 'USER',
 } as const;
 
 export type RoleType = (typeof ROLES)[keyof typeof ROLES];
@@ -57,7 +57,7 @@ export const ROLE_PERMISSIONS = {
     canManagePayments: false,
     canViewAnalytics: false,
   },
-  STAFF: {
+  USER: {
     description: 'Staff member - limited access to business operations',
     canAccessPlatformAdmin: false,
     canAccessSellerPortal: true,
@@ -73,5 +73,6 @@ export const ROLE_PERMISSIONS = {
 export const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN] as const;
 export const PLATFORM_ADMIN_ROLES = [ROLES.SUPER_ADMIN] as const;
 export const BUSINESS_ADMIN_ROLES = [ROLES.ADMIN] as const;
-export const SELLER_ROLES = [ROLES.SELLER, ROLES.STAFF] as const;
+export const SELLER_ROLES = [ROLES.SELLER, ROLES.USER] as const;
 export const CUSTOMER_ROLES = [ROLES.CUSTOMER] as const;
+

@@ -805,7 +805,7 @@ export class CustomersService {
       throw new NotFoundException('Customer not found');
     }
 
-    if (currentUser.role === 'STAFF' && customer.createdByUserId !== userId) {
+    if (currentUser.role === 'USER' && customer.createdByUserId !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -961,3 +961,4 @@ export class CustomersService {
     });
   }
 }
+

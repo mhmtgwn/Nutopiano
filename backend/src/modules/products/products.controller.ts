@@ -38,11 +38,11 @@ export class ProductsController {
   @Get('manage')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SELLER', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'List products (seller portal)',
     description:
-      'SELLER/STAFF can list active products for their business with pagination.',
+      'SUPER_ADMIN/ADMIN/SELLER can list active products for their business with pagination.',
   })
   @ApiOkResponse({
     description: 'Paginated list of products for the current business.',
@@ -61,7 +61,7 @@ export class ProductsController {
   @Get('export/csv')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Export products as CSV',
     description:
@@ -87,7 +87,7 @@ export class ProductsController {
   @Post('import/csv')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Import products from CSV',
     description:
@@ -106,7 +106,7 @@ export class ProductsController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Create product',
     description:
@@ -201,7 +201,7 @@ export class ProductsController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Update product',
     description:
@@ -226,7 +226,7 @@ export class ProductsController {
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Archive (soft-delete) product',
     description:
@@ -247,7 +247,7 @@ export class ProductsController {
   @Post(':id/variants')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Create product variant',
     description:
@@ -265,7 +265,7 @@ export class ProductsController {
   @Get(':id/variants/manage')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'List product variants (manage)',
     description: 'Lists all variants including inactive ones for staff/admin UI.',
@@ -283,7 +283,7 @@ export class ProductsController {
   @Patch(':id/variants/:variantId')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Update product variant',
     description: 'Updates an existing product variant.',
@@ -306,7 +306,7 @@ export class ProductsController {
   @Delete(':id/variants/:variantId')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'STAFF')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Archive product variant',
     description: 'Soft-deletes a product variant by setting isActive=false.',
@@ -324,3 +324,4 @@ export class ProductsController {
     );
   }
 }
+

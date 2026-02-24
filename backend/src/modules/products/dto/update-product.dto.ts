@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsArray,
   IsEnum,
   IsInt,
@@ -13,6 +14,11 @@ export class UpdateProductDto {
   @IsInt()
   @Min(1)
   categoryId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  ownerSellerId?: number;
 
   @IsOptional()
   @IsString()
@@ -33,6 +39,11 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   price?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  costPriceCents?: number;
 
   @IsOptional()
   @IsString()
@@ -69,4 +80,8 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   seoDescription?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
 }

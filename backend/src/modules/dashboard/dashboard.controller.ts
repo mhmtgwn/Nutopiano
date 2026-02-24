@@ -19,7 +19,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Dashboard summary',
     description:
@@ -27,14 +27,14 @@ export class DashboardController {
   })
   @ApiOkResponse({ description: 'Dashboard summary KPI payload.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN/SELLER/STAFF.',
+    description: 'Forbidden for roles other than ADMIN/SELLER/USER.',
   })
   summary(@Req() req: { user: JwtPayload }) {
     return this.dashboardService.getSellerSummary(req.user);
   }
 
   @Get('reports/summary')
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Dashboard reports summary',
     description:
@@ -42,9 +42,10 @@ export class DashboardController {
   })
   @ApiOkResponse({ description: 'Reports summary payload.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN/SELLER/STAFF.',
+    description: 'Forbidden for roles other than ADMIN/SELLER/USER.',
   })
   reportsSummary(@Req() req: { user: JwtPayload }) {
     return this.dashboardService.getSellerReportsSummary(req.user);
   }
 }
+

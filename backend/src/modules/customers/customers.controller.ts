@@ -33,32 +33,32 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Create customer',
     description:
-      'ADMIN and STAFF can create customers in their own business. The createdByUserId is set to the calling user.',
+      'ADMIN and USER can create customers in their own business. The createdByUserId is set to the calling user.',
   })
   @ApiOkResponse({ description: 'The created customer.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN or STAFF.',
+    description: 'Forbidden for roles other than ADMIN or USER.',
   })
   create(@Req() req: { user: JwtPayload }, @Body() payload: CreateCustomerDto) {
     return this.customersService.create(req.user, payload);
   }
 
   @Get()
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'List customers',
     description:
-      'ADMIN sees all customers in their business. STAFF sees only customers they created in their business.',
+      'ADMIN sees all customers in their business. USER sees only customers they created in their business.',
   })
   @ApiOkResponse({
     description: 'Array of customers scoped to the current business and role.',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN or STAFF.',
+    description: 'Forbidden for roles other than ADMIN or USER.',
   })
   findAll(
     @Req() req: { user: JwtPayload },
@@ -78,18 +78,18 @@ export class CustomersController {
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Get customer by id',
     description:
-      'ADMIN can fetch any customer by id in their business. STAFF can only access customers they created. Cross-tenant access is not allowed.',
+      'ADMIN can fetch any customer by id in their business. USER can only access customers they created. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description:
       'Customer matching the given id within the current business and access rules.',
   })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to access a customer created by another user.',
+    description: 'USER trying to access a customer created by another user.',
   })
   @ApiNotFoundResponse({
     description:
@@ -100,15 +100,15 @@ export class CustomersController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Update customer',
     description:
-      'ADMIN can update any customer in their business. STAFF can only update customers they created. Cross-tenant access is not allowed.',
+      'ADMIN can update any customer in their business. USER can only update customers they created. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({ description: 'Updated customer.' })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to update a customer created by another user.',
+    description: 'USER trying to update a customer created by another user.',
   })
   @ApiNotFoundResponse({
     description:
@@ -123,15 +123,15 @@ export class CustomersController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'STAFF')
+  @Roles('ADMIN', 'USER')
   @ApiOperation({
     summary: 'Delete customer (soft delete)',
     description:
-      'ADMIN can soft-delete any customer in their business. STAFF can only soft-delete customers they created. Cross-tenant access is not allowed.',
+      'ADMIN can soft-delete any customer in their business. USER can only soft-delete customers they created. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({ description: 'Soft-deleted customer.' })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to delete a customer created by another user.',
+    description: 'USER trying to delete a customer created by another user.',
   })
   @ApiNotFoundResponse({
     description:
@@ -142,7 +142,7 @@ export class CustomersController {
   }
 
   @Get('me')
-  @Roles('CUSTOMER', 'STAFF', 'ADMIN')
+  @Roles('CUSTOMER', 'USER', 'ADMIN')
   @ApiOperation({
     summary: 'Get or create customer record for current user',
     description:
@@ -153,3 +153,4 @@ export class CustomersController {
     return this.customersService.findOrCreateForUser(req.user);
   }
 }
+

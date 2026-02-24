@@ -44,14 +44,44 @@ const statusBadgeClassName = (statusKey: string) => {
 export default function SellerOrdersPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [source, setSource] = useState('');
+  const [statusKey, setStatusKey] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [createdByUserId, setCreatedByUserId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const filters = useMemo(
+    () => {
+      const parsedCustomerId = Number(customerId);
+      const parsedCreatedByUserId = Number(createdByUserId);
+      return {
+        source: source.trim() || undefined,
+        statusKey: statusKey.trim() || undefined,
+        customerId:
+          customerId.trim().length > 0 && Number.isFinite(parsedCustomerId)
+            ? parsedCustomerId
+            : undefined,
+        createdByUserId:
+          createdByUserId.trim().length > 0 &&
+          Number.isFinite(parsedCreatedByUserId)
+            ? parsedCreatedByUserId
+            : undefined,
+        dateFrom: dateFrom.trim() || undefined,
+        dateTo: dateTo.trim() || undefined,
+      };
+    },
+    [source, statusKey, customerId, createdByUserId, dateFrom, dateTo],
+  );
 
   const { data, isLoading, isError } = useQuery<PaginatedOrders>({
-    queryKey: ['seller-orders', { page, pageSize }],
+    queryKey: ['seller-orders', { page, pageSize, ...filters }],
     queryFn: async () => {
       const res = await api.get<PaginatedOrders>('/orders', {
         params: {
           page,
           pageSize,
+          ...filters,
         },
       });
       return res.data;
@@ -80,7 +110,7 @@ export default function SellerOrdersPage() {
           <div>
             <h1 className="text-2xl font-serif text-[var(--primary-800)]">Siparişler</h1>
             <p className="mt-2 text-sm text-[var(--neutral-600)]">
-              Siparişlerinizi takip edin. (SELLER tüm işletme, STAFF sadece kendi oluşturdukları)
+              Siparislerinizi takip edin. (SELLER kendi magazasi, USER seller scope)
             </p>
           </div>
           <div className="rounded-full border border-[var(--neutral-200)] bg-white px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)]">
@@ -99,7 +129,93 @@ export default function SellerOrdersPage() {
         )}
 
         {!isLoading && !isError && (
-          <div className="overflow-x-auto">
+          <>
+            <div className="mb-4 grid gap-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-4 md:grid-cols-6">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Kanal
+                <select
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                >
+                  <option value="">Tum</option>
+                  <option value="POS">POS</option>
+                  <option value="WEB">WEB</option>
+                </select>
+              </label>
+
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Durum
+                <input
+                  value={statusKey}
+                  onChange={(e) => {
+                    setStatusKey(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="CREATED"
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                />
+              </label>
+
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Musteri
+                <input
+                  value={customerId}
+                  onChange={(e) => {
+                    setCustomerId(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="ID"
+                  inputMode="numeric"
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                />
+              </label>
+
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Personel
+                <input
+                  value={createdByUserId}
+                  onChange={(e) => {
+                    setCreatedByUserId(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="User ID"
+                  inputMode="numeric"
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                />
+              </label>
+
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Baslangic
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                />
+              </label>
+
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-600)]">
+                Bitis
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 h-10 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
+                />
+              </label>
+            </div>
+
+            <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--neutral-200)] text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
@@ -140,7 +256,8 @@ export default function SellerOrdersPage() {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -176,3 +293,4 @@ export default function SellerOrdersPage() {
     </div>
   );
 }
+

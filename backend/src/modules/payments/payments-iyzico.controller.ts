@@ -27,7 +27,7 @@ export class PaymentsIyzicoController {
   ) {}
 
   @Post('initialize')
-  @Roles('CUSTOMER', 'ADMIN', 'STAFF')
+  @Roles('CUSTOMER', 'ADMIN', 'USER')
   @ApiOperation({
     summary: 'Initialize Iyzico CheckoutForm session for an order',
     description:
@@ -203,7 +203,7 @@ export class PaymentsIyzicoController {
   }
 
   @Post('retrieve')
-  @Roles('CUSTOMER', 'ADMIN', 'STAFF')
+  @Roles('CUSTOMER', 'ADMIN', 'USER')
   @ApiOperation({
     summary: 'Retrieve Iyzico CheckoutForm result',
     description:
@@ -303,10 +303,28 @@ export class PaymentsIyzicoController {
 
       if (!existing) {
         const orderId = Number(session.orderId);
+        const order = await this.prisma.order.findFirst({
+          where: {
+            id: orderId,
+            businessId,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            sellerId: true,
+          },
+        });
+
+        if (!order) {
+          throw new BadRequestException('Order not found for payment session');
+        }
+
         await this.prisma.payment.create({
           data: {
             businessId,
-            orderId,
+            orderId: order.id,
+            sellerId: order.sellerId ?? null,
+            createdByUserId: null,
             amountCents,
             method: 'CARD',
             reference: paymentId,
@@ -338,3 +356,4 @@ export class PaymentsIyzicoController {
     return json;
   }
 }
+

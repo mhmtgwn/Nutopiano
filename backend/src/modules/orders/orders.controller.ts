@@ -35,7 +35,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Roles('CUSTOMER', 'ADMIN', 'SELLER', 'STAFF')
+  @Roles('CUSTOMER', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Create order',
     description:
@@ -49,7 +49,7 @@ export class OrdersController {
   })
   @ApiOkResponse({ description: 'The created order with items.' })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than CUSTOMER, ADMIN, SELLER or STAFF.',
+    description: 'Forbidden for roles other than CUSTOMER, ADMIN, SELLER or USER.',
   })
   create(
     @Req() req: { user: JwtPayload },
@@ -60,29 +60,49 @@ export class OrdersController {
   }
 
   @Get()
-  @Roles('ADMIN', 'SELLER', 'STAFF', 'CUSTOMER')
+  @Roles('ADMIN', 'SELLER', 'USER', 'CUSTOMER')
   @ApiOperation({
     summary: 'List orders',
     description:
-      'ADMIN/SELLER lists all orders in their business. STAFF lists only orders they created. Cross-tenant access is not allowed.',
+      'ADMIN/SELLER lists all orders in their business. USER lists only orders they created. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description: 'Array of orders for the current business and RBAC scope.',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden for roles other than ADMIN, SELLER, STAFF or CUSTOMER.',
+    description: 'Forbidden for roles other than ADMIN, SELLER, USER or CUSTOMER.',
   })
   findAll(
     @Req() req: { user: JwtPayload },
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('source') source?: string,
+    @Query('statusKey') statusKey?: string,
+    @Query('customerId') customerId?: string,
+    @Query('createdByUserId') createdByUserId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
     const hasPagination = Boolean(page) || Boolean(pageSize);
+    const hasFilters = Boolean(
+      source ||
+        statusKey ||
+        customerId ||
+        createdByUserId ||
+        dateFrom ||
+        dateTo,
+    );
 
-    if (hasPagination) {
+    if (hasPagination || hasFilters) {
       return this.ordersService.findAllPaginated(req.user, {
         page: page ? Number(page) : undefined,
         pageSize: pageSize ? Number(pageSize) : undefined,
+        source: source?.trim() || undefined,
+        statusKey: statusKey?.trim() || undefined,
+        customerId: customerId ? Number(customerId) : undefined,
+        createdByUserId: createdByUserId ? Number(createdByUserId) : undefined,
+        dateFrom: dateFrom?.trim() || undefined,
+        dateTo: dateTo?.trim() || undefined,
       });
     }
 
@@ -90,11 +110,11 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'SELLER', 'STAFF', 'CUSTOMER')
+  @Roles('ADMIN', 'SELLER', 'USER', 'CUSTOMER')
   @ApiOperation({
     summary: 'Get order by id',
     description:
-      'ADMIN/SELLER can fetch any order by id in their business. STAFF can fetch only orders they created. CUSTOMER can fetch only their own orders. Cross-tenant access is not allowed.',
+      'ADMIN/SELLER can fetch any order by id in their business. USER can fetch only orders they created. CUSTOMER can fetch only their own orders. Cross-tenant access is not allowed.',
   })
   @ApiOkResponse({
     description:
@@ -102,7 +122,7 @@ export class OrdersController {
   })
   @ApiForbiddenResponse({
     description:
-      'STAFF trying to access an order created by another user, or CUSTOMER trying to access another customer\'s order.',
+      'USER trying to access an order created by another user, or CUSTOMER trying to access another customer\'s order.',
   })
   @ApiNotFoundResponse({
     description:
@@ -113,15 +133,15 @@ export class OrdersController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Update order',
     description:
-      'ADMIN/SELLER can update any order in their business. STAFF can update only orders they created. StatusKey will be resolved to an OrderStatus in the current business.',
+      'ADMIN/SELLER can update any order in their business. USER can update only orders they created. StatusKey will be resolved to an OrderStatus in the current business.',
   })
   @ApiOkResponse({ description: 'Updated order.' })
   @ApiForbiddenResponse({
-    description: 'STAFF trying to update an order created by another user.',
+    description: 'USER trying to update an order created by another user.',
   })
   @ApiNotFoundResponse({
     description:
@@ -136,11 +156,11 @@ export class OrdersController {
   }
 
   @Get(':id/payments')
-  @Roles('ADMIN', 'SELLER', 'STAFF', 'CUSTOMER')
+  @Roles('ADMIN', 'SELLER', 'USER', 'CUSTOMER')
   @ApiOperation({
     summary: 'List payments for an order',
     description:
-      'ADMIN/SELLER can list payments for any order in their business. STAFF can list payments only for orders they created. CUSTOMER can list payments only for their own orders.',
+      'ADMIN/SELLER can list payments for any order in their business. USER can list payments only for orders they created. CUSTOMER can list payments only for their own orders.',
   })
   @ApiOkResponse({
     description:
@@ -148,7 +168,7 @@ export class OrdersController {
   })
   @ApiForbiddenResponse({
     description:
-      'STAFF trying to access payments for an order created by another user, or CUSTOMER trying to access another customer\'s order payments.',
+      'USER trying to access payments for an order created by another user, or CUSTOMER trying to access another customer\'s order payments.',
   })
   @ApiNotFoundResponse({
     description:
@@ -159,16 +179,16 @@ export class OrdersController {
   }
 
   @Post(':id/payments')
-  @Roles('ADMIN', 'SELLER', 'STAFF')
+  @Roles('ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Add payment to an order',
     description:
-      'ADMIN/SELLER can add payments to any order in their business. STAFF can add payments only to orders they created. This endpoint does not yet enforce balance logic.',
+      'ADMIN/SELLER can add payments to any order in their business. USER can add payments only to orders they created. This endpoint does not yet enforce balance logic.',
   })
   @ApiOkResponse({ description: 'The created payment.' })
   @ApiForbiddenResponse({
     description:
-      'STAFF trying to add a payment to an order created by another user.',
+      'USER trying to add a payment to an order created by another user.',
   })
   @ApiNotFoundResponse({
     description:
@@ -182,3 +202,4 @@ export class OrdersController {
     return this.ordersService.addPayment(req.user, Number(id), payload);
   }
 }
+

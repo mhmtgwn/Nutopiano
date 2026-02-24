@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 import api from '@/services/api';
 
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER' | 'CUSTOMER';
 
 type UserRow = {
   id: number;
@@ -37,11 +37,11 @@ const roleLabel: Record<UserRole, string> = {
   SUPER_ADMIN: 'Süper Admin',
   ADMIN: 'Admin',
   SELLER: 'Satıcı',
-  STAFF: 'Personel',
+  USER: 'Personel',
   CUSTOMER: 'Müşteri',
 };
 
-const roles: UserRole[] = ['CUSTOMER', 'STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
@@ -250,3 +250,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+

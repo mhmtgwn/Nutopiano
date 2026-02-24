@@ -30,7 +30,7 @@ export class StaffSelfGuard implements CanActivate {
       .getRequest<{ user?: JwtPayload; params?: Record<string, string> }>();
     const user = request.user;
 
-    if (!user || user.role !== 'STAFF') {
+    if (!user || user.role !== 'USER') {
       return true;
     }
 
@@ -52,3 +52,4 @@ export class StaffSelfGuard implements CanActivate {
     return true;
   }
 }
+

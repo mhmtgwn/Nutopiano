@@ -5,16 +5,12 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BarChart3,
-  Home,
-  Menu,
-  Package,
-  Tag,
   CreditCard,
-  Warehouse,
+  Menu,
   ScrollText,
-  Settings,
+  Users,
   Wallet,
+  Warehouse,
   X,
 } from 'lucide-react';
 import { useAppSelector } from '@/store';
@@ -25,26 +21,16 @@ interface SellerShellProps {
 }
 
 const sellerNavItems = [
-  { label: 'Genel Bakış', href: '/dashboard', icon: Home },
-  { label: 'Ürünler', href: '/dashboard/products', icon: Package },
+  { label: 'Satis', href: '/pos', icon: CreditCard },
+  { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
   { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
-  { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'POS', href: '/pos', icon: CreditCard },
-  { label: 'Kampanyalar', href: '/dashboard/campaigns/coupons', icon: Tag },
   { label: 'Finans', href: '/dashboard/finance', icon: Wallet },
-  { label: 'Abonelik', href: '/dashboard/subscription', icon: CreditCard },
-  { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
-  { label: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
+  { label: 'Musteriler', href: '/dashboard/customers', icon: Users },
 ] as const;
 
 const staffNavItems = [
-  { label: 'Genel Bakış', href: '/dashboard', icon: Home },
-  { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
-  { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'POS', href: '/pos', icon: CreditCard },
-  { label: 'Finans', href: '/dashboard/finance', icon: Wallet },
-  { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
-  { label: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
+  { label: 'Satis', href: '/pos', icon: CreditCard },
+  { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
 ] as const;
 
 export default function SellerShell({ children }: SellerShellProps) {
@@ -53,15 +39,15 @@ export default function SellerShell({ children }: SellerShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const navItems = useMemo(
-    () => (user?.role === 'STAFF' ? staffNavItems : sellerNavItems),
+    () => (user?.role === 'USER' ? staffNavItems : sellerNavItems),
     [user?.role],
   );
 
   const panelLabel = getPanelLabelByRole(user?.role);
-  const isStaff = user?.role === 'STAFF';
+  const isStaff = user?.role === 'USER';
   const panelDescription = isStaff
-    ? 'Günlük operasyon, sipariş ve stok akışını yönetin.'
-    : 'Ürün, sipariş ve finans akışlarını yönetin.';
+    ? 'Satis ve siparis akisina erisiminiz var.'
+    : 'Satis, siparis, stok, finans ve musteri akislarini yonetin.';
   const activeNavClass = isStaff
     ? 'border border-[#7A4B00]/20 bg-[#7A4B00] text-white'
     : 'border border-[var(--primary-800)]/20 bg-[var(--primary-800)] text-white';
@@ -70,7 +56,7 @@ export default function SellerShell({ children }: SellerShellProps) {
     : 'rounded-full border border-[var(--neutral-200)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] md:px-4';
 
   const isActive = (href: string) =>
-    href === '/dashboard' ? pathname === href : pathname.startsWith(href);
+    pathname === href || pathname.startsWith(`${href}/`);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -204,3 +190,4 @@ export default function SellerShell({ children }: SellerShellProps) {
     </div>
   );
 }
+

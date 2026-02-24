@@ -2,7 +2,7 @@ export const APP_ROLES = [
   'SUPER_ADMIN',
   'ADMIN',
   'SELLER',
-  'STAFF',
+  'USER',
   'CUSTOMER',
 ] as const;
 
@@ -24,19 +24,19 @@ export const isSuperAdminRole = (
 
 export const isSellerPanelRole = (
   role?: string | null,
-): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF'> =>
+): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER'> =>
   role === 'SUPER_ADMIN' ||
   role === 'ADMIN' ||
   role === 'SELLER' ||
-  role === 'STAFF';
+  role === 'USER';
 
 export const isPosRoleAllowed = (
   role?: string | null,
-): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'STAFF'> =>
+): role is Extract<AppRole, 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER'> =>
   role === 'SUPER_ADMIN' ||
   role === 'ADMIN' ||
   role === 'SELLER' ||
-  role === 'STAFF';
+  role === 'USER';
 
 export const getPanelHomePathByRole = (role?: string | null): string => {
   switch (role) {
@@ -45,7 +45,7 @@ export const getPanelHomePathByRole = (role?: string | null): string => {
     case 'ADMIN':
       return '/admin';
     case 'SELLER':
-    case 'STAFF':
+    case 'USER':
       return '/dashboard';
     case 'CUSTOMER':
       return '/account/orders';
@@ -62,7 +62,7 @@ export const getPanelLabelByRole = (role?: string | null): string => {
       return 'Admin Paneli';
     case 'SELLER':
       return 'Satıcı Paneli';
-    case 'STAFF':
+    case 'USER':
       return 'Personel Paneli';
     case 'CUSTOMER':
       return 'Hesabım';
@@ -70,3 +70,4 @@ export const getPanelLabelByRole = (role?: string | null): string => {
       return 'Panelim';
   }
 };
+

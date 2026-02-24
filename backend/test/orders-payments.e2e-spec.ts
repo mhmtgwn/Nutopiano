@@ -15,6 +15,8 @@ describe('Orders & Payments (e2e)', () => {
   let business1: { id: number };
   let business2: { id: number };
   let adminUser: { id: number; phone: string };
+  let sellerUser: { id: number; phone: string };
+  let sellerProfile: { id: number };
   let staffUser: { id: number; phone: string };
   let otherBusinessAdmin: { id: number; phone: string };
   let customer1: { id: number };
@@ -28,6 +30,7 @@ describe('Orders & Payments (e2e)', () => {
   const RUN_ID = Date.now().toString();
   const PHONE_BASE = RUN_ID.slice(-7);
   const ADMIN_PHONE = `+905${PHONE_BASE}01`;
+  const SELLER_PHONE = `+905${PHONE_BASE}09`;
   const STAFF_PHONE = `+905${PHONE_BASE}02`;
   const OTHER_BUS_ADMIN_PHONE = `+905${PHONE_BASE}03`;
   const CUSTOMER_PHONE_1 = `+905${PHONE_BASE}11`;
@@ -68,14 +71,55 @@ describe('Orders & Payments (e2e)', () => {
       },
     });
 
+    sellerUser = await prisma.user.create({
+      data: {
+        businessId: business1.id,
+        name: 'Orders Seller',
+        phone: SELLER_PHONE,
+        passwordHash,
+        role: 'SELLER',
+        isActive: true,
+      },
+    });
+
+    sellerProfile = await prisma.seller.create({
+      data: {
+        businessId: business1.id,
+        userId: sellerUser.id,
+        displayName: 'Orders Seller',
+        slug: `orders-seller-${RUN_ID}`,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
     staffUser = await prisma.user.create({
       data: {
         businessId: business1.id,
         name: 'Orders Staff',
         phone: STAFF_PHONE,
         passwordHash,
-        role: 'STAFF',
+        role: 'USER',
         isActive: true,
+      },
+    });
+
+    await prisma.sellerTeamMember.create({
+      data: {
+        businessId: business1.id,
+        sellerId: sellerProfile.id,
+        userId: staffUser.id,
+        invitedByUserId: sellerUser.id,
+        isActive: true,
+        permissionsJson: {
+          permissions: [
+            'tab.sales',
+            'tab.orders',
+            'pos.sale.create',
+            'orders.read',
+            'orders.updateStatus',
+          ],
+        },
       },
     });
 
@@ -115,6 +159,7 @@ describe('Orders & Payments (e2e)', () => {
       data: {
         businessId: business1.id,
         createdByUserId: adminUser.id,
+        ownerSellerId: sellerProfile.id,
         categoryId: category1.id,
         name: 'Orders Product 1',
         sku: `ORD-P1-${RUN_ID}`,
@@ -128,6 +173,7 @@ describe('Orders & Payments (e2e)', () => {
       data: {
         businessId: business1.id,
         createdByUserId: adminUser.id,
+        ownerSellerId: sellerProfile.id,
         categoryId: category1.id,
         name: 'Orders Product 2',
         sku: `ORD-P2-${RUN_ID}`,
@@ -286,7 +332,7 @@ describe('Orders & Payments (e2e)', () => {
       expect(currentProduct2?.stock).toBe(18);
     });
 
-    it('STAFF can create own order', async () => {
+    it('USER can create own order', async () => {
       const res = await request(app.getHttpServer())
         .post('/orders')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -451,7 +497,7 @@ describe('Orders & Payments (e2e)', () => {
       expect(secondItem?.productName).toBe('Orders Product 2');
     });
 
-    it('ADMIN lists all orders in business, STAFF lists only own orders', async () => {
+    it('ADMIN lists all orders in business, USER lists only own orders', async () => {
       const adminRes = await request(app.getHttpServer())
         .get('/orders')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -472,7 +518,31 @@ describe('Orders & Payments (e2e)', () => {
       expect(staffOrderIds).not.toContain(adminOrder.id);
     });
 
-    it('STAFF cannot access other user order by id (403)', async () => {
+    it('supports paginated order filters by source, creator and date range', async () => {
+      const today = new Date().toISOString().slice(0, 10);
+
+      const filtered = await request(app.getHttpServer())
+        .get('/orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({
+          page: 1,
+          pageSize: 50,
+          source: 'POS',
+          createdByUserId: adminUser.id,
+          dateFrom: today,
+          dateTo: today,
+        })
+        .expect(200);
+
+      expect(Array.isArray(filtered.body.data)).toBe(true);
+      expect(filtered.body.data.length).toBeGreaterThan(0);
+      for (const row of filtered.body.data) {
+        expect(row.source).toBe('POS');
+        expect(row.createdByUserId).toBe(adminUser.id);
+      }
+    });
+
+    it('USER cannot access other user order by id (403)', async () => {
       await request(app.getHttpServer())
         .get(`/orders/${adminOrder.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -528,7 +598,7 @@ describe('Orders & Payments (e2e)', () => {
       expect(res.body[0].amountCents).toBe(1500);
     });
 
-    it('STAFF can add and list payments only for own orders', async () => {
+    it('USER can add and list payments only for own orders', async () => {
       await request(app.getHttpServer())
         .post(`/orders/${staffOrder.id}/payments`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -546,7 +616,7 @@ describe('Orders & Payments (e2e)', () => {
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body[0].amountCents).toBe(1000);
 
-      // STAFF cannot touch other user's order payments
+      // USER cannot touch other user's order payments
       await request(app.getHttpServer())
         .post(`/orders/${adminOrder.id}/payments`)
         .set('Authorization', `Bearer ${staffToken}`)
@@ -563,3 +633,4 @@ describe('Orders & Payments (e2e)', () => {
     });
   });
 });
+

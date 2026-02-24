@@ -55,7 +55,7 @@ export async function generateMetadata({
     metadataBase: new URL(siteUrl),
     title,
     alternates: {
-      canonical: `${siteUrl}/sellers/${slug}`,
+      canonical: `${siteUrl}/magaza/${slug}`,
     },
   };
 }
@@ -179,7 +179,7 @@ export default async function SellerProfilePage({
               const sp = new URLSearchParams();
               sp.set('page', String(nextPage));
               sp.set('pageSize', String(meta.pageSize));
-              return `/sellers/${seller.slug}?${sp.toString()}`;
+              return `/magaza/${seller.slug}?${sp.toString()}`;
             }}
           />
         )}

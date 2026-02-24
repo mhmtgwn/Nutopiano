@@ -149,8 +149,8 @@ export const ROLE_DEFINITIONS: Record<string, RoleDefinition> = {
     ],
   },
 
-  STAFF: {
-    name: 'STAFF',
+  USER: {
+    name: 'USER',
     displayName: 'Personel',
     description: 'İşletme personeli',
     level: 30,
@@ -201,3 +201,4 @@ export function getPermissions(role: string): Permission[] {
 export function getRolesByLevel(level: number): RoleDefinition[] {
   return Object.values(ROLE_DEFINITIONS).filter((role) => role.level >= level);
 }
+

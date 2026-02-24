@@ -42,6 +42,12 @@ model Business {
   commissions         Commission[]
   payouts             Payout[]
   sellers             Seller[]
+  sellerTeamMembers   SellerTeamMember[]
+  sellerInvites       SellerInvite[]
+  sellerInviteDeliveries SellerInviteDelivery[]
+  customerLedger      CustomerLedgerEntry[]
+  auditLogs           AuditLog[]
+  outboxEvents        OutboxEvent[]
   plans               Plan[]
 
   refreshTokens RefreshToken[]
@@ -83,6 +89,13 @@ model User {
   decidedReturnRequests      ReturnRequest[]       @relation("ReturnRequestDecidedBy")
   openedCashRegisterSessions CashRegisterSession[] @relation("CashRegisterOpenedBy")
   closedCashRegisterSessions CashRegisterSession[] @relation("CashRegisterClosedBy")
+  sellerTeamMemberships      SellerTeamMember[]    @relation("SellerTeamMemberUser")
+  createdSellerTeamMembers   SellerTeamMember[]    @relation("SellerTeamMemberInvitedBy")
+  receivedSellerInvites      SellerInvite[]        @relation("SellerInviteTargetUser")
+  sentSellerInvites          SellerInvite[]        @relation("SellerInviteInvitedBy")
+  createdPayments            Payment[]             @relation("PaymentCreatedBy")
+  createdCustomerLedger      CustomerLedgerEntry[] @relation("CustomerLedgerCreatedBy")
+  auditLogsAsActor           AuditLog[]            @relation("AuditLogActor")
 
   sellerProfile Seller?
 
@@ -136,29 +149,107 @@ model Seller {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  business Business @relation(fields: [businessId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  business       Business              @relation(fields: [businessId], references: [id])
+  user           User                  @relation(fields: [userId], references: [id])
+  products       Product[]             @relation("SellerProducts")
+  categories     Category[]            @relation("SellerCategories")
+  orders         Order[]               @relation("SellerOrders")
+  payments       Payment[]             @relation("SellerPayments")
+  teamMembers    SellerTeamMember[]
+  invites        SellerInvite[]
+  customerLedger CustomerLedgerEntry[]
 
   @@unique([businessId, slug])
   @@index([businessId])
   @@index([businessId, isActive])
 }
 
+model SellerTeamMember {
+  id              Int      @id @default(autoincrement())
+  businessId      Int
+  sellerId        Int
+  userId          Int
+  invitedByUserId Int?
+  isActive        Boolean  @default(true)
+  permissionsJson Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id])
+  seller    Seller   @relation(fields: [sellerId], references: [id])
+  user      User     @relation("SellerTeamMemberUser", fields: [userId], references: [id])
+  invitedBy User?    @relation("SellerTeamMemberInvitedBy", fields: [invitedByUserId], references: [id])
+
+  @@unique([sellerId, userId])
+  @@index([businessId, sellerId, isActive])
+  @@index([businessId, userId, isActive])
+}
+
+model SellerInvite {
+  id              Int                @id @default(autoincrement())
+  businessId      Int
+  sellerId        Int
+  targetUserId    Int
+  invitedByUserId Int
+  status          SellerInviteStatus @default(PENDING)
+  token           String             @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  business      Business @relation(fields: [businessId], references: [id])
+  seller        Seller   @relation(fields: [sellerId], references: [id])
+  targetUser    User     @relation("SellerInviteTargetUser", fields: [targetUserId], references: [id])
+  invitedByUser User     @relation("SellerInviteInvitedBy", fields: [invitedByUserId], references: [id])
+  deliveries    SellerInviteDelivery[]
+
+  @@index([businessId, sellerId, status, createdAt])
+  @@index([businessId, targetUserId, status, createdAt])
+}
+
+model SellerInviteDelivery {
+  id           Int                  @id @default(autoincrement())
+  businessId   Int
+  inviteId     Int
+  channel      InviteDeliveryChannel
+  status       InviteDeliveryStatus @default(PENDING)
+  target       String
+  attemptCount Int                  @default(0)
+  maxAttempts  Int                  @default(3)
+  nextRetryAt  DateTime?
+  lastAttemptAt DateTime?
+  lastError    String?
+  sentAt       DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  business Business     @relation(fields: [businessId], references: [id])
+  invite   SellerInvite @relation(fields: [inviteId], references: [id])
+
+  @@unique([inviteId, channel])
+  @@index([businessId, status, nextRetryAt, createdAt])
+  @@index([businessId, inviteId, channel])
+}
+
 model Category {
-  id              Int       @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   businessId      Int
   createdByUserId Int
+  sellerId        Int?
+  scopeType       CategoryScopeType @default(GLOBAL)
   name            String
   slug            String
   parentId        Int?
-  isActive        Boolean   @default(true)
-  orderIndex      Int       @default(0)
+  isActive        Boolean           @default(true)
+  orderIndex      Int               @default(0)
   archivedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   business  Business   @relation(fields: [businessId], references: [id])
   createdBy User       @relation("CategoryCreatedBy", fields: [createdByUserId], references: [id])
+  seller    Seller?    @relation("SellerCategories", fields: [sellerId], references: [id])
   parent    Category?  @relation("CategoryParent", fields: [parentId], references: [id])
   children  Category[] @relation("CategoryParent")
   products  Product[]
@@ -168,23 +259,28 @@ model Category {
   @@index([businessId, orderIndex])
   @@index([parentId])
   @@index([businessId, parentId])
+  @@index([businessId, scopeType])
+  @@index([businessId, sellerId, parentId])
+  @@index([businessId, sellerId, orderIndex])
 }
 
 model Customer {
-  id              Int       @id @default(autoincrement())
-  businessId      Int
-  createdByUserId Int
-  userId          Int?      @unique
-  name            String
-  phone           String
-  balance         Int       @default(0)
-  deletedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                Int               @id @default(autoincrement())
+  businessId        Int
+  createdByUserId   Int
+  userId            Int?              @unique
+  name              String
+  phone             String
+  balance           Int               @default(0)
+  creditLimitCents  Int?
+  creditBlockPolicy CreditBlockPolicy @default(WARN)
+  deletedAt         DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  business       Business            @relation(fields: [businessId], references: [id])
-  createdBy      User                @relation("CustomerCreatedBy", fields: [createdByUserId], references: [id])
-  user           User?               @relation("UserCustomer", fields: [userId], references: [id])
+  business       Business              @relation(fields: [businessId], references: [id])
+  createdBy      User                  @relation("CustomerCreatedBy", fields: [createdByUserId], references: [id])
+  user           User?                 @relation("UserCustomer", fields: [userId], references: [id])
   orders         Order[]
   appointments   Appointment[]
   addresses      CustomerAddress[]
@@ -192,6 +288,7 @@ model Customer {
   reviews        ProductReview[]
   preferences    CustomerPreference?
   returnRequests ReturnRequest[]
+  ledgerEntries  CustomerLedgerEntry[]
 
   @@unique([businessId, phone])
   @@index([businessId])
@@ -253,8 +350,51 @@ enum Role {
   SUPER_ADMIN
   ADMIN
   SELLER
-  STAFF
+  USER
   CUSTOMER
+}
+
+enum CategoryScopeType {
+  GLOBAL
+  SELLER_STORE
+}
+
+enum SellerInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum InviteDeliveryChannel {
+  EMAIL
+  SMS
+}
+
+enum InviteDeliveryStatus {
+  PENDING
+  SENT
+  RETRY
+  DEAD_LETTER
+}
+
+enum CreditBlockPolicy {
+  NONE
+  WARN
+  BLOCK
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerSourceType {
+  SALE_DEBIT
+  PAYMENT_CREDIT
+  RETURN_REVERSAL
+  CANCEL_REVERSAL
+  MANUAL_ADJUSTMENT
 }
 
 enum PlanInterval {
@@ -323,16 +463,20 @@ model Product {
   businessId      Int
   createdByUserId Int
   categoryId      Int
+  ownerSellerId   Int?
   name            String
   subtitle        String?
   sku             String?
   type            ProductType
   priceCents      Int
+  costPriceCents  Int         @default(0)
   description     String?
   features        String[]    @default([])
   imageUrl        String?
   images          String[]    @default([])
   stock           Int?
+  isPublished     Boolean     @default(false)
+  publishedAt     DateTime?
   tags            String[]    @default([])
   seoTitle        String?
   seoDescription  String?
@@ -344,6 +488,7 @@ model Product {
   business      Business           @relation(fields: [businessId], references: [id])
   createdBy     User               @relation("ProductCreatedBy", fields: [createdByUserId], references: [id])
   category      Category           @relation(fields: [categoryId], references: [id])
+  ownerSeller   Seller?            @relation("SellerProducts", fields: [ownerSellerId], references: [id])
   items         OrderItem[]
   variants      ProductVariant[]
   galleryImages ProductImage[]
@@ -355,6 +500,8 @@ model Product {
   @@index([businessId, categoryId])
   @@index([businessId, isActive, createdAt])
   @@index([businessId, isActive, name])
+  @@index([businessId, ownerSellerId, isPublished])
+  @@index([businessId, ownerSellerId, isActive, createdAt])
 }
 
 model ProductVariant {
@@ -439,6 +586,7 @@ model Order {
   businessId             Int
   customerId             Int
   createdByUserId        Int
+  sellerId               Int?
   statusId               Int
   subtotalAmountCents    Int         @default(0)
   taxAmountCents         Int         @default(0)
@@ -446,6 +594,9 @@ model Order {
   discountAmountCents    Int         @default(0)
   couponCode             String?
   totalAmountCents       Int         @default(0)
+  shippingCostCents      Int         @default(0)
+  commissionSnapshotCents Int        @default(0)
+  returnCostCents        Int         @default(0)
   source                 OrderSource @default(POS)
   notes                  String?
   idempotencyKey         String?
@@ -456,23 +607,26 @@ model Order {
   createdAt              DateTime    @default(now())
   updatedAt              DateTime    @updatedAt
 
-  business   Business    @relation(fields: [businessId], references: [id])
-  customer   Customer    @relation(fields: [customerId], references: [id])
-  createdBy  User        @relation("OrderCreatedBy", fields: [createdByUserId], references: [id])
-  status     OrderStatus @relation(fields: [statusId], references: [id])
-  items      OrderItem[]
-  payments   Payment[]
-  commission Commission? @relation("OrderCommission")
+  business      Business              @relation(fields: [businessId], references: [id])
+  customer      Customer              @relation(fields: [customerId], references: [id])
+  createdBy     User                  @relation("OrderCreatedBy", fields: [createdByUserId], references: [id])
+  seller        Seller?               @relation("SellerOrders", fields: [sellerId], references: [id])
+  status        OrderStatus           @relation(fields: [statusId], references: [id])
+  items         OrderItem[]
+  payments      Payment[]
+  ledgerEntries CustomerLedgerEntry[]
+  commission    Commission?           @relation("OrderCommission")
 
   paymentSessions PaymentSession[]
   returnRequests  ReturnRequest[]
 
+  @@unique([businessId, idempotencyKey])
   @@index([businessId])
   @@index([businessId, customerId])
   @@index([businessId, deletedAt])
   @@index([businessId, statusId, createdAt])
   @@index([businessId, createdAt])
-  @@unique([businessId, idempotencyKey])
+  @@index([businessId, sellerId, createdAt])
 }
 
 model ReturnRequest {
@@ -565,6 +719,11 @@ model OrderItem {
   taxAmountCents      Int      @default(0)
   taxRateBps          Int      @default(0)
   totalAmountCents    Int
+  costSnapshotCents   Int      @default(0)
+  shippingAllocationCents   Int      @default(0)
+  commissionAllocationCents Int      @default(0)
+  returnAllocationCents     Int      @default(0)
+  netProfitV2Cents          Int      @default(0)
   createdAt           DateTime @default(now())
 
   business Business        @relation(fields: [businessId], references: [id])
@@ -595,19 +754,24 @@ enum WebhookEventStatus {
 }
 
 model Payment {
-  id          Int           @id @default(autoincrement())
-  businessId  Int
-  orderId     Int
-  amountCents Int
-  method      PaymentMethod
-  reference   String?
-  createdAt   DateTime      @default(now())
+  id              Int           @id @default(autoincrement())
+  businessId      Int
+  orderId         Int
+  sellerId        Int?
+  createdByUserId Int?
+  amountCents     Int
+  method          PaymentMethod
+  reference       String?
+  createdAt       DateTime      @default(now())
 
-  business Business @relation(fields: [businessId], references: [id])
-  order    Order    @relation(fields: [orderId], references: [id])
+  business  Business @relation(fields: [businessId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+  seller    Seller?  @relation("SellerPayments", fields: [sellerId], references: [id])
+  createdBy User?    @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id])
 
   @@index([businessId, orderId])
   @@index([businessId, createdAt])
+  @@index([businessId, sellerId, createdAt])
 }
 
 model PaymentWebhookEvent {
@@ -666,6 +830,76 @@ model PaymentSession {
   @@index([businessId])
   @@index([businessId, orderId])
   @@index([provider, status])
+}
+
+model CustomerLedgerEntry {
+  id                Int              @id @default(autoincrement())
+  businessId        Int
+  sellerId          Int
+  customerId        Int
+  orderId           Int?
+  type              LedgerEntryType
+  sourceType        LedgerSourceType
+  amountCents       Int
+  balanceAfterCents Int
+  createdByUserId   Int?
+  createdAt         DateTime         @default(now())
+
+  business  Business @relation(fields: [businessId], references: [id])
+  seller    Seller   @relation(fields: [sellerId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  order     Order?   @relation(fields: [orderId], references: [id])
+  createdBy User?    @relation("CustomerLedgerCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([businessId, sellerId, customerId, createdAt])
+  @@index([businessId, sellerId, createdAt])
+  @@index([businessId, orderId])
+}
+
+model OutboxEvent {
+  id            Int       @id @default(autoincrement())
+  businessId    Int
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  idempotencyKey String?
+  payloadJson   Json
+  attemptCount  Int       @default(0)
+  nextRetryAt   DateTime?
+  processingStartedAt DateTime?
+  lastError     String?
+  deadLetteredAt DateTime?
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, aggregateType, aggregateId, eventType, idempotencyKey])
+  @@index([businessId, aggregateType, aggregateId])
+  @@index([businessId, eventType, createdAt])
+  @@index([processedAt])
+  @@index([processedAt, deadLetteredAt, nextRetryAt])
+  @@index([businessId, deadLetteredAt, createdAt])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  actorRole   Role
+  actorUserId Int
+  actionType  String
+  targetType  String
+  targetId    String
+  payloadJson Json
+  createdAt   DateTime @default(now())
+
+  business  Business @relation(fields: [businessId], references: [id])
+  actorUser User     @relation("AuditLogActor", fields: [actorUserId], references: [id])
+
+  @@index([businessId, actionType, createdAt])
+  @@index([businessId, actorUserId, createdAt])
+  @@index([businessId, targetType, targetId, createdAt])
 }
 
 model Settings {

@@ -75,17 +75,16 @@ export default function Header() {
         ];
       case 'SELLER':
         return [
-          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
-          { href: '/dashboard/products', label: 'Ürünler', icon: Package },
-          { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
-          { href: '/pos', label: 'POS', icon: LayoutDashboard },
-        ];
-      case 'STAFF':
-        return [
+          { href: '/pos', label: 'Satis', icon: LayoutDashboard },
           { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
           { href: '/dashboard/inventory', label: 'Stok', icon: Package },
           { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
-          { href: '/pos', label: 'POS', icon: LayoutDashboard },
+          { href: '/dashboard/customers', label: 'Musteriler', icon: User },
+        ];
+      case 'USER':
+        return [
+          { href: '/pos', label: 'Satis', icon: LayoutDashboard },
+          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
         ];
       default:
         return [];
@@ -383,3 +382,4 @@ export default function Header() {
     </>
   );
 }
+

@@ -17,6 +17,8 @@ interface ProductRow {
   type: ProductType;
   stock?: number | null;
   priceCents: number;
+  costPriceCents?: number | null;
+  isPublished?: boolean;
   isActive: boolean;
 }
 
@@ -79,7 +81,7 @@ export default function SellerInventoryPage() {
 
   const updateStockMutation = useMutation({
     mutationFn: async (params: { productId: number; stock: number | null }) => {
-      await api.patch(`/products/${params.productId}`, {
+      await api.patch(`/seller/products/${params.productId}/stock`, {
         stock: params.stock,
       });
     },
@@ -95,6 +97,26 @@ export default function SellerInventoryPage() {
   const isRowSaving = (productId: number) => {
     const current = updateStockMutation.variables;
     return updateStockMutation.isPending && current?.productId === productId;
+  };
+
+  const publishMutation = useMutation({
+    mutationFn: async (params: { productId: number; isPublished: boolean }) => {
+      await api.patch(`/seller/products/${params.productId}/publish`, {
+        isPublished: params.isPublished,
+      });
+    },
+    onSuccess: async () => {
+      toast.success('Yayin durumu guncellendi.');
+      await queryClient.invalidateQueries({ queryKey: ['seller-inventory'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveApiErrorMessage(err, 'Yayin durumu guncellenemedi.'));
+    },
+  });
+
+  const isPublishSaving = (productId: number) => {
+    const current = publishMutation.variables;
+    return publishMutation.isPending && current?.productId === productId;
   };
 
   return (
@@ -124,6 +146,7 @@ export default function SellerInventoryPage() {
                   <th className="py-3 pr-4">Ürün</th>
                   <th className="py-3 pr-4">SKU</th>
                   <th className="py-3 pr-4">Stok</th>
+                  <th className="py-3 pr-4">Yayin</th>
                   <th className="py-3 pr-4">Aksiyon</th>
                 </tr>
               </thead>
@@ -155,6 +178,25 @@ export default function SellerInventoryPage() {
                       <td className="py-3 pr-4">
                         <button
                           type="button"
+                          disabled={isPublishSaving(p.id)}
+                          onClick={() => {
+                            publishMutation.mutate({
+                              productId: p.id,
+                              isPublished: !Boolean(p.isPublished),
+                            });
+                          }}
+                          className={`inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] border px-3 text-[10px] font-semibold uppercase tracking-[0.15em] ${
+                            p.isPublished
+                              ? 'border-[#0F5132]/25 bg-[#E6FBF2] text-[#0F5132]'
+                              : 'border-[#7A4B00]/25 bg-[#FFF7E6] text-[#7A4B00]'
+                          } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {p.isPublished ? 'Yayinda' : 'Taslak'}
+                        </button>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <button
+                          type="button"
                           disabled={isRowSaving(p.id)}
                           onClick={() => {
                             const raw = (draftStock[p.id] ?? '').trim();
@@ -181,7 +223,7 @@ export default function SellerInventoryPage() {
 
                 {products.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-sm text-[var(--neutral-600)]">
+                    <td colSpan={5} className="py-6 text-center text-sm text-[var(--neutral-600)]">
                       Henüz ürün yok.
                     </td>
                   </tr>
