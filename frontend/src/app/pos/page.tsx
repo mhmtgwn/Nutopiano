@@ -4,15 +4,31 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import Button from '@/components/common/Button';
+import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
+import {
+  isConflictError,
+  isNetworkError,
+  isRateLimitError,
+  resolveApiErrorMessage,
+} from '@/lib/api-errors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import api from '@/services/api';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import { isPosRoleAllowed } from '@/lib/role-routing';
 import {
   enqueuePosOrder,
+  findCachedPosCustomers,
+  findCachedPosProductByBarcode,
+  hasReceiptBeenPrinted,
+  listCachedPosProducts,
   listQueuedPosOrders,
+  listReadyQueuedPosOrders,
+  markReceiptPrinted,
   markQueuedPosOrderAttempt,
+  purgeOldReceiptPrintLogs,
   removeQueuedPosOrder,
+  upsertCachedPosCustomers,
+  upsertCachedPosProducts,
   type PosOrderQueueItem,
   type PosOrderQueuePayload,
 } from '@/lib/offline/pos-order-queue';
@@ -232,24 +248,6 @@ type PosInvoicePayload = {
     paidAmountCents: number;
     remainingAmountCents: number;
   };
-};
-
-const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  const maybeError = error as {
-    code?: string;
-    response?: { data?: { message?: unknown }; status?: number };
-  };
-  const message = maybeError.response?.data?.message;
-  if (Array.isArray(message)) return message.map(String).join(', ');
-  if (typeof message === 'string') return message;
-  return fallback;
-};
-
-const isNetworkError = (error: unknown) => {
-  if (!error || typeof error !== 'object') return false;
-  const maybeError = error as { code?: string; response?: unknown };
-  return maybeError.code === 'ERR_NETWORK' || !maybeError.response;
 };
 
 const createIdempotencyKey = (prefix: string) => {
@@ -737,6 +735,7 @@ export default function PosPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [queueItems, setQueueItems] = useState<PosOrderQueueItem[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const [registerCode, setRegisterCode] = useState('MAIN');
   const [openingCashCents, setOpeningCashCents] = useState('0');
   const [closingCashCents, setClosingCashCents] = useState('');
@@ -759,6 +758,7 @@ export default function PosPage() {
   const [invoiceOrderId, setInvoiceOrderId] = useState('');
   const [invoicePayload, setInvoicePayload] = useState<PosInvoicePayload | null>(null);
   const [isInvoiceBusy, setIsInvoiceBusy] = useState(false);
+  const [conflictDetail, setConflictDetail] = useState<string | null>(null);
 
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>(
     defaultReceiptSettings,
@@ -781,7 +781,7 @@ export default function PosPage() {
 
     setIsSyncing(true);
     try {
-      const items = await listQueuedPosOrders();
+      const items = await listReadyQueuedPosOrders();
       let successCount = 0;
 
       for (const item of items) {
@@ -797,7 +797,13 @@ export default function PosPage() {
           await removeQueuedPosOrder(item.id);
           successCount += 1;
         } catch (error) {
-          const message = resolveApiErrorMessage(error, 'Senkronizasyon basarisiz');
+          if (isConflictError(error)) {
+            // Item is stale; drop from queue to avoid endless conflict retries.
+            await removeQueuedPosOrder(item.id);
+            continue;
+          }
+
+          const message = resolveApiErrorMessage(error, 'Senkronizasyon basarisiz.');
           await markQueuedPosOrderAttempt(item.id, message);
           if (isNetworkError(error)) break;
         }
@@ -897,6 +903,10 @@ export default function PosPage() {
       window.URL.revokeObjectURL(url);
       toast.success('CSV raporu indirildi.');
     } catch (error) {
+      if (isRateLimitError(error)) {
+        toast.error('Export limiti asildi. Biraz sonra tekrar deneyin.');
+        return;
+      }
       toast.error(resolveApiErrorMessage(error, 'CSV export basarisiz.'));
     }
   }, [isAuthed, reportDateFrom, reportDateTo, salesPeriod, salesTopLimit]);
@@ -985,6 +995,15 @@ export default function PosPage() {
       await loadStaffSalesReport();
       await loadSalesReport();
     } catch (error) {
+      if (isConflictError(error)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            error,
+            'Bu register icin baska terminalde acik vardiya var.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(error, 'Vardiya acilamadi.'));
     } finally {
       setIsShiftBusy(false);
@@ -1026,6 +1045,15 @@ export default function PosPage() {
       await loadStaffSalesReport();
       await loadSalesReport();
     } catch (error) {
+      if (isConflictError(error)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            error,
+            'Vardiya kapanisi baska terminalde degistigi icin tamamlanamadi.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(error, 'Vardiya kapatilamadi.'));
     } finally {
       setIsShiftBusy(false);
@@ -1088,6 +1116,10 @@ export default function PosPage() {
   }, []);
 
   useEffect(() => {
+    void purgeOldReceiptPrintLogs(7);
+  }, []);
+
+  useEffect(() => {
     if (typeof navigator === 'undefined') return;
     const updateOnlineState = () => {
       setIsOnline(navigator.onLine);
@@ -1146,6 +1178,11 @@ export default function PosPage() {
         : 'border-amber-200 bg-amber-50 text-amber-800',
     [isOnline],
   );
+  const queueSeverityClass = useMemo(() => {
+    if (queueCount >= 20) return 'border-red-200 bg-red-50 text-red-800';
+    if (queueCount >= 8) return 'border-amber-200 bg-amber-50 text-amber-800';
+    return 'border-[#D8DED8] bg-white text-[#1A3C34]';
+  }, [queueCount]);
   const parsedQuantityInput = Number(quantity);
   const parsedUnitPriceInput = Number(unitPriceCents);
   const parsedItemDiscountInput = Number(itemDiscountCents);
@@ -1204,7 +1241,19 @@ export default function PosPage() {
   };
 
   const printReceiptRecord = useCallback(
-    (receipt: ReceiptRecord) => {
+    async (receipt: ReceiptRecord, options?: { force?: boolean }) => {
+      if (!options?.force) {
+        try {
+          const isAlreadyPrinted = await hasReceiptBeenPrinted(receipt.saleId);
+          if (isAlreadyPrinted) {
+            toast('Bu fis daha once yazdirildi.');
+            return false;
+          }
+        } catch {
+          // Offline print idempotency is best-effort.
+        }
+      }
+
       const html = buildReceiptHtml(receiptSettings, receipt);
       const printWindow = window.open('', '_blank', 'width=420,height=760');
       if (!printWindow) {
@@ -1215,17 +1264,22 @@ export default function PosPage() {
       printWindow.document.close();
       printWindow.focus();
       printWindow.print();
+      try {
+        await markReceiptPrinted(receipt.saleId);
+      } catch {
+        // Ignore receipt print log write errors.
+      }
       return true;
     },
     [receiptSettings],
   );
 
-  const printReceipt = () => {
+  const printReceipt = async () => {
     if (!lastReceipt) {
       toast.error('Yazdirilacak fis yok.');
       return;
     }
-    const printed = printReceiptRecord(lastReceipt);
+    const printed = await printReceiptRecord(lastReceipt, { force: true });
     if (!printed) {
       toast.error('Fis yazdirilamadi.');
     }
@@ -1305,8 +1359,32 @@ export default function PosPage() {
           sku: code,
           quantity: 1,
         });
+        void upsertCachedPosProducts([
+          {
+            productId: data.productId,
+            variantId: data.variantId ?? null,
+            name: data.name,
+            priceCents: data.priceCents,
+            sku: code,
+          },
+        ]);
         toast.success(`Urun sepete eklendi: ${data.name}`);
       } catch (error) {
+        if (isNetworkError(error)) {
+          const cached = await findCachedPosProductByBarcode(code);
+          if (cached) {
+            addProductToCart({
+              productId: cached.productId,
+              variantId: cached.variantId,
+              name: cached.name,
+              priceCents: cached.priceCents,
+              sku: cached.sku,
+              quantity: 1,
+            });
+            toast('Offline urun cache kullanildi.');
+            return;
+          }
+        }
         toast.error(resolveApiErrorMessage(error, 'Barkod eslesmedi.'));
       }
     },
@@ -1321,7 +1399,47 @@ export default function PosPage() {
       const endpoint = `/pos/products/search?limit=20${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       const res = await api.get<PosProductSearchRow[]>(endpoint);
       setProductResults(res.data);
+      void upsertCachedPosProducts(
+        res.data.map((row) => ({
+          productId: row.productId,
+          variantId: row.variantId,
+          name: row.name,
+          sku: row.sku,
+          priceCents: row.priceCents,
+          stock: row.stock,
+        })),
+      );
     } catch (error) {
+      if (isNetworkError(error)) {
+        const normalizedQuery = productQuery.trim().toLowerCase();
+        const cached = await listCachedPosProducts(100);
+        const rows = cached
+          .filter((row) => {
+            if (!normalizedQuery) return true;
+            return (
+              row.name.toLowerCase().includes(normalizedQuery) ||
+              String(row.sku ?? '').toLowerCase().includes(normalizedQuery) ||
+              String(row.productId).includes(normalizedQuery) ||
+              String(row.variantId ?? '').includes(normalizedQuery)
+            );
+          })
+          .slice(0, 20)
+          .map((row) => ({
+            type: row.variantId ? 'VARIANT' : 'PRODUCT',
+            productId: row.productId,
+            variantId: row.variantId,
+            name: row.name,
+            sku: row.sku,
+            priceCents: row.priceCents,
+            stock: row.stock ?? null,
+          } satisfies PosProductSearchRow));
+
+        setProductResults(rows);
+        if (rows.length > 0) {
+          toast('Offline urun cache sonuclari gosterildi.');
+          return;
+        }
+      }
       toast.error(resolveApiErrorMessage(error, 'Urun aranirken hata olustu.'));
     } finally {
       setIsSearchingProduct(false);
@@ -1366,7 +1484,29 @@ export default function PosPage() {
         `/pos/customers/search?q=${encodeURIComponent(customerQuery.trim())}&limit=10`,
       );
       setCustomerResults(res.data);
+      void upsertCachedPosCustomers(
+        res.data.map((row) => ({
+          customerId: row.id,
+          name: row.name,
+          phone: row.phone,
+          balance: row.balance,
+        })),
+      );
     } catch (error) {
+      if (isNetworkError(error)) {
+        const cachedRows = await findCachedPosCustomers(customerQuery.trim(), 10);
+        const mapped = cachedRows.map((row) => ({
+          id: row.customerId,
+          name: row.name,
+          phone: row.phone,
+          balance: row.balance,
+        }));
+        setCustomerResults(mapped);
+        if (mapped.length > 0) {
+          toast('Offline musteri cache sonuclari gosterildi.');
+          return;
+        }
+      }
       toast.error(resolveApiErrorMessage(error, 'Musteri aranirken hata olustu.'));
     } finally {
       setIsSearchingCustomer(false);
@@ -1415,6 +1555,14 @@ export default function PosPage() {
       setIsCustomerSearchModalOpen(false);
       setNewCustomerName('');
       setNewCustomerPhone('');
+      void upsertCachedPosCustomers([
+        {
+          customerId: res.data.id,
+          name: res.data.name,
+          phone: res.data.phone,
+          balance: res.data.balance,
+        },
+      ]);
       toast.success(`Musteri secildi: #${res.data.id} ${res.data.name}`);
     } catch (error) {
       toast.error(resolveApiErrorMessage(error, 'Musteri olusturulamadi.'));
@@ -1459,6 +1607,15 @@ export default function PosPage() {
         `Bakiye uygulandi: ${formatMoney(res.data.appliedAmountCents)} (kalan borc: ${formatMoney(res.data.remainingDueCents)})`,
       );
     } catch (error) {
+      if (isConflictError(error)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            error,
+            'Siparis bakiyesi baska terminalde guncellendi.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(error, 'Bakiye uygulanamadi.'));
     } finally {
       setIsApplyingBalance(false);
@@ -1724,7 +1881,7 @@ export default function PosPage() {
         };
         setLastReceipt(queuedReceipt);
         if (autoPrintReceipt) {
-          printReceiptRecord(queuedReceipt);
+          void printReceiptRecord(queuedReceipt);
         }
         toast.success('Internet yok. Satis lokal kuyruga alindi.');
         return;
@@ -1809,7 +1966,7 @@ export default function PosPage() {
       };
       setLastReceipt(nextReceipt);
       if (autoPrintReceipt) {
-        printReceiptRecord(nextReceipt);
+        void printReceiptRecord(nextReceipt);
       }
 
       setCartItems([]);
@@ -1845,6 +2002,15 @@ export default function PosPage() {
         toast('Veresiye limiti asildi, satis WARN politikasiyla devam etti.');
       }
     } catch (error) {
+      if (isConflictError(error)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            error,
+            'Siparis baska terminalde degistigi icin islem tamamlanamadi.',
+          ),
+        );
+        return;
+      }
       if (isNetworkError(error)) {
                 if (splitPaymentPayload.lines.length > 0) {
                   toast.error(
@@ -1875,7 +2041,7 @@ export default function PosPage() {
         };
         setLastReceipt(queuedReceipt);
         if (autoPrintReceipt) {
-          printReceiptRecord(queuedReceipt);
+          void printReceiptRecord(queuedReceipt);
         }
         toast.success('Baglanti kesildi. Satis lokal kuyruga alindi.');
       } else {
@@ -1905,7 +2071,7 @@ export default function PosPage() {
           >
             {isOnline ? 'Online' : 'Offline'}
           </span>
-          <span className="inline-flex items-center rounded-full border border-[#D8DED8] bg-white px-3 py-1 text-xs font-semibold text-[#1A3C34]">
+          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${queueSeverityClass}`}>
             Kuyruk: {queueCount}
           </span>
           <Button
@@ -1915,10 +2081,26 @@ export default function PosPage() {
           >
             {isSyncing ? 'Senkronize ediliyor...' : 'Kuyrugu senkronize et'}
           </Button>
+          <Button
+            variant="secondary"
+            className="h-8 px-3 text-xs"
+            onClick={() => setIsFocusMode((prev) => !prev)}
+          >
+            {isFocusMode ? 'Focus kapat' : 'Focus mode'}
+          </Button>
         </div>
+        {isFocusMode ? (
+          <p className="text-xs text-[#1A3C34]/70">
+            Focus mode aktif: ikincil operasyon panelleri gizlendi.
+          </p>
+        ) : null}
 
         {isAuthed ? (
-          <div className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5">
+          <div
+            className={`rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5 ${
+              isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''
+            }`}
+          >
             <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
               <div className="space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
@@ -2208,7 +2390,7 @@ export default function PosPage() {
                   <Button className="h-12 w-full text-base" onClick={() => void handleCreateSale()} disabled={isSubmitting}>
                     {isSubmitting ? 'Gonderiliyor...' : 'Satisi Tamamla'}
                   </Button>
-                  <Button variant="secondary" className="h-10 w-full" onClick={printReceipt} disabled={!lastReceipt}>
+                  <Button variant="secondary" className="h-10 w-full" onClick={() => void printReceipt()} disabled={!lastReceipt}>
                     Fis Yazdir
                   </Button>
                 </div>
@@ -2420,7 +2602,7 @@ export default function PosPage() {
           </div>
         ) : null}
 
-        {isAuthed && user?.role !== 'USER' ? (
+        {isAuthed && user?.role !== 'USER' && !isFocusMode ? (
           <details className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4" open={false}>
             <summary className="cursor-pointer list-none text-sm font-semibold text-[#1A3C34]">
               Detayli POS operasyon paneli (vardiya, split, analitik, fatura)
@@ -2976,7 +3158,7 @@ export default function PosPage() {
                 <Button onClick={() => void handleCreateSale()} disabled={isSubmitting}>
                   {isSubmitting ? 'Gonderiliyor...' : 'Satis Olustur'}
                 </Button>
-                <Button variant="secondary" onClick={printReceipt} disabled={!lastReceipt}>
+                <Button variant="secondary" onClick={() => void printReceipt()} disabled={!lastReceipt}>
                   Fis Yazdir
                 </Button>
                 <input
@@ -3163,6 +3345,12 @@ export default function PosPage() {
                           Son hata: {item.lastError} (deneme: {item.attempts})
                         </p>
                       ) : null}
+                      <p className="mt-1 text-xs text-[#5C5C5C]">
+                        Sonraki deneme:{' '}
+                        {item.nextRetryAt
+                          ? new Date(item.nextRetryAt).toLocaleString('tr-TR')
+                          : 'Hemen'}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -3181,6 +3369,20 @@ export default function PosPage() {
             </Button>
           </div>
         )}
+
+        <ConflictResolutionModal
+          isOpen={Boolean(conflictDetail)}
+          detail={conflictDetail ?? undefined}
+          message="Ayni kayitta baska terminalde degisiklik tespit edildi."
+          onClose={() => setConflictDetail(null)}
+          onRefresh={() => {
+            setConflictDetail(null);
+            void loadShiftRows();
+            void loadSalesReport();
+            void loadStaffSalesReport();
+            void refreshQueue();
+          }}
+        />
       </section>
     </div>
   );

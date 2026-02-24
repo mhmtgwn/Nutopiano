@@ -4,25 +4,13 @@ import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import Spinner from '@/components/common/Spinner';
 import PaginationControls from '@/components/common/PaginationControls';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import { isConflictError, resolveApiErrorMessage } from '@/lib/api-errors';
 import api from '@/services/api';
 import { formatDate, formatPrice } from '@/utils/helpers';
-
-const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
-  const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
-  const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
-  const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) return message.map(String).join(', ');
-  if (typeof message === 'string') return message;
-  return fallback;
-};
 
 type PaginationMeta = {
   total: number;
@@ -56,10 +44,12 @@ const statusBadge = (status: string) => {
 
 export default function AdminPlatformPayoutsPage() {
   const queryClient = useQueryClient();
+  const { can } = useCapabilities();
 
   const [status, setStatus] = useState<'pending' | 'approved' | 'completed' | ''>('pending');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [conflictDetail, setConflictDetail] = useState<string | null>(null);
 
   const {
     data: payload,
@@ -93,6 +83,15 @@ export default function AdminPlatformPayoutsPage() {
       await queryClient.invalidateQueries({ queryKey: ['platform-payouts'] });
     },
     onError: (err: unknown) => {
+      if (isConflictError(err)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            err,
+            'Payout durumu baska bir admin tarafindan degistirildi.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(err, 'Payout onaylanamadı.'));
     },
   });
@@ -107,6 +106,15 @@ export default function AdminPlatformPayoutsPage() {
       await queryClient.invalidateQueries({ queryKey: ['platform-payouts'] });
     },
     onError: (err: unknown) => {
+      if (isConflictError(err)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            err,
+            'Payout durumu baska bir admin tarafindan degistirildi.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(err, 'Payout tamamlanamadı.'));
     },
   });
@@ -220,6 +228,7 @@ export default function AdminPlatformPayoutsPage() {
                 {items.map((row) => {
                   const canApprove = String(row.status).toLowerCase() === 'pending';
                   const canComplete = String(row.status).toLowerCase() === 'approved';
+                  const canMutatePayout = can('MANAGE_PAYOUT');
 
                   return (
                     <tr key={row.id} className="hover:bg-[var(--neutral-50)]">
@@ -240,7 +249,12 @@ export default function AdminPlatformPayoutsPage() {
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
-                            disabled={!canApprove || approveMutation.isPending || completeMutation.isPending}
+                            disabled={
+                              !canMutatePayout ||
+                              !canApprove ||
+                              approveMutation.isPending ||
+                              completeMutation.isPending
+                            }
                             onClick={() => {
                               const ok = window.confirm('Bu payout onaylansın mı?');
                               if (!ok) return;
@@ -252,7 +266,12 @@ export default function AdminPlatformPayoutsPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={!canComplete || approveMutation.isPending || completeMutation.isPending}
+                            disabled={
+                              !canMutatePayout ||
+                              !canComplete ||
+                              approveMutation.isPending ||
+                              completeMutation.isPending
+                            }
                             onClick={() => {
                               const ok = window.confirm('EFT yapıldı mı? Tamamlansın mı?');
                               if (!ok) return;
@@ -272,6 +291,14 @@ export default function AdminPlatformPayoutsPage() {
           </div>
         </section>
       )}
+
+      {!can('MANAGE_PAYOUT') ? (
+        <section className="rounded-[var(--radius-xl)] border border-amber-200 bg-amber-50 px-6 py-4">
+          <p className="text-sm text-amber-800">
+            Bu hesap payout aksiyonlarini yurutemez (sadece goruntuleme).
+          </p>
+        </section>
+      ) : null}
 
       {meta && meta.totalPages > 1 && (
         <PaginationControls
@@ -304,6 +331,16 @@ export default function AdminPlatformPayoutsPage() {
           </button>
         </div>
       )}
+
+      <ConflictResolutionModal
+        isOpen={Boolean(conflictDetail)}
+        detail={conflictDetail ?? undefined}
+        onClose={() => setConflictDetail(null)}
+        onRefresh={() => {
+          setConflictDetail(null);
+          void queryClient.invalidateQueries({ queryKey: ['platform-payouts'] });
+        }}
+      />
     </div>
   );
 }

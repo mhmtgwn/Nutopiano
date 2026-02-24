@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,12 +16,54 @@ import { PosReturnOrderDto } from './dto/pos-return-order.dto';
 import { ApplyCustomerBalanceDto } from './dto/apply-customer-balance.dto';
 import { ApplySplitPaymentsDto } from './dto/apply-split-payments.dto';
 import { CreatePosCustomerDto } from './dto/create-pos-customer.dto';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTION_TYPES } from '../audit/audit.constants';
 
 type SalesBucketPeriod = 'day' | 'week' | 'month';
 
 @Injectable()
 export class PosService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly exportRateLimitWindowMs = 15 * 60 * 1000;
+  private readonly exportRateLimitMax = 10;
+  private readonly exportRateBuckets = new Map<string, number[]>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  private buildExportRateLimitKey(currentUser: JwtPayload) {
+    return `${currentUser.businessId}:${currentUser.userId}`;
+  }
+
+  private enforceExportRateLimit(currentUser: JwtPayload) {
+    const key = this.buildExportRateLimitKey(currentUser);
+    const now = Date.now();
+    const windowStart = now - this.exportRateLimitWindowMs;
+    const current = this.exportRateBuckets.get(key) ?? [];
+    const next = current.filter((timestamp) => timestamp >= windowStart);
+
+    if (next.length >= this.exportRateLimitMax) {
+      throw new HttpException(
+        'Export limiti asildi. Lutfen bir sure sonra tekrar deneyin.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    next.push(now);
+    this.exportRateBuckets.set(key, next);
+
+    if (this.exportRateBuckets.size > 1000) {
+      for (const [bucketKey, timestamps] of this.exportRateBuckets.entries()) {
+        const filtered = timestamps.filter((timestamp) => timestamp >= windowStart);
+        if (filtered.length === 0) {
+          this.exportRateBuckets.delete(bucketKey);
+        } else {
+          this.exportRateBuckets.set(bucketKey, filtered);
+        }
+      }
+    }
+  }
 
   private aggregateStockLines(
     lines: Array<{ productId: number; variantId?: number | null; quantity: number }>,
@@ -602,11 +646,40 @@ export class PosService {
     }
 
     if (!active) {
+      const shouldCheckClosedConflict = Boolean(payload.sessionId || registerCode);
+      const closedSession = shouldCheckClosedConflict
+        ? await this.prisma.cashRegisterSession.findFirst({
+            where: {
+              businessId,
+              ...(payload.sessionId
+                ? { id: payload.sessionId }
+                : registerCode
+                  ? { registerCode }
+                  : {}),
+              closedAt: { not: null },
+            },
+            select: {
+              id: true,
+              registerCode: true,
+              closedByUserId: true,
+              closedAt: true,
+            },
+            orderBy: { closedAt: 'desc' },
+          })
+        : null;
+
+      if (closedSession) {
+        throw new ConflictException(
+          `Vardiya daha once kapatildi (kapanisi yapan user: #${closedSession.closedByUserId ?? 'unknown'}).`,
+        );
+      }
       throw new NotFoundException('Kapatilacak aktif vardiya bulunamadi');
     }
 
     if (currentUser.role === 'USER' && active.openedByUserId !== userId) {
-      throw new ForbiddenException('Bu kasayi kapatamazsiniz');
+      throw new ConflictException(
+        `Bu vardiya baska bir kasiyere ait (openedByUserId: #${active.openedByUserId}).`,
+      );
     }
 
     const closed = await this.prisma.cashRegisterSession.update({
@@ -1053,6 +1126,8 @@ export class PosService {
       topLimit?: number;
     },
   ) {
+    this.enforceExportRateLimit(currentUser);
+
     const report = await this.getSalesReport(currentUser, params);
     const lines: string[] = [];
 
@@ -1093,6 +1168,27 @@ export class PosService {
     for (const row of report.paymentsByMethod) {
       lines.push(`${row.method},${row.count},${row.amountCents}`);
     }
+
+    await this.auditService.logFromActor(currentUser, {
+      actionType: AUDIT_ACTION_TYPES.EXPORT_SALES_REPORT,
+      targetType: 'pos-sales-report',
+      targetId: 'csv',
+      payloadJson: {
+        period: report.range.period,
+        startAt: report.range.startAt.toISOString(),
+        endAt: report.range.endAt.toISOString(),
+        filters: {
+          dateFrom: params?.dateFrom ?? null,
+          dateTo: params?.dateTo ?? null,
+          topLimit: params?.topLimit ?? null,
+        },
+        summary: {
+          orderCount: report.summary.orderCount,
+          trendRows: report.trend.length,
+          topProductRows: report.topProducts.length,
+        },
+      },
+    });
 
     return lines.join('\n');
   }

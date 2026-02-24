@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  AlertTriangle,
   ClipboardList,
   CreditCard,
   Home,
@@ -14,6 +15,7 @@ import {
   MessageCircle,
   Package,
   Settings,
+  Shield,
   Tags,
   Truck,
   Users,
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAppSelector } from '@/store';
 import { getPanelLabelByRole } from '@/lib/role-routing';
+import { hasAllCapabilities, hasAnyCapability, type AppCapability } from '@/lib/capabilities';
 
 interface AdminShellProps {
   children: ReactNode;
@@ -31,6 +34,8 @@ type NavItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  requiredCapabilities?: AppCapability[];
+  requireAnyCapabilities?: AppCapability[];
 };
 
 type NavSection = {
@@ -38,57 +43,136 @@ type NavSection = {
   items: NavItem[];
 };
 
-const createNavSections = (basePath: string): NavSection[] => [
-  {
-    title: 'Merkez',
-    items: [
-      { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
-      { label: 'Kullanıcılar', href: `${basePath}/users`, icon: Users },
-      { label: 'Müşteriler', href: `${basePath}/customers`, icon: Users },
-      { label: 'Satıcılar', href: `${basePath}/sellers`, icon: Users },
-      { label: 'Satıcı Başvuru', href: `${basePath}/sellers/applications`, icon: Users },
-      { label: 'Planlar', href: `${basePath}/plans`, icon: CreditCard },
-    ],
-  },
-  {
-    title: 'Katalog',
-    items: [
-      { label: 'Katalog', href: `${basePath}/catalog`, icon: Package },
-      { label: 'Ürünler', href: `${basePath}/products`, icon: Package },
-      { label: 'Kategoriler', href: `${basePath}/categories`, icon: Tags },
-    ],
-  },
-  {
-    title: 'Sipariş',
-    items: [
-      { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
-      { label: 'Kapıya Hizmet', href: `${basePath}/services`, icon: Truck },
-      { label: 'Ödeme Ayarları', href: `${basePath}/payments`, icon: CreditCard },
-      { label: 'Finans', href: `${basePath}/finance`, icon: Landmark },
-    ],
-  },
-  {
-    title: 'Bildirim',
-    items: [
-      { label: 'SMTP', href: `${basePath}/smtp`, icon: Mail },
-      { label: 'SMS', href: `${basePath}/sms`, icon: MessageCircle },
-    ],
-  },
-  {
-    title: 'Ayarlar',
-    items: [
-      { label: 'Raporlar', href: `${basePath}/reports`, icon: ClipboardList },
-      { label: 'Genel Ayarlar', href: `${basePath}/settings`, icon: Settings },
-    ],
-  },
-];
+const createNavSections = (basePath: string): NavSection[] => {
+  const isPlatform = basePath === '/platform';
+
+  const sections: NavSection[] = [
+    {
+      title: 'Merkez',
+      items: [
+        { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
+        {
+          label: 'Kullanıcılar',
+          href: `${basePath}/users`,
+          icon: Users,
+          requiredCapabilities: ['MANAGE_SELLERS'],
+        },
+        { label: 'Müşteriler', href: `${basePath}/customers`, icon: Users },
+        {
+          label: 'Satıcılar',
+          href: `${basePath}/sellers`,
+          icon: Users,
+          requiredCapabilities: ['MANAGE_SELLERS'],
+        },
+        {
+          label: 'Satıcı Başvuru',
+          href: `${basePath}/sellers/applications`,
+          icon: Users,
+          requiredCapabilities: ['MANAGE_SELLERS'],
+        },
+        { label: 'Planlar', href: `${basePath}/plans`, icon: CreditCard },
+      ],
+    },
+    {
+      title: 'Katalog',
+      items: [
+        { label: 'Katalog', href: `${basePath}/catalog`, icon: Package },
+        { label: 'Ürünler', href: `${basePath}/products`, icon: Package },
+        { label: 'Kategoriler', href: `${basePath}/categories`, icon: Tags },
+      ],
+    },
+    {
+      title: 'Sipariş',
+      items: [
+        { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
+        { label: 'Kapıya Hizmet', href: `${basePath}/services`, icon: Truck },
+        { label: 'Ödeme Ayarları', href: `${basePath}/payments`, icon: CreditCard },
+        {
+          label: 'Finans',
+          href: `${basePath}/finance`,
+          icon: Landmark,
+          requiredCapabilities: ['VIEW_FINANCE'],
+        },
+      ],
+    },
+    {
+      title: 'Risk',
+      items: [
+        {
+          label: 'Risk & Control',
+          href: `${basePath}/risk-control`,
+          icon: AlertTriangle,
+          requireAnyCapabilities: ['VIEW_AUDIT', 'VIEW_OUTBOX'],
+        },
+      ],
+    },
+    {
+      title: 'Bildirim',
+      items: [
+        { label: 'SMTP', href: `${basePath}/smtp`, icon: Mail },
+        { label: 'SMS', href: `${basePath}/sms`, icon: MessageCircle },
+      ],
+    },
+    {
+      title: 'Ayarlar',
+      items: [
+        {
+          label: 'Raporlar',
+          href: `${basePath}/reports`,
+          icon: ClipboardList,
+          requiredCapabilities: ['VIEW_REPORTS'],
+        },
+        { label: 'Genel Ayarlar', href: `${basePath}/settings`, icon: Settings },
+      ],
+    },
+  ];
+
+  if (isPlatform) {
+    sections.push({
+      title: 'Destek',
+      items: [
+        {
+          label: 'Support Mode',
+          href: `${basePath}/support`,
+          icon: Shield,
+          requiredCapabilities: ['VIEW_SUPPORT_MODE'],
+        },
+      ],
+    });
+  }
+
+  return sections;
+};
 
 export default function AdminShell({ children, basePath = '/admin' }: AdminShellProps) {
   const pathname = usePathname();
   const user = useAppSelector((state) => state.user.user);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const navSections = useMemo(() => createNavSections(basePath), [basePath]);
+  const navSections = useMemo(() => {
+    const raw = createNavSections(basePath);
+    const role = user?.role;
+    return raw
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (
+            item.requiredCapabilities &&
+            !hasAllCapabilities(role, item.requiredCapabilities)
+          ) {
+            return false;
+          }
+          if (
+            item.requireAnyCapabilities &&
+            !hasAnyCapability(role, item.requireAnyCapabilities)
+          ) {
+            return false;
+          }
+          return true;
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [basePath, user?.role]);
   const panelLabel = getPanelLabelByRole(user?.role);
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const panelModeLabel = isSuperAdmin ? 'Platform Panel' : 'Admin Panel';

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
+import RiskScoreBadge from '@/components/common/RiskScoreBadge';
 import api from '@/services/api';
 import { formatPrice } from '@/lib/format';
 import { getPanelLabelByRole } from '@/lib/role-routing';
@@ -84,6 +85,24 @@ interface ReturnRequestSummary {
   status: string;
   reason?: string | null;
   requestedAt: string;
+}
+
+interface OutboxMetrics {
+  totalCount: number;
+  processedCount: number;
+  pendingCount: number;
+  retryCount: number;
+  failedCount: number;
+  deadLetterCount: number;
+}
+
+interface AuditLogRow {
+  id: number;
+  actionType: string;
+}
+
+interface PaginatedAuditLogs {
+  data: AuditLogRow[];
 }
 
 type QuickLink = {
@@ -195,6 +214,22 @@ export default function AdminOverviewPage() {
     },
   });
 
+  const outboxMetricsQuery = useQuery<OutboxMetrics>({
+    queryKey: ['admin-dashboard-outbox-metrics'],
+    queryFn: async () => {
+      const res = await api.get<OutboxMetrics>('/platform/outbox/metrics');
+      return res.data;
+    },
+  });
+
+  const auditRiskQuery = useQuery<PaginatedAuditLogs>({
+    queryKey: ['admin-dashboard-risk-audit'],
+    queryFn: async () => {
+      const res = await api.get<PaginatedAuditLogs>('/platform/audit/logs?page=1&pageSize=20');
+      return res.data;
+    },
+  });
+
   const isLoading =
     summaryQuery.isLoading ||
     reportsQuery.isLoading ||
@@ -279,6 +314,24 @@ export default function AdminOverviewPage() {
     summary && summary.ordersTotal === 0 && summary.activeProducts === 0,
   );
 
+  const riskScore = useMemo(() => {
+    const metrics = outboxMetricsQuery.data;
+    const auditRows = auditRiskQuery.data?.data ?? [];
+    if (!metrics) return 0;
+
+    const total = Math.max(metrics.totalCount, 1);
+    const failedRatio =
+      ((metrics.failedCount + metrics.deadLetterCount) / total) * 100;
+    const retryRatio = (metrics.retryCount / total) * 100;
+    const overrideCount = auditRows.filter((row) => {
+      const action = String(row.actionType ?? '').toUpperCase();
+      return action.includes('FORCE') || action.includes('OVERRIDE');
+    }).length;
+
+    const score = failedRatio * 0.6 + retryRatio * 0.2 + overrideCount * 2;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }, [auditRiskQuery.data?.data, outboxMetricsQuery.data]);
+
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--primary-800)]/10 bg-gradient-to-br from-[#F7F1E5] via-white to-[#ECF6F3] px-6 py-6 shadow-[0_24px_70px_rgba(26,60,52,0.1)]">
@@ -294,12 +347,21 @@ export default function AdminOverviewPage() {
               {heroDescription}
             </p>
           </div>
-          <Link
-            href={reportHref}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
-          >
-            Raporlar <ArrowUpRight className="h-4 w-4" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <RiskScoreBadge score={riskScore} label="Risk" />
+            <Link
+              href={`${basePath}/risk-control`}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+            >
+              Risk Hub <ArrowUpRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href={reportHref}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+            >
+              Raporlar <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </section>
 

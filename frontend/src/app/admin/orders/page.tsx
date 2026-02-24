@@ -5,26 +5,11 @@ import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardList, PackageCheck, Truck, X } from 'lucide-react';
 
+import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import Spinner from '@/components/common/Spinner';
+import { isConflictError, resolveApiErrorMessage } from '@/lib/api-errors';
 import api from '@/services/api';
 import { formatDate, formatPrice } from '@/utils/helpers';
-
-const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
-  const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
-  const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
-  const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) {
-    return message.map(String).join(', ');
-  }
-  if (typeof message === 'string') return message;
-  return fallback;
-};
 
 interface OrderRow {
   id: number;
@@ -118,6 +103,7 @@ export default function AdminOrdersPage() {
   const [source, setSource] = useState<string>('');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [conflictDetail, setConflictDetail] = useState<string | null>(null);
 
   const {
     data: ordersPayload,
@@ -188,6 +174,15 @@ export default function AdminOrdersPage() {
       await api.patch(`/orders/${selectedOrderId}`, { statusKey: nextStatusKey });
     },
     onError: (error: unknown) => {
+      if (isConflictError(error)) {
+        setConflictDetail(
+          resolveApiErrorMessage(
+            error,
+            'Siparis baska bir kullanici tarafindan guncellendi.',
+          ),
+        );
+        return;
+      }
       toast.error(resolveApiErrorMessage(error, 'Sipariş durumu güncellenemedi.'));
     },
     onSuccess: async () => {
@@ -562,6 +557,24 @@ export default function AdminOrdersPage() {
           </aside>
         </div>
       )}
+
+      <ConflictResolutionModal
+        isOpen={Boolean(conflictDetail)}
+        detail={conflictDetail ?? undefined}
+        onClose={() => setConflictDetail(null)}
+        onRefresh={() => {
+          setConflictDetail(null);
+          void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+          if (selectedOrderId) {
+            void queryClient.invalidateQueries({
+              queryKey: ['admin-order-detail', selectedOrderId],
+            });
+            void queryClient.invalidateQueries({
+              queryKey: ['admin-order-payments', selectedOrderId],
+            });
+          }
+        }}
+      />
     </div>
   );
 }

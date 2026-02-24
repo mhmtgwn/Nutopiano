@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -393,25 +394,39 @@ export class FinanceService {
 
     const businessId = Number(currentUser.businessId);
 
-    const payout = await this.prisma.payout.findFirst({
+    const existing = await this.prisma.payout.findFirst({
       where: { id: payoutId, businessId },
-      select: { id: true, status: true },
+      select: { id: true },
     });
 
-    if (!payout) {
+    if (!existing) {
       throw new NotFoundException('Payout not found');
     }
 
-    if (payout.status !== 'pending') {
-      throw new ForbiddenException('Payout can not be approved');
-    }
-
-    return this.prisma.payout.update({
-      where: { id: payout.id },
+    const updated = await this.prisma.payout.updateMany({
+      where: {
+        id: payoutId,
+        businessId,
+        status: 'pending',
+      },
       data: {
         status: 'approved',
         approvedAt: new Date(),
       },
+    });
+
+    if (updated.count === 0) {
+      const current = await this.prisma.payout.findFirst({
+        where: { id: payoutId, businessId },
+        select: { status: true },
+      });
+      throw new ConflictException(
+        `Payout state changed. Current status: ${current?.status ?? 'unknown'}`,
+      );
+    }
+
+    return this.prisma.payout.findUniqueOrThrow({
+      where: { id: payoutId },
       select: {
         id: true,
         beneficiaryUserId: true,
@@ -431,25 +446,39 @@ export class FinanceService {
 
     const businessId = Number(currentUser.businessId);
 
-    const payout = await this.prisma.payout.findFirst({
+    const existing = await this.prisma.payout.findFirst({
       where: { id: payoutId, businessId },
-      select: { id: true, status: true },
+      select: { id: true },
     });
 
-    if (!payout) {
+    if (!existing) {
       throw new NotFoundException('Payout not found');
     }
 
-    if (payout.status !== 'approved') {
-      throw new ForbiddenException('Payout can not be completed');
-    }
-
-    return this.prisma.payout.update({
-      where: { id: payout.id },
+    const updated = await this.prisma.payout.updateMany({
+      where: {
+        id: payoutId,
+        businessId,
+        status: 'approved',
+      },
       data: {
         status: 'completed',
         completedAt: new Date(),
       },
+    });
+
+    if (updated.count === 0) {
+      const current = await this.prisma.payout.findFirst({
+        where: { id: payoutId, businessId },
+        select: { status: true },
+      });
+      throw new ConflictException(
+        `Payout state changed. Current status: ${current?.status ?? 'unknown'}`,
+      );
+    }
+
+    return this.prisma.payout.findUniqueOrThrow({
+      where: { id: payoutId },
       select: {
         id: true,
         beneficiaryUserId: true,

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -15,33 +15,46 @@ import {
 } from 'lucide-react';
 import { useAppSelector } from '@/store';
 import { getPanelLabelByRole } from '@/lib/role-routing';
+import { hasAllCapabilities, type AppCapability } from '@/lib/capabilities';
 
 interface SellerShellProps {
   children: ReactNode;
 }
 
-const sellerNavItems = [
-  { label: 'Satis', href: '/pos', icon: CreditCard },
+type SellerNavItem = {
+  label: string;
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  requiredCapabilities?: AppCapability[];
+};
+
+const sellerNavItems: SellerNavItem[] = [
+  { label: 'Satis', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
   { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
   { label: 'Stok', href: '/dashboard/inventory', icon: Warehouse },
-  { label: 'Finans', href: '/dashboard/finance', icon: Wallet },
+  { label: 'Finans', href: '/dashboard/finance', icon: Wallet, requiredCapabilities: ['VIEW_FINANCE'] },
   { label: 'Musteriler', href: '/dashboard/customers', icon: Users },
-] as const;
+];
 
-const staffNavItems = [
-  { label: 'Satis', href: '/pos', icon: CreditCard },
+const staffNavItems: SellerNavItem[] = [
+  { label: 'Satis', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
   { label: 'Siparis', href: '/dashboard/orders', icon: ScrollText },
-] as const;
+];
 
 export default function SellerShell({ children }: SellerShellProps) {
   const pathname = usePathname();
   const user = useAppSelector((state) => state.user.user);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const navItems = useMemo(
-    () => (user?.role === 'USER' ? staffNavItems : sellerNavItems),
-    [user?.role],
-  );
+  const navItems = useMemo(() => {
+    const role = user?.role;
+    const base = role === 'USER' ? staffNavItems : sellerNavItems;
+    return base.filter(
+      (item) =>
+        !item.requiredCapabilities ||
+        hasAllCapabilities(role, item.requiredCapabilities),
+    );
+  }, [user?.role]);
 
   const panelLabel = getPanelLabelByRole(user?.role);
   const isStaff = user?.role === 'USER';
