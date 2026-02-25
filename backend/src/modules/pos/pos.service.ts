@@ -55,7 +55,9 @@ export class PosService {
 
     if (this.exportRateBuckets.size > 1000) {
       for (const [bucketKey, timestamps] of this.exportRateBuckets.entries()) {
-        const filtered = timestamps.filter((timestamp) => timestamp >= windowStart);
+        const filtered = timestamps.filter(
+          (timestamp) => timestamp >= windowStart,
+        );
         if (filtered.length === 0) {
           this.exportRateBuckets.delete(bucketKey);
         } else {
@@ -66,7 +68,11 @@ export class PosService {
   }
 
   private aggregateStockLines(
-    lines: Array<{ productId: number; variantId?: number | null; quantity: number }>,
+    lines: Array<{
+      productId: number;
+      variantId?: number | null;
+      quantity: number;
+    }>,
   ) {
     const byProduct = new Map<number, number>();
     const byVariant = new Map<number, number>();
@@ -144,7 +150,10 @@ export class PosService {
     return Array.from(new Set(normalized));
   }
 
-  private async resolveUserTeamPermissionRows(businessId: number, userId: number) {
+  private async resolveUserTeamPermissionRows(
+    businessId: number,
+    userId: number,
+  ) {
     const rows = await this.prisma.sellerTeamMember.findMany({
       where: {
         businessId,
@@ -179,7 +188,11 @@ export class PosService {
 
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
-    if (!Number.isFinite(businessId) || !Number.isFinite(userId) || userId <= 0) {
+    if (
+      !Number.isFinite(businessId) ||
+      !Number.isFinite(userId) ||
+      userId <= 0
+    ) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -208,10 +221,7 @@ export class PosService {
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
-    if (
-      currentUser.role === 'ADMIN' ||
-      currentUser.role === 'SUPER_ADMIN'
-    ) {
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN') {
       return null;
     }
 
@@ -238,10 +248,7 @@ export class PosService {
     currentUser: JwtPayload,
     order: { sellerId: number | null; createdByUserId: number },
   ) {
-    if (
-      currentUser.role === 'ADMIN' ||
-      currentUser.role === 'SUPER_ADMIN'
-    ) {
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN') {
       return;
     }
 
@@ -250,7 +257,11 @@ export class PosService {
     const orderSellerId =
       typeof order.sellerId === 'number' ? Number(order.sellerId) : null;
 
-    if (Array.isArray(sellerIds) && orderSellerId && sellerIds.includes(orderSellerId)) {
+    if (
+      Array.isArray(sellerIds) &&
+      orderSellerId &&
+      sellerIds.includes(orderSellerId)
+    ) {
       return;
     }
 
@@ -310,7 +321,10 @@ export class PosService {
     amountCents: number;
     createdByUserId?: number | null;
   }) {
-    const normalizedAmount = Math.max(Math.trunc(Number(params.amountCents)), 0);
+    const normalizedAmount = Math.max(
+      Math.trunc(Number(params.amountCents)),
+      0,
+    );
     if (normalizedAmount <= 0) {
       return null;
     }
@@ -596,9 +610,12 @@ export class PosService {
     const userId = Number(currentUser.userId);
     const registerCode = payload.registerCode?.trim().toUpperCase();
 
-    let active = null as
-      | { id: number; registerCode: string; openedByUserId: number; openingCashCents: number }
-      | null;
+    let active = null as {
+      id: number;
+      registerCode: string;
+      openedByUserId: number;
+      openingCashCents: number;
+    } | null;
 
     if (payload.sessionId) {
       active = await this.prisma.cashRegisterSession.findFirst({
@@ -646,7 +663,9 @@ export class PosService {
     }
 
     if (!active) {
-      const shouldCheckClosedConflict = Boolean(payload.sessionId || registerCode);
+      const shouldCheckClosedConflict = Boolean(
+        payload.sessionId || registerCode,
+      );
       const closedSession = shouldCheckClosedConflict
         ? await this.prisma.cashRegisterSession.findFirst({
             where: {
@@ -677,7 +696,7 @@ export class PosService {
     }
 
     if (currentUser.role === 'USER' && active.openedByUserId !== userId) {
-      throw new ConflictException(
+      throw new ForbiddenException(
         `Bu vardiya baska bir kasiyere ait (openedByUserId: #${active.openedByUserId}).`,
       );
     }
@@ -706,8 +725,7 @@ export class PosService {
 
     return {
       ...closed,
-      varianceCents:
-        (closed.closingCashCents ?? 0) - closed.openingCashCents,
+      varianceCents: (closed.closingCashCents ?? 0) - closed.openingCashCents,
     };
   }
 
@@ -898,7 +916,9 @@ export class PosService {
         }
       GROUP BY o."createdByUserId"
     `;
-    const paymentMap = new Map(paymentRows.map((r) => [Number(r.userId), Number(r.paidCents)]));
+    const paymentMap = new Map(
+      paymentRows.map((r) => [Number(r.userId), Number(r.paidCents)]),
+    );
 
     const shiftGroups = await this.prisma.cashRegisterSession.groupBy({
       by: ['openedByUserId'],
@@ -987,50 +1007,55 @@ export class PosService {
           ? Prisma.sql`date_trunc('month', o."createdAt")`
           : Prisma.sql`date_trunc('day', o."createdAt")`;
 
-    const [orderAggregate, paymentAggregate, paymentMethodGroups, trendRows, topProducts] =
-      await Promise.all([
-        this.prisma.order.aggregate({
-          where: {
-            businessId,
+    const [
+      orderAggregate,
+      paymentAggregate,
+      paymentMethodGroups,
+      trendRows,
+      topProducts,
+    ] = await Promise.all([
+      this.prisma.order.aggregate({
+        where: {
+          businessId,
+          source: 'POS',
+          deletedAt: null,
+          createdAt: { gte: startAt, lt: endAt },
+        },
+        _count: { _all: true },
+        _sum: { totalAmountCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          businessId,
+          order: {
             source: 'POS',
             deletedAt: null,
             createdAt: { gte: startAt, lt: endAt },
           },
-          _count: { _all: true },
-          _sum: { totalAmountCents: true },
-        }),
-        this.prisma.payment.aggregate({
-          where: {
-            businessId,
-            order: {
-              source: 'POS',
-              deletedAt: null,
-              createdAt: { gte: startAt, lt: endAt },
-            },
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.payment.groupBy({
+        by: ['method'],
+        where: {
+          businessId,
+          order: {
+            source: 'POS',
+            deletedAt: null,
+            createdAt: { gte: startAt, lt: endAt },
           },
-          _sum: { amountCents: true },
-        }),
-        this.prisma.payment.groupBy({
-          by: ['method'],
-          where: {
-            businessId,
-            order: {
-              source: 'POS',
-              deletedAt: null,
-              createdAt: { gte: startAt, lt: endAt },
-            },
-          },
-          _sum: { amountCents: true },
-          _count: { _all: true },
-        }),
-        this.prisma.$queryRaw<
-          Array<{
-            bucketStart: Date;
-            orderCount: number;
-            salesTotalCents: number;
-            paymentsTotalCents: number;
-          }>
-        >(Prisma.sql`
+        },
+        _sum: { amountCents: true },
+        _count: { _all: true },
+      }),
+      this.prisma.$queryRaw<
+        Array<{
+          bucketStart: Date;
+          orderCount: number;
+          salesTotalCents: number;
+          paymentsTotalCents: number;
+        }>
+      >(Prisma.sql`
           SELECT
             ${bucketExpr} AS "bucketStart",
             COUNT(*)::int AS "orderCount",
@@ -1054,15 +1079,15 @@ export class PosService {
           GROUP BY 1
           ORDER BY 1 ASC
         `),
-        this.prisma.$queryRaw<
-          Array<{
-            productId: number;
-            productName: string;
-            quantity: number;
-            salesTotalCents: number;
-            orderCount: number;
-          }>
-        >(Prisma.sql`
+      this.prisma.$queryRaw<
+        Array<{
+          productId: number;
+          productName: string;
+          quantity: number;
+          salesTotalCents: number;
+          orderCount: number;
+        }>
+      >(Prisma.sql`
           SELECT
             oi."productId" AS "productId",
             MAX(oi."productName") AS "productName",
@@ -1082,7 +1107,7 @@ export class PosService {
           ORDER BY "salesTotalCents" DESC, "quantity" DESC
           LIMIT ${topLimit}
         `),
-      ]);
+    ]);
 
     const orderCount = orderAggregate._count._all;
     const salesTotalCents = orderAggregate._sum.totalAmountCents ?? 0;
@@ -1094,7 +1119,8 @@ export class PosService {
         orderCount,
         salesTotalCents,
         paymentsTotalCents,
-        avgTicketCents: orderCount > 0 ? Math.round(salesTotalCents / orderCount) : 0,
+        avgTicketCents:
+          orderCount > 0 ? Math.round(salesTotalCents / orderCount) : 0,
       },
       trend: trendRows.map((row) => ({
         bucketStart: row.bucketStart,
@@ -1133,7 +1159,9 @@ export class PosService {
 
     lines.push('POS Sales Report');
     lines.push(`Period,${this.escapeCsvCell(report.range.period)}`);
-    lines.push(`StartAt,${this.escapeCsvCell(report.range.startAt.toISOString())}`);
+    lines.push(
+      `StartAt,${this.escapeCsvCell(report.range.startAt.toISOString())}`,
+    );
     lines.push(`EndAt,${this.escapeCsvCell(report.range.endAt.toISOString())}`);
     lines.push('');
 
@@ -1298,10 +1326,7 @@ export class PosService {
           businessId,
           customerId: order.customerId,
         },
-        orderBy: [
-          { isDefaultBilling: 'desc' },
-          { updatedAt: 'desc' },
-        ],
+        orderBy: [{ isDefaultBilling: 'desc' }, { updatedAt: 'desc' }],
         select: {
           id: true,
           title: true,
@@ -1318,8 +1343,11 @@ export class PosService {
       }),
     ]);
 
-    const settingsMap = new Map(settingsRows.map((row) => [row.key, row.value]));
-    const settingValue = (key: string) => this.settingToText(settingsMap.get(key));
+    const settingsMap = new Map(
+      settingsRows.map((row) => [row.key, row.value]),
+    );
+    const settingValue = (key: string) =>
+      this.settingToText(settingsMap.get(key));
     const companyName =
       settingValue('invoice.companyName') ??
       settingValue('invoice.companyTitle') ??
@@ -1431,7 +1459,10 @@ export class PosService {
         discountAmountCents: order.discountAmountCents,
         totalAmountCents: order.totalAmountCents,
         paidAmountCents,
-        remainingAmountCents: Math.max(order.totalAmountCents - paidAmountCents, 0),
+        remainingAmountCents: Math.max(
+          order.totalAmountCents - paidAmountCents,
+          0,
+        ),
       },
     };
   }
@@ -1482,7 +1513,9 @@ export class PosService {
       throw new ConflictException('Siparis zaten iade/iptal surecinde');
     }
 
-    const refundAmountCents = Number(payload.refundAmountCents ?? order.totalAmountCents);
+    const refundAmountCents = Number(
+      payload.refundAmountCents ?? order.totalAmountCents,
+    );
     if (!Number.isFinite(refundAmountCents) || refundAmountCents <= 0) {
       throw new BadRequestException('Iade tutari pozitif olmali');
     }
@@ -1500,7 +1533,9 @@ export class PosService {
     });
     const alreadyRefunded = Math.abs(refundedBefore._sum.amountCents ?? 0);
     if (alreadyRefunded + refundAmountCents > order.totalAmountCents) {
-      throw new BadRequestException('Toplam iade tutari siparis tutarini asamaz');
+      throw new BadRequestException(
+        'Toplam iade tutari siparis tutarini asamaz',
+      );
     }
 
     const targetStatusRows = await this.prisma.orderStatus.findMany({
@@ -1521,11 +1556,14 @@ export class PosService {
     const reason = payload.note?.trim() || null;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const items: Array<{ productId: number; variantId?: number | null; quantity: number }> =
-        await (tx as any).orderItem.findMany({
-          where: { businessId, orderId: order.id },
-          select: { productId: true, variantId: true, quantity: true },
-        });
+      const items: Array<{
+        productId: number;
+        variantId?: number | null;
+        quantity: number;
+      }> = await (tx as any).orderItem.findMany({
+        where: { businessId, orderId: order.id },
+        select: { productId: true, variantId: true, quantity: true },
+      });
 
       const aggregated = this.aggregateStockLines(items);
       for (const [variantId, quantity] of aggregated.byVariant.entries()) {
@@ -1626,9 +1664,12 @@ export class PosService {
     const businessId = Number(currentUser.businessId);
 
     const day = (date ?? '').trim();
-    const targetDate = day.length > 0 ? new Date(`${day}T00:00:00.000Z`) : new Date();
+    const targetDate =
+      day.length > 0 ? new Date(`${day}T00:00:00.000Z`) : new Date();
     if (Number.isNaN(targetDate.getTime())) {
-      throw new BadRequestException('Gecersiz tarih. YYYY-MM-DD formatini kullanin');
+      throw new BadRequestException(
+        'Gecersiz tarih. YYYY-MM-DD formatini kullanin',
+      );
     }
 
     const startAt = new Date(targetDate);
@@ -1876,7 +1917,7 @@ export class PosService {
         { description: { contains: q, mode: 'insensitive' } },
       ];
       if (qNumber) {
-        (productWhere.OR as Prisma.ProductWhereInput[]).push({ id: qNumber });
+        productWhere.OR.push({ id: qNumber });
       }
     }
 
@@ -1986,7 +2027,8 @@ export class PosService {
       if (row.name.toLowerCase().startsWith(queryLower)) return 1;
       if (row.sku?.toLowerCase().includes(queryLower)) return 2;
       if (row.name.toLowerCase().includes(queryLower)) return 3;
-      if (qNumber && (row.productId === qNumber || row.variantId === qNumber)) return 4;
+      if (qNumber && (row.productId === qNumber || row.variantId === qNumber))
+        return 4;
       return 10;
     };
 
@@ -2167,7 +2209,9 @@ export class PosService {
         },
         data: {
           name,
-          balance: Number.isFinite(balance) ? Math.max(Math.trunc(balance), 0) : 0,
+          balance: Number.isFinite(balance)
+            ? Math.max(Math.trunc(balance), 0)
+            : 0,
           deletedAt: null,
         },
         select: {
@@ -2186,7 +2230,9 @@ export class PosService {
           createdByUserId,
           name,
           phone,
-          balance: Number.isFinite(balance) ? Math.max(Math.trunc(balance), 0) : 0,
+          balance: Number.isFinite(balance)
+            ? Math.max(Math.trunc(balance), 0)
+            : 0,
         },
         select: {
           id: true,
@@ -2238,7 +2284,9 @@ export class PosService {
         amountCents: Number(line.amountCents),
         reference: line.reference?.trim() || null,
       }))
-      .filter((line) => Number.isFinite(line.amountCents) && line.amountCents > 0);
+      .filter(
+        (line) => Number.isFinite(line.amountCents) && line.amountCents > 0,
+      );
 
     if (paymentLines.length === 0) {
       throw new BadRequestException('En az bir odeme satiri gonderin');
@@ -2483,4 +2531,3 @@ export class PosService {
     };
   }
 }
-

@@ -3,42 +3,34 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import {
+  AlertTriangle,
+  ChevronDown,
+  Search,
+  ToggleLeft,
+  ToggleRight,
+} from 'lucide-react';
 
 import api from '@/services/api';
+import Spinner from '@/components/common/Spinner';
 
 type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER' | 'CUSTOMER';
-
-type UserRow = {
-  id: number;
-  name: string;
-  phone?: string;
-  role: UserRole;
-  isActive: boolean;
-};
+type UserRow = { id: number; name: string; phone?: string; role: UserRole; isActive: boolean; };
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
-  const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
-  const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
-  const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) {
-    return message.map(String).join(', ');
-  }
-  if (typeof message === 'string') return message;
+  const msg = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  if (Array.isArray(msg)) return msg.map(String).join(', ');
+  if (typeof msg === 'string') return msg;
   return fallback;
 };
 
 const roleLabel: Record<UserRole, string> = {
-  SUPER_ADMIN: 'Süper Admin',
-  ADMIN: 'Admin',
-  SELLER: 'Satıcı',
-  USER: 'Personel',
-  CUSTOMER: 'Müşteri',
+  SUPER_ADMIN: 'Süper Admin', ADMIN: 'Admin', SELLER: 'Satıcı', USER: 'Personel', CUSTOMER: 'Müşteri',
+};
+
+const roleDot: Record<UserRole, string> = {
+  SUPER_ADMIN: 'bg-red-500', ADMIN: 'bg-violet-500',
+  SELLER: 'bg-blue-500', USER: 'bg-amber-500', CUSTOMER: 'bg-gray-400',
 };
 
 const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
@@ -46,40 +38,34 @@ const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER', 'ADMIN', 'SUPER_ADMIN']
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
-  const {
-    data: users,
-    isLoading,
-    isError,
-  } = useQuery<UserRow[]>({
+  const { data: users, isLoading, isError } = useQuery<UserRow[]>({
     queryKey: ['admin-users'],
-    queryFn: async () => {
-      const res = await api.get<UserRow[]>('/users');
-      return res.data;
-    },
+    queryFn: async () => (await api.get<UserRow[]>('/users')).data,
   });
 
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (users ?? []).filter((u) => {
+      const matchSearch = !q || u.name.toLowerCase().includes(q) || (u.phone ?? '').includes(q);
+      const matchRole = !roleFilter || u.role === roleFilter;
+      return matchSearch && matchRole;
+    });
+  }, [users, search, roleFilter]);
+
   const updateActiveMutation = useMutation({
-    mutationFn: async (payload: { id: number; isActive: boolean }) => {
-      await api.patch(`/users/${payload.id}/active`, { isActive: payload.isActive });
-    },
+    mutationFn: async (p: { id: number; isActive: boolean }) =>
+      api.patch(`/users/${p.id}/active`, { isActive: p.isActive }),
     onMutate: async ({ id, isActive }) => {
       await queryClient.cancelQueries({ queryKey: ['admin-users'] });
       const prev = queryClient.getQueryData<UserRow[]>(['admin-users']);
-
-      if (prev) {
-        queryClient.setQueryData<UserRow[]>(['admin-users'],
-          prev.map((u) => (u.id === id ? { ...u, isActive } : u)),
-        );
-      }
-
+      if (prev) queryClient.setQueryData<UserRow[]>(['admin-users'], prev.map((u) => u.id === id ? { ...u, isActive } : u));
       return { prev };
     },
-    onError: (error: unknown, _payload, context) => {
-      if (context?.prev) {
-        queryClient.setQueryData(['admin-users'], context.prev);
-      }
-      toast.error(resolveApiErrorMessage(error, 'Durum güncellenemedi.'));
+    onError: (err: unknown, _p, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['admin-users'], ctx.prev);
+      toast.error(resolveApiErrorMessage(err, 'Durum güncellenemedi.'));
     },
     onSuccess: async () => {
       toast.success('Durum güncellendi.');
@@ -87,37 +73,18 @@ export default function AdminUsersPage() {
     },
   });
 
-  const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return users ?? [];
-    return (users ?? []).filter((u) => {
-      const name = (u.name ?? '').toLowerCase();
-      const phone = (u.phone ?? '').toLowerCase();
-      return name.includes(q) || phone.includes(q);
-    });
-  }, [users, search]);
-
   const updateRoleMutation = useMutation({
-    mutationFn: async (payload: { id: number; role: UserRole }) => {
-      await api.patch(`/users/${payload.id}/role`, { role: payload.role });
-    },
+    mutationFn: async (p: { id: number; role: UserRole }) =>
+      api.patch(`/users/${p.id}/role`, { role: p.role }),
     onMutate: async ({ id, role }) => {
       await queryClient.cancelQueries({ queryKey: ['admin-users'] });
       const prev = queryClient.getQueryData<UserRow[]>(['admin-users']);
-
-      if (prev) {
-        queryClient.setQueryData<UserRow[]>(['admin-users'],
-          prev.map((u) => (u.id === id ? { ...u, role } : u)),
-        );
-      }
-
+      if (prev) queryClient.setQueryData<UserRow[]>(['admin-users'], prev.map((u) => u.id === id ? { ...u, role } : u));
       return { prev };
     },
-    onError: (error: unknown, _payload, context) => {
-      if (context?.prev) {
-        queryClient.setQueryData(['admin-users'], context.prev);
-      }
-      toast.error(resolveApiErrorMessage(error, 'Rol güncellenemedi.'));
+    onError: (err: unknown, _p, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['admin-users'], ctx.prev);
+      toast.error(resolveApiErrorMessage(err, 'Rol güncellenemedi.'));
     },
     onSuccess: async () => {
       toast.success('Rol güncellendi.');
@@ -126,128 +93,129 @@ export default function AdminUsersPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <section className="border-b border-[var(--neutral-200)] pb-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Merkez
-            </p>
-            <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)] md:text-3xl lg:text-4xl">
-              Kullanıcılar
-            </h1>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">
-              Kayıtlı kullanıcıları görüntüleyin ve rollerini yönetin.
-            </p>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-8">
 
-      <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white">
-        <div className="flex flex-col gap-3 border-b border-[var(--neutral-200)] px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Liste
-            </p>
-            <p className="mt-1 text-sm text-[var(--neutral-600)]">
-              Toplam: <span className="font-semibold text-[var(--primary-800)]">{users?.length ?? 0}</span>
-            </p>
-          </div>
-          <div className="w-full md:max-w-xs">
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Kullanıcı Yönetimi</h1>
+        <p className="mt-1 text-sm text-[var(--neutral-600)]">Kayıtlı kullanıcıları görüntüleyin, rol ve durumlarını yönetin.</p>
+      </div>
+
+      {/* ── Toolbar ── */}
+      <div className="flex flex-col gap-3 border-b border-[var(--neutral-200)] pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-[var(--neutral-600)]">
+          <span className="font-semibold text-[var(--primary-800)]">{filteredUsers.length}</span> kullanıcı
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--neutral-400)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="İsim veya telefon ara"
-              className="w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-4 py-3 text-sm text-[var(--primary-900)] outline-none transition placeholder:text-[var(--neutral-500)] focus:border-[var(--primary-800)]/30"
+              placeholder="İsim veya telefon..."
+              className="h-8 w-48 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-8 pr-3 text-xs text-[var(--neutral-700)] outline-none focus:border-[var(--primary-800)]/40"
             />
           </div>
+          <div className="relative">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as UserRole | '')}
+              className="h-8 appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-3 pr-7 text-xs text-[var(--neutral-700)] outline-none focus:border-[var(--primary-800)]/40"
+            >
+              <option value="">Tüm roller</option>
+              {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--neutral-400)] pointer-events-none" />
+          </div>
         </div>
+      </div>
 
-        {isLoading && (
-          <div className="px-4 py-6 text-sm text-[var(--neutral-600)] md:px-6">
-            Kullanıcılar yükleniyor...
-          </div>
-        )}
+      {/* ── States ── */}
+      {isLoading && <Spinner label="Kullanıcılar yükleniyor..." />}
+      {isError && (
+        <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4" /> Kullanıcılar alınamadı.
+        </div>
+      )}
 
-        {isError && !isLoading && (
-          <div className="px-4 py-6 text-sm text-[var(--neutral-600)] md:px-6">
-            Kullanıcılar alınamadı.
-          </div>
-        )}
-
-        {!isLoading && !isError && (
-          <div className="divide-y divide-[var(--neutral-200)]">
-            {filteredUsers.length === 0 ? (
-              <div className="px-4 py-10 text-sm text-[var(--neutral-600)] md:px-6">
-                Sonuç bulunamadı.
-              </div>
-            ) : (
-              filteredUsers.map((u) => (
-                <div key={u.id} className="px-4 py-4 md:px-6">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--primary-800)]">
-                        {u.name}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--neutral-600)]">
-                        ID: {u.id}
-                        {u.phone ? ` • ${u.phone}` : ''}
-                        {' • '}
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                            u.isActive
-                              ? 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]/70'
-                              : 'border-[var(--neutral-200)] bg-[var(--neutral-50)] text-[var(--primary-800)]'
-                          }`}
-                        >
-                          {u.isActive ? 'aktif' : 'pasif'}
+      {/* ── Table ── */}
+      {!isLoading && !isError && (
+        filteredUsers.length === 0
+          ? <p className="py-10 text-center text-sm text-[var(--neutral-500)]">Kullanıcı bulunamadı.</p>
+          : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--neutral-200)]">
+                    {['Kullanıcı', 'Rol', 'Durum', ''].map((h) => (
+                      <th key={h} className={`pb-3 pr-6 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)] ${h === '' ? 'text-right' : ''}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--neutral-100)]">
+                  {filteredUsers.map((u) => (
+                    <tr key={u.id} className="transition-colors hover:bg-[var(--neutral-50)]">
+                      {/* Kullanıcı */}
+                      <td className="py-3 pr-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-7 w-7 rounded-full bg-[var(--neutral-100)] flex items-center justify-center flex-shrink-0">
+                            <span className="text-[11px] font-bold text-[var(--neutral-600)]">
+                              {u.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[var(--primary-800)]">{u.name}</p>
+                            <p className="text-[11px] text-[var(--neutral-500)]">#{u.id}{u.phone ? ` · ${u.phone}` : ''}</p>
+                          </div>
+                        </div>
+                      </td>
+                      {/* Rol */}
+                      <td className="py-3 pr-6">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-1.5 w-1.5 rounded-full ${roleDot[u.role]}`} />
+                          <span className="text-[12px] font-medium text-[var(--neutral-700)]">{roleLabel[u.role]}</span>
+                        </div>
+                      </td>
+                      {/* Durum */}
+                      <td className="py-3 pr-6">
+                        <span className={`text-[12px] font-medium ${u.isActive ? 'text-emerald-700' : 'text-[var(--neutral-500)]'}`}>
+                          {u.isActive ? 'Aktif' : 'Pasif'}
                         </span>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        disabled={updateActiveMutation.isPending}
-                        onClick={() =>
-                          updateActiveMutation.mutate({
-                            id: u.id,
-                            isActive: !u.isActive,
-                          })
-                        }
-                        className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)] disabled:opacity-60"
-                      >
-                        {u.isActive ? 'Pasife al' : 'Aktifleştir'}
-                      </button>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                        {roleLabel[u.role]}
-                      </div>
-                      <select
-                        value={u.role}
-                        disabled={updateRoleMutation.isPending}
-                        onChange={(e) =>
-                          updateRoleMutation.mutate({
-                            id: u.id,
-                            role: e.target.value as UserRole,
-                          })
-                        }
-                        className="h-10 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] outline-none transition focus:border-[var(--primary-800)]/30 disabled:opacity-60"
-                      >
-                        {roles.map((r) => (
-                          <option key={r} value={r}>
-                            {roleLabel[r]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </section>
+                      </td>
+                      {/* İşlemler */}
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="relative">
+                            <select
+                              value={u.role}
+                              disabled={updateRoleMutation.isPending}
+                              onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value as UserRole })}
+                              className="h-7 appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-2.5 pr-6 text-[11px] text-[var(--neutral-700)] outline-none hover:bg-[var(--neutral-50)] disabled:opacity-60"
+                            >
+                              {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-[var(--neutral-400)] pointer-events-none" />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={updateActiveMutation.isPending}
+                            onClick={() => updateActiveMutation.mutate({ id: u.id, isActive: !u.isActive })}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--neutral-600)] hover:text-[var(--primary-800)] disabled:opacity-60 transition"
+                          >
+                            {u.isActive
+                              ? <><ToggleRight className="h-4 w-4 text-emerald-500" />Pasife Al</>
+                              : <><ToggleLeft className="h-4 w-4 text-[var(--neutral-400)]" />Aktifleştir</>
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+      )}
     </div>
   );
 }
-

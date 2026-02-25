@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -16,8 +17,8 @@ describe('Auth & Users (e2e)', () => {
   let staffUser: { id: number; phone: string };
   let business: { id: number };
 
-  const RUN_ID = Date.now().toString();
-  const PHONE_BASE = RUN_ID.slice(-7);
+  const RUN_ID = `${Date.now()}-${process.pid}-${crypto.randomInt(1000, 9999)}`;
+  const PHONE_BASE = String(crypto.randomInt(1_000_000, 9_999_999));
   const ADMIN_PHONE = `+905${PHONE_BASE}01`;
   const STAFF_PHONE = `+905${PHONE_BASE}02`;
 

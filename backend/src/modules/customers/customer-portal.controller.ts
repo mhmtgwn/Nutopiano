@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  ParseIntPipe,
   Param,
   Patch,
   Post,
@@ -84,8 +85,11 @@ export class CustomerPortalController {
       'Returns an order detail only if it belongs to the authenticated customer.',
   })
   @ApiOkResponse({ description: 'Customer order detail payload.' })
-  async getOrder(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.ordersService.findOneCustomer(req.user, Number(id));
+  async getOrder(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.ordersService.findOneCustomer(req.user, id);
   }
 
   @Post('orders/:id/cancel')
@@ -96,8 +100,11 @@ export class CustomerPortalController {
       'Sets order status to CANCELLED if allowed and the order belongs to the authenticated customer.',
   })
   @ApiOkResponse({ description: 'Updated customer order detail payload.' })
-  async cancelOrder(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.ordersService.requestCancelCustomerOrder(req.user, Number(id));
+  async cancelOrder(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.ordersService.requestCancelCustomerOrder(req.user, id);
   }
 
   @Post('orders/:id/return')
@@ -110,12 +117,12 @@ export class CustomerPortalController {
   @ApiOkResponse({ description: 'Updated customer order detail payload.' })
   async returnOrder(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: CreateReturnRequestDto,
   ) {
     return this.ordersService.requestReturnCustomerOrder(
       req.user,
-      Number(id),
+      id,
       payload?.reason,
     );
   }
@@ -157,12 +164,12 @@ export class CustomerPortalController {
   @ApiOkResponse({ description: 'Updated address.' })
   async updateAddress(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateCustomerAddressDto,
   ) {
     return this.customersService.updateCustomerAddress(
       req.user,
-      Number(id),
+      id,
       payload,
     );
   }
@@ -177,9 +184,9 @@ export class CustomerPortalController {
   @ApiOkResponse({ description: 'Deleted address id.' })
   async deleteAddress(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.customersService.deleteCustomerAddress(req.user, Number(id));
+    return this.customersService.deleteCustomerAddress(req.user, id);
   }
 
   @Patch('addresses/:id/default')
@@ -192,12 +199,12 @@ export class CustomerPortalController {
   @ApiOkResponse({ description: 'Updated address.' })
   async setDefaultAddress(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: SetDefaultAddressDto,
   ) {
     return this.customersService.setDefaultCustomerAddress(
       req.user,
-      Number(id),
+      id,
       payload.type,
     );
   }
@@ -240,12 +247,9 @@ export class CustomerPortalController {
   @ApiOkResponse({ description: 'Removed product id.' })
   async removeFavorite(
     @Req() req: { user: JwtPayload },
-    @Param('productId') productId: string,
+    @Param('productId', ParseIntPipe) productId: number,
   ) {
-    return this.customersService.removeCustomerFavorite(
-      req.user,
-      Number(productId),
-    );
+    return this.customersService.removeCustomerFavorite(req.user, productId);
   }
 
   @Get('reviews')

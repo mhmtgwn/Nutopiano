@@ -128,9 +128,29 @@ const ORDER_CREATE_OPERATION = 'ORDER_CREATE';
 const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['IN_PROGRESS', 'PAID', 'COMPLETED', 'CANCELLED'],
-  CREATED: ['IN_PROGRESS', 'PAID', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
-  IN_PROGRESS: ['PAID', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
-  PAID: ['IN_PROGRESS', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURN_REQUESTED'],
+  CREATED: [
+    'IN_PROGRESS',
+    'PAID',
+    'COMPLETED',
+    'CANCELLED',
+    'RETURN_REQUESTED',
+  ],
+  IN_PROGRESS: [
+    'PAID',
+    'SHIPPED',
+    'DELIVERED',
+    'COMPLETED',
+    'CANCELLED',
+    'RETURN_REQUESTED',
+  ],
+  PAID: [
+    'IN_PROGRESS',
+    'SHIPPED',
+    'DELIVERED',
+    'COMPLETED',
+    'CANCELLED',
+    'RETURN_REQUESTED',
+  ],
   SHIPPED: ['DELIVERED', 'COMPLETED', 'RETURN_REQUESTED', 'CANCELLED'],
   DELIVERED: ['COMPLETED', 'RETURN_REQUESTED'],
   RETURN_REQUESTED: ['RETURNED', 'RETURN_REJECTED', 'CANCELLED', 'COMPLETED'],
@@ -143,7 +163,11 @@ type VariantRow = {
   stock: number | null;
   name: string;
 };
-type OrderItemStockLine = { productId: number; variantId?: number | null; quantity: number };
+type OrderItemStockLine = {
+  productId: number;
+  variantId?: number | null;
+  quantity: number;
+};
 type ResolvedOrderRuleConfig = {
   calculationProfileId: string;
   taxProfileCode: string;
@@ -326,7 +350,9 @@ export class OrdersService {
     return normalized;
   }
 
-  private mapOrderSourceToCommerceChannel(source: OrderSource): CommerceChannel {
+  private mapOrderSourceToCommerceChannel(
+    source: OrderSource,
+  ): CommerceChannel {
     if (source === OrderSource.POS) {
       return CommerceChannel.POS;
     }
@@ -348,11 +374,13 @@ export class OrdersService {
         role: String(currentUser.role),
       },
       customerId:
-        typeof payload.customerId === 'number' && Number.isFinite(payload.customerId)
+        typeof payload.customerId === 'number' &&
+        Number.isFinite(payload.customerId)
           ? Number(payload.customerId)
           : null,
       sellerId:
-        typeof payload.sellerId === 'number' && Number.isFinite(payload.sellerId)
+        typeof payload.sellerId === 'number' &&
+        Number.isFinite(payload.sellerId)
           ? Number(payload.sellerId)
           : null,
       source: payload.source ?? null,
@@ -462,9 +490,7 @@ export class OrdersService {
             type: 'PERCENT' as const,
             value: Math.max(
               Math.trunc(
-                Number(
-                  rule?.rateBps ?? params.fallbackCommissionRateBps ?? 0,
-                ),
+                Number(rule?.rateBps ?? params.fallbackCommissionRateBps ?? 0),
               ),
               0,
             ),
@@ -523,7 +549,10 @@ export class OrdersService {
     totalAmountCents: number,
   ): Promise<void> {
     try {
-      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      const recipient = await this.resolveOrderEmailRecipient(
+        businessId,
+        orderId,
+      );
       if (!recipient) return;
 
       await this.emailService.sendOrderCreatedEmail({
@@ -553,7 +582,10 @@ export class OrdersService {
     }
 
     try {
-      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      const recipient = await this.resolveOrderEmailRecipient(
+        businessId,
+        orderId,
+      );
       if (!recipient) return;
 
       await this.emailService.sendOrderStatusChangedEmail({
@@ -582,7 +614,10 @@ export class OrdersService {
     method: string,
   ): Promise<void> {
     try {
-      const recipient = await this.resolveOrderEmailRecipient(businessId, orderId);
+      const recipient = await this.resolveOrderEmailRecipient(
+        businessId,
+        orderId,
+      );
       if (!recipient) return;
 
       await this.emailService.sendOrderPaymentReceivedEmail({
@@ -710,7 +745,10 @@ export class OrdersService {
     createdByUserId: number,
     payload: CreateOrderDto,
   ): Promise<number> {
-    if (typeof payload.customerId === 'number' && Number.isFinite(payload.customerId)) {
+    if (
+      typeof payload.customerId === 'number' &&
+      Number.isFinite(payload.customerId)
+    ) {
       const customer = await this.prisma.customer.findFirst({
         where: { id: payload.customerId, businessId, deletedAt: null },
         select: { id: true },
@@ -722,7 +760,10 @@ export class OrdersService {
     }
 
     if (currentUser.role === 'CUSTOMER') {
-      const linkedCustomerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      const linkedCustomerId = await this.resolveCustomerIdForUser(
+        currentUser,
+        businessId,
+      );
       if (!linkedCustomerId) {
         throw new NotFoundException('Customer not found');
       }
@@ -866,7 +907,9 @@ export class OrdersService {
         throw new ForbiddenException('Seller profili bulunamadi');
       }
       if (requestedSellerId && requestedSellerId !== sellerId) {
-        throw new ForbiddenException('Sadece kendi seller kapsaminda siparis acabilirsiniz');
+        throw new ForbiddenException(
+          'Sadece kendi seller kapsaminda siparis acabilirsiniz',
+        );
       }
       return sellerId;
     }
@@ -878,7 +921,9 @@ export class OrdersService {
       }
       if (requestedSellerId) {
         if (!sellerIds.includes(requestedSellerId)) {
-          throw new ForbiddenException('Bu seller kapsaminda siparis acamazsiniz');
+          throw new ForbiddenException(
+            'Bu seller kapsaminda siparis acamazsiniz',
+          );
         }
         return requestedSellerId;
       }
@@ -906,7 +951,7 @@ export class OrdersService {
       return {
         businessId,
         sellerId: { in: sellerIds },
-        deletedAt: null as null,
+        deletedAt: null,
       };
     }
 
@@ -916,17 +961,17 @@ export class OrdersService {
         return {
           businessId,
           id: { in: [-1] },
-          deletedAt: null as null,
+          deletedAt: null,
         };
       }
       return {
         businessId,
         sellerId,
-        deletedAt: null as null,
+        deletedAt: null,
       };
     }
 
-    return { businessId, deletedAt: null as null };
+    return { businessId, deletedAt: null };
   }
 
   private async isGuestCustomer(businessId: number, customerId: number) {
@@ -947,7 +992,7 @@ export class OrdersService {
     customerId: number;
   }) {
     const [debitAggregate, creditAggregate] = await Promise.all([
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId: params.sellerId,
@@ -956,7 +1001,7 @@ export class OrdersService {
         },
         _sum: { amountCents: true },
       }),
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId: params.sellerId,
@@ -988,7 +1033,10 @@ export class OrdersService {
     amountCents: number;
     createdByUserId?: number;
   }) {
-    const normalizedAmount = Math.max(Math.trunc(Math.abs(params.amountCents)), 0);
+    const normalizedAmount = Math.max(
+      Math.trunc(Math.abs(params.amountCents)),
+      0,
+    );
     if (normalizedAmount <= 0) {
       return null;
     }
@@ -1004,7 +1052,7 @@ export class OrdersService {
         ? currentBalance + normalizedAmount
         : Math.max(currentBalance - normalizedAmount, 0);
 
-    return (params.tx as any).customerLedgerEntry.create({
+    return params.tx.customerLedgerEntry.create({
       data: {
         businessId: params.businessId,
         sellerId: params.sellerId,
@@ -1047,7 +1095,8 @@ export class OrdersService {
       (Object.values(OrderSource) as string[]).includes(sourceRaw);
 
     const requestedCustomerId =
-      typeof params?.customerId === 'number' && Number.isFinite(params.customerId)
+      typeof params?.customerId === 'number' &&
+      Number.isFinite(params.customerId)
         ? Math.trunc(params.customerId)
         : null;
     const requestedCreatedByUserId =
@@ -1087,7 +1136,10 @@ export class OrdersService {
         : undefined;
 
     if (currentUser.role === 'CUSTOMER') {
-      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      const customerId = await this.resolveCustomerIdForUser(
+        currentUser,
+        businessId,
+      );
       if (!customerId) {
         const meta = buildPaginationMeta(0, page, pageSize);
         return { data: [], meta };
@@ -1096,7 +1148,7 @@ export class OrdersService {
       const where: Prisma.OrderWhereInput = {
         businessId,
         customerId,
-        deletedAt: null as null,
+        deletedAt: null,
         ...(isValidSource ? { source: sourceRaw as OrderSource } : {}),
         ...(statusKeyRaw ? { status: { key: statusKeyRaw } } : {}),
         ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
@@ -1205,7 +1257,8 @@ export class OrdersService {
     const source = (params?.source ?? '').trim();
 
     const isValidSource =
-      source.length > 0 && (Object.values(OrderSource) as string[]).includes(source);
+      source.length > 0 &&
+      (Object.values(OrderSource) as string[]).includes(source);
 
     const where: {
       businessId: number;
@@ -1309,11 +1362,7 @@ export class OrdersService {
       if (source !== OrderSource.POS) {
         throw new ForbiddenException('USER sadece POS siparisi olusturabilir');
       }
-      await this.assertUserPermission(
-        currentUser,
-        'pos.sale.create',
-        sellerId,
-      );
+      await this.assertUserPermission(currentUser, 'pos.sale.create', sellerId);
     }
 
     const defaultStatusKey =
@@ -1334,11 +1383,9 @@ export class OrdersService {
       throw new NotFoundException('Default order status not configured');
     }
 
-    const commissionRate = await this.getCommissionRateForOrderCreate(businessId);
-    const commissionRateBps = Math.max(
-      0,
-      Math.round(commissionRate * 10_000),
-    );
+    const commissionRate =
+      await this.getCommissionRateForOrderCreate(businessId);
+    const commissionRateBps = Math.max(0, Math.round(commissionRate * 10_000));
     const resolvedRuleConfig = await this.resolveOrderRuleConfig({
       businessId,
       sellerId,
@@ -1360,7 +1407,8 @@ export class OrdersService {
         ? Math.floor(taxRateBpsRaw)
         : 0;
     const normalizedCouponCode =
-      typeof payload.couponCode === 'string' && payload.couponCode.trim().length > 0
+      typeof payload.couponCode === 'string' &&
+      payload.couponCode.trim().length > 0
         ? payload.couponCode.trim().toUpperCase()
         : null;
 
@@ -1420,7 +1468,9 @@ export class OrdersService {
       if (item.variantId) {
         const variant = variantMap.get(item.variantId);
         if (!variant || variant.productId !== item.productId) {
-          throw new NotFoundException(`Product variant not found: ${item.variantId}`);
+          throw new NotFoundException(
+            `Product variant not found: ${item.variantId}`,
+          );
         }
         if (
           variant.stock !== null &&
@@ -1458,11 +1508,18 @@ export class OrdersService {
           phone: true,
         },
       });
-      if (!creditCustomer || creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE) {
-        throw new BadRequestException('Veresiye satis icin musteri secimi zorunlu');
+      if (
+        !creditCustomer ||
+        creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE
+      ) {
+        throw new BadRequestException(
+          'Veresiye satis icin musteri secimi zorunlu',
+        );
       }
       if (typeof sellerId !== 'number') {
-        throw new BadRequestException('Veresiye satis icin seller kapsami zorunlu');
+        throw new BadRequestException(
+          'Veresiye satis icin seller kapsami zorunlu',
+        );
       }
     }
 
@@ -1485,18 +1542,18 @@ export class OrdersService {
 
     try {
       result = await this.prisma.$transaction(async (tx) => {
-      // Fetch products with row-level locking (SELECT ... FOR UPDATE NOWAIT)
-      // This prevents concurrent requests from reading stale stock values
-      const productsLocked = await tx.$queryRaw<
-        Array<{
-          id: number;
-          priceCents: number;
-          costPriceCents: number;
-          ownerSellerId: number | null;
-          stock: number | null;
-          name: string;
-        }>
-      >`
+        // Fetch products with row-level locking (SELECT ... FOR UPDATE NOWAIT)
+        // This prevents concurrent requests from reading stale stock values
+        const productsLocked = await tx.$queryRaw<
+          Array<{
+            id: number;
+            priceCents: number;
+            costPriceCents: number;
+            ownerSellerId: number | null;
+            stock: number | null;
+            name: string;
+          }>
+        >`
         SELECT id, "priceCents", "costPriceCents", "ownerSellerId", stock, name FROM "Product"
         WHERE "businessId" = ${businessId}
           AND id = ANY(${productIds}::int[])
@@ -1504,242 +1561,253 @@ export class OrdersService {
         FOR UPDATE NOWAIT
       `;
 
-      const productMapLocked = new Map(
-        productsLocked.map((p) => [p.id, p]),
-      );
-      const variantsLocked =
-        variantIds.length > 0
-          ? await tx.$queryRaw<
-              Array<{
-                id: number;
-                productId: number;
-                priceCents: number;
-                stock: number | null;
-                name: string;
-              }>
-            >`
+        const productMapLocked = new Map(productsLocked.map((p) => [p.id, p]));
+        const variantsLocked =
+          variantIds.length > 0
+            ? await tx.$queryRaw<
+                Array<{
+                  id: number;
+                  productId: number;
+                  priceCents: number;
+                  stock: number | null;
+                  name: string;
+                }>
+              >`
               SELECT id, "productId", "priceCents", stock, name FROM "ProductVariant"
               WHERE "businessId" = ${businessId}
                 AND id = ANY(${variantIds}::int[])
                 AND "isActive" = true
               FOR UPDATE NOWAIT
             `
-          : [];
-      const variantMapLocked = new Map(
-        variantsLocked.map((v) => [v.id, v]),
-      );
+            : [];
+        const variantMapLocked = new Map(variantsLocked.map((v) => [v.id, v]));
 
-      const priceMismatches: Array<{
-        productId: number;
-        variantId: number | null;
-        expectedUnitPriceCents: number;
-        actualUnitPriceCents: number;
-        deltaCents: number;
-      }> = [];
+        const priceMismatches: Array<{
+          productId: number;
+          variantId: number | null;
+          expectedUnitPriceCents: number;
+          actualUnitPriceCents: number;
+          deltaCents: number;
+        }> = [];
 
-      // Validate stock again inside transaction with locked rows
-      for (const item of payload.items) {
-        const product = productMapLocked.get(item.productId);
-        if (!product) {
-          throw new NotFoundException(`Product not found: ${item.productId}`);
-        }
-        if (
-          typeof sellerId === 'number' &&
-          Number(product.ownerSellerId ?? 0) !== sellerId
-        ) {
-          throw new NotFoundException(`Product not found: ${item.productId}`);
-        }
-
-        if (item.variantId) {
-          const variant = variantMapLocked.get(item.variantId);
-          if (!variant || variant.productId !== item.productId) {
-            throw new NotFoundException(`Product variant not found: ${item.variantId}`);
+        // Validate stock again inside transaction with locked rows
+        for (const item of payload.items) {
+          const product = productMapLocked.get(item.productId);
+          if (!product) {
+            throw new NotFoundException(`Product not found: ${item.productId}`);
           }
           if (
-            variant.stock !== null &&
-            variant.stock !== undefined &&
-            variant.stock < item.quantity
+            typeof sellerId === 'number' &&
+            Number(product.ownerSellerId ?? 0) !== sellerId
           ) {
-            throw new NotFoundException(
-              `Insufficient stock for variant "${variant.name}". Available: ${variant.stock}, Requested: ${item.quantity}`,
-            );
+            throw new NotFoundException(`Product not found: ${item.productId}`);
           }
-          if (
-            typeof item.expectedUnitPriceCents === 'number' &&
-            item.expectedUnitPriceCents !== variant.priceCents
-          ) {
-            if (source === OrderSource.POS) {
-              priceMismatches.push({
-                productId: item.productId,
-                variantId: variant.id,
-                expectedUnitPriceCents: item.expectedUnitPriceCents,
-                actualUnitPriceCents: variant.priceCents,
-                deltaCents: variant.priceCents - item.expectedUnitPriceCents,
-              });
-            } else {
-              throw new BadRequestException(
-                `Sepetteki fiyat güncellendi: "${product.name} / ${variant.name}". Lütfen sepeti yenileyin.`,
+
+          if (item.variantId) {
+            const variant = variantMapLocked.get(item.variantId);
+            if (!variant || variant.productId !== item.productId) {
+              throw new NotFoundException(
+                `Product variant not found: ${item.variantId}`,
               );
             }
-          }
-        } else {
-          if (
-            product.stock !== null &&
-            product.stock !== undefined &&
-            product.stock < item.quantity
-          ) {
-            throw new NotFoundException(
-              `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
-            );
-          }
-          if (
-            typeof item.expectedUnitPriceCents === 'number' &&
-            item.expectedUnitPriceCents !== product.priceCents
-          ) {
-            if (source === OrderSource.POS) {
-              priceMismatches.push({
-                productId: item.productId,
-                variantId: null,
-                expectedUnitPriceCents: item.expectedUnitPriceCents,
-                actualUnitPriceCents: product.priceCents,
-                deltaCents: product.priceCents - item.expectedUnitPriceCents,
-              });
-            } else {
-              throw new BadRequestException(
-                `Sepetteki fiyat güncellendi: "${product.name}". Lütfen sepeti yenileyin.`,
+            if (
+              variant.stock !== null &&
+              variant.stock !== undefined &&
+              variant.stock < item.quantity
+            ) {
+              throw new NotFoundException(
+                `Insufficient stock for variant "${variant.name}". Available: ${variant.stock}, Requested: ${item.quantity}`,
               );
+            }
+            if (
+              typeof item.expectedUnitPriceCents === 'number' &&
+              item.expectedUnitPriceCents !== variant.priceCents
+            ) {
+              if (source === OrderSource.POS) {
+                priceMismatches.push({
+                  productId: item.productId,
+                  variantId: variant.id,
+                  expectedUnitPriceCents: item.expectedUnitPriceCents,
+                  actualUnitPriceCents: variant.priceCents,
+                  deltaCents: variant.priceCents - item.expectedUnitPriceCents,
+                });
+              } else {
+                throw new BadRequestException(
+                  `Sepetteki fiyat güncellendi: "${product.name} / ${variant.name}". Lütfen sepeti yenileyin.`,
+                );
+              }
+            }
+          } else {
+            if (
+              product.stock !== null &&
+              product.stock !== undefined &&
+              product.stock < item.quantity
+            ) {
+              throw new NotFoundException(
+                `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
+              );
+            }
+            if (
+              typeof item.expectedUnitPriceCents === 'number' &&
+              item.expectedUnitPriceCents !== product.priceCents
+            ) {
+              if (source === OrderSource.POS) {
+                priceMismatches.push({
+                  productId: item.productId,
+                  variantId: null,
+                  expectedUnitPriceCents: item.expectedUnitPriceCents,
+                  actualUnitPriceCents: product.priceCents,
+                  deltaCents: product.priceCents - item.expectedUnitPriceCents,
+                });
+              } else {
+                throw new BadRequestException(
+                  `Sepetteki fiyat güncellendi: "${product.name}". Lütfen sepeti yenileyin.`,
+                );
+              }
             }
           }
         }
-      }
 
-      const hasPriceMismatch = priceMismatches.length > 0;
-      const priceMismatchMetaJson: Prisma.InputJsonValue | undefined =
-        hasPriceMismatch
-          ? ({
-              policy: 'ACCEPT_AND_FLAG',
-              channel: source,
-              items: priceMismatches,
-            } as Prisma.InputJsonValue)
-          : undefined;
-
-      let totalAmountCents = 0;
-      let subtotalAmountCents = 0;
-      let taxAmountCents = 0;
-      let lineDiscountAmountCents = 0;
-      const itemData: Array<{
-        businessId: number;
-        orderId?: number;
-        productId: number;
-        variantId?: number;
-        productName: string;
-        quantity: number;
-        unitPriceCents: number;
-        subtotalAmountCents: number;
-        taxAmountCents: number;
-        taxRateBps: number;
-        totalAmountCents: number;
-        costSnapshotCents: number;
-      }> = [];
-
-      for (const item of payload.items) {
-        const product = productMapLocked.get(item.productId);
-        if (!product) {
-          throw new NotFoundException(`Product not found: ${item.productId}`);
-        }
-        const variant =
-          typeof item.variantId === 'number'
-            ? variantMapLocked.get(item.variantId)
+        const hasPriceMismatch = priceMismatches.length > 0;
+        const priceMismatchMetaJson: Prisma.InputJsonValue | undefined =
+          hasPriceMismatch
+            ? ({
+                policy: 'ACCEPT_AND_FLAG',
+                channel: source,
+                items: priceMismatches,
+              } as Prisma.InputJsonValue)
             : undefined;
-        const unitPriceCents = variant ? variant.priceCents : product.priceCents;
-        const lineSubtotalRaw = unitPriceCents * item.quantity;
-        const requestedLineDiscount = Number(item.discountAmountCents ?? 0);
-        const lineDiscount = Math.min(
-          Math.max(requestedLineDiscount, 0),
-          lineSubtotalRaw,
+
+        let totalAmountCents = 0;
+        let subtotalAmountCents = 0;
+        let taxAmountCents = 0;
+        let lineDiscountAmountCents = 0;
+        const itemData: Array<{
+          businessId: number;
+          orderId?: number;
+          productId: number;
+          variantId?: number;
+          productName: string;
+          quantity: number;
+          unitPriceCents: number;
+          subtotalAmountCents: number;
+          taxAmountCents: number;
+          taxRateBps: number;
+          totalAmountCents: number;
+          costSnapshotCents: number;
+        }> = [];
+
+        for (const item of payload.items) {
+          const product = productMapLocked.get(item.productId);
+          if (!product) {
+            throw new NotFoundException(`Product not found: ${item.productId}`);
+          }
+          const variant =
+            typeof item.variantId === 'number'
+              ? variantMapLocked.get(item.variantId)
+              : undefined;
+          const unitPriceCents = variant
+            ? variant.priceCents
+            : product.priceCents;
+          const lineSubtotalRaw = unitPriceCents * item.quantity;
+          const requestedLineDiscount = Number(item.discountAmountCents ?? 0);
+          const lineDiscount = Math.min(
+            Math.max(requestedLineDiscount, 0),
+            lineSubtotalRaw,
+          );
+          const lineSubtotal = lineSubtotalRaw - lineDiscount;
+          const lineTax = Math.round((lineSubtotal * taxRateBps) / 10_000);
+          const lineTotal = lineSubtotal + lineTax;
+          subtotalAmountCents += lineSubtotal;
+          taxAmountCents += lineTax;
+          totalAmountCents += lineTotal;
+          lineDiscountAmountCents += lineDiscount;
+          itemData.push({
+            businessId,
+            productId: item.productId,
+            variantId: variant?.id,
+            productName: product.name,
+            quantity: item.quantity,
+            unitPriceCents,
+            subtotalAmountCents: lineSubtotal,
+            taxAmountCents: lineTax,
+            taxRateBps,
+            totalAmountCents: lineTotal,
+            costSnapshotCents: Math.max(
+              Math.trunc(Number(product.costPriceCents ?? 0)),
+              0,
+            ),
+          });
+        }
+
+        // Decrement stock in aggregated form to avoid N+1 update pressure.
+        const aggregated = this.aggregateStockLines(
+          payload.items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            quantity: i.quantity,
+          })),
         );
-        const lineSubtotal = lineSubtotalRaw - lineDiscount;
-        const lineTax = Math.round((lineSubtotal * taxRateBps) / 10_000);
-        const lineTotal = lineSubtotal + lineTax;
-        subtotalAmountCents += lineSubtotal;
-        taxAmountCents += lineTax;
-        totalAmountCents += lineTotal;
-        lineDiscountAmountCents += lineDiscount;
-        itemData.push({
-          businessId,
-          productId: item.productId,
-          variantId: variant?.id,
-          productName: product.name,
-          quantity: item.quantity,
-          unitPriceCents,
-          subtotalAmountCents: lineSubtotal,
-          taxAmountCents: lineTax,
-          taxRateBps,
-          totalAmountCents: lineTotal,
-          costSnapshotCents: Math.max(Math.trunc(Number(product.costPriceCents ?? 0)), 0),
-        });
-      }
 
-      // Decrement stock in aggregated form to avoid N+1 update pressure.
-      const aggregated = this.aggregateStockLines(
-        payload.items.map((i) => ({
-          productId: i.productId,
-          variantId: i.variantId,
-          quantity: i.quantity,
-        })),
-      );
-
-      for (const [variantId, quantity] of aggregated.byVariant.entries()) {
-        const variant = variantMapLocked.get(variantId);
-        if (variant && variant.stock !== null && variant.stock !== undefined) {
-          await (tx as any).productVariant.update({
-            where: { id: variantId },
-            data: { stock: { decrement: quantity } },
-          });
+        for (const [variantId, quantity] of aggregated.byVariant.entries()) {
+          const variant = variantMapLocked.get(variantId);
+          if (
+            variant &&
+            variant.stock !== null &&
+            variant.stock !== undefined
+          ) {
+            await (tx as any).productVariant.update({
+              where: { id: variantId },
+              data: { stock: { decrement: quantity } },
+            });
+          }
         }
-      }
 
-      for (const [productId, quantity] of aggregated.byProduct.entries()) {
-        const product = productMapLocked.get(productId);
-        if (product && product.stock !== null && product.stock !== undefined) {
-          await tx.product.update({
-            where: { id: productId },
-            data: { stock: { decrement: quantity } },
-          });
+        for (const [productId, quantity] of aggregated.byProduct.entries()) {
+          const product = productMapLocked.get(productId);
+          if (
+            product &&
+            product.stock !== null &&
+            product.stock !== undefined
+          ) {
+            await tx.product.update({
+              where: { id: productId },
+              data: { stock: { decrement: quantity } },
+            });
+          }
         }
-      }
 
-      let discountAmountCents = lineDiscountAmountCents;
-      const requestedCartDiscountAmount = Number(
-        payload.cartDiscountAmountCents ?? 0,
-      );
-      const cartDiscountAmountCents = Math.min(
-        Math.max(requestedCartDiscountAmount, 0),
-        totalAmountCents,
-      );
-      if (cartDiscountAmountCents > 0) {
-        discountAmountCents += cartDiscountAmountCents;
-        totalAmountCents -= cartDiscountAmountCents;
-      }
+        let discountAmountCents = lineDiscountAmountCents;
+        const requestedCartDiscountAmount = Number(
+          payload.cartDiscountAmountCents ?? 0,
+        );
+        const cartDiscountAmountCents = Math.min(
+          Math.max(requestedCartDiscountAmount, 0),
+          totalAmountCents,
+        );
+        if (cartDiscountAmountCents > 0) {
+          discountAmountCents += cartDiscountAmountCents;
+          totalAmountCents -= cartDiscountAmountCents;
+        }
 
-      let couponToConsume: { id: number; code: string } | null = null;
-      let couponDiscountAmountCents = 0;
-      if (normalizedCouponCode) {
-        const rows = await tx.$queryRaw<
-          Array<{
-            id: number;
-            code: string;
-            type: string;
-            value: number;
-            usageLimit: number | null;
-            usedCount: number;
-            minOrderAmountCents: number | null;
-            maxDiscountCents: number | null;
-            startsAt: Date | null;
-            endsAt: Date | null;
-            isActive: boolean;
-          }>
-        >`
+        let couponToConsume: { id: number; code: string } | null = null;
+        let couponDiscountAmountCents = 0;
+        if (normalizedCouponCode) {
+          const rows = await tx.$queryRaw<
+            Array<{
+              id: number;
+              code: string;
+              type: string;
+              value: number;
+              usageLimit: number | null;
+              usedCount: number;
+              minOrderAmountCents: number | null;
+              maxDiscountCents: number | null;
+              startsAt: Date | null;
+              endsAt: Date | null;
+              isActive: boolean;
+            }>
+          >`
           SELECT id, code, type, value, "usageLimit", "usedCount", "minOrderAmountCents", "maxDiscountCents", "startsAt", "endsAt", "isActive"
           FROM "Coupon"
           WHERE "businessId" = ${businessId}
@@ -1747,305 +1815,315 @@ export class OrdersService {
           FOR UPDATE NOWAIT
         `;
 
-        const coupon = rows[0];
-        if (!coupon || !coupon.isActive) {
-          throw new BadRequestException('Kupon geçersiz veya pasif.');
+          const coupon = rows[0];
+          if (!coupon || !coupon.isActive) {
+            throw new BadRequestException('Kupon geçersiz veya pasif.');
+          }
+
+          const now = new Date();
+          if (coupon.startsAt && now < new Date(coupon.startsAt)) {
+            throw new BadRequestException('Kupon henüz aktif değil.');
+          }
+          if (coupon.endsAt && now > new Date(coupon.endsAt)) {
+            throw new BadRequestException('Kupon süresi dolmuş.');
+          }
+          if (
+            coupon.usageLimit !== null &&
+            coupon.usageLimit !== undefined &&
+            coupon.usedCount >= coupon.usageLimit
+          ) {
+            throw new BadRequestException('Kupon kullanım limiti dolmuş.');
+          }
+          if (
+            coupon.minOrderAmountCents !== null &&
+            coupon.minOrderAmountCents !== undefined &&
+            subtotalAmountCents < coupon.minOrderAmountCents
+          ) {
+            throw new BadRequestException(
+              'Kupon minimum sepet tutarı sağlanmadı.',
+            );
+          }
+
+          if (String(coupon.type).toUpperCase() === 'PERCENT') {
+            couponDiscountAmountCents = Math.round(
+              (subtotalAmountCents * Number(coupon.value)) / 10_000,
+            );
+          } else {
+            couponDiscountAmountCents = Number(coupon.value);
+          }
+
+          if (
+            coupon.maxDiscountCents !== null &&
+            coupon.maxDiscountCents !== undefined &&
+            couponDiscountAmountCents > coupon.maxDiscountCents
+          ) {
+            couponDiscountAmountCents = coupon.maxDiscountCents;
+          }
+
+          if (couponDiscountAmountCents > totalAmountCents) {
+            couponDiscountAmountCents = totalAmountCents;
+          }
+          if (couponDiscountAmountCents < 0) {
+            couponDiscountAmountCents = 0;
+          }
+
+          discountAmountCents += couponDiscountAmountCents;
+          totalAmountCents -= couponDiscountAmountCents;
+          couponToConsume = { id: coupon.id, code: coupon.code };
         }
 
-        const now = new Date();
-        if (coupon.startsAt && now < new Date(coupon.startsAt)) {
-          throw new BadRequestException('Kupon henüz aktif değil.');
-        }
-        if (coupon.endsAt && now > new Date(coupon.endsAt)) {
-          throw new BadRequestException('Kupon süresi dolmuş.');
-        }
-        if (
-          coupon.usageLimit !== null &&
-          coupon.usageLimit !== undefined &&
-          coupon.usedCount >= coupon.usageLimit
-        ) {
-          throw new BadRequestException('Kupon kullanım limiti dolmuş.');
-        }
-        if (
-          coupon.minOrderAmountCents !== null &&
-          coupon.minOrderAmountCents !== undefined &&
-          subtotalAmountCents < coupon.minOrderAmountCents
-        ) {
-          throw new BadRequestException('Kupon minimum sepet tutarı sağlanmadı.');
-        }
-
-        if (String(coupon.type).toUpperCase() === 'PERCENT') {
-          couponDiscountAmountCents = Math.round(
-            (subtotalAmountCents * Number(coupon.value)) / 10_000,
-          );
-        } else {
-          couponDiscountAmountCents = Number(coupon.value);
-        }
-
-        if (
-          coupon.maxDiscountCents !== null &&
-          coupon.maxDiscountCents !== undefined &&
-          couponDiscountAmountCents > coupon.maxDiscountCents
-        ) {
-          couponDiscountAmountCents = coupon.maxDiscountCents;
-        }
-
-        if (couponDiscountAmountCents > totalAmountCents) {
-          couponDiscountAmountCents = totalAmountCents;
-        }
-        if (couponDiscountAmountCents < 0) {
-          couponDiscountAmountCents = 0;
-        }
-
-        discountAmountCents += couponDiscountAmountCents;
-        totalAmountCents -= couponDiscountAmountCents;
-        couponToConsume = { id: coupon.id, code: coupon.code };
-      }
-
-      const shippingCostCents = Math.max(
-        Math.trunc(Number(payload.shippingCostCents ?? 0)),
-        0,
-      );
-      const commissionSnapshotCents = Math.max(
-        0,
-        resolvedRuleConfig.commissionPolicy.type === 'FIXED'
-          ? Math.min(resolvedRuleConfig.commissionPolicy.value, totalAmountCents)
-          : Math.round(
-              (totalAmountCents * resolvedRuleConfig.commissionPolicy.value) /
-                10_000,
-            ),
-      );
-      const platformRevenueCents = commissionSnapshotCents;
-      const sellerPayoutCents = Math.max(
-        totalAmountCents - platformRevenueCents,
-        0,
-      );
-      const calculationSeed: CalculationVersionSeed = {
-        stepOrder: [
-          'pricing',
-          'discount',
-          'tax',
-          'commission',
-          'delivery',
-          'rounding',
-          'finalize',
-        ],
-        ruleProfileId: resolvedRuleConfig.calculationProfileId,
-        commissionRuleSnapshot: resolvedRuleConfig.commissionPolicy,
-        taxProfile: {
-          inclusive: false,
-          code: resolvedRuleConfig.taxProfileCode,
-          rates: [taxRateBps],
-        },
-        roundingPolicy: 'HALF_UP',
-        discountRules: {
-          lineDiscountTotalCents: lineDiscountAmountCents,
-          cartDiscountAmountCents,
-          couponDiscountAmountCents,
-          couponCode: couponToConsume?.code ?? null,
-        },
-      };
-      const calculationVersion = buildCalculationVersion(calculationSeed);
-      const breakdownJson = {
-        source: 'legacy-order-create',
-        pricing: {
-          subtotalAmountCents,
-          shippingCostCents,
-        },
-        discount: {
-          lineDiscountAmountCents,
-          cartDiscountAmountCents,
-          couponDiscountAmountCents,
-          discountAmountCents,
-        },
-        tax: {
-          taxRateBps,
-          taxAmountCents,
-        },
-        commission: {
-          policyType: resolvedRuleConfig.commissionPolicy.type,
-          policyValue: resolvedRuleConfig.commissionPolicy.value,
-          rate:
-            resolvedRuleConfig.commissionPolicy.type === 'PERCENT'
-              ? resolvedRuleConfig.commissionPolicy.value / 10_000
-              : null,
-          commissionSnapshotCents,
-        },
-        payout: {
-          platformRevenueCents,
-          sellerPayoutCents,
-        },
-        ruleResolution: {
-          source: resolvedRuleConfig.source,
-          calculationProfileId: resolvedRuleConfig.calculationProfileId,
-          commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
-          taxProfileCode: resolvedRuleConfig.taxProfileCode,
-        },
-        calculationVersionSeed: calculationSeed as unknown as Record<
-          string,
-          unknown
-        >,
-      };
-
-      const order = await (tx as any).order.create({
-        data: {
-          businessId,
-          customerId: resolvedCustomerId,
-          createdByUserId,
-          sellerId: sellerId ?? null,
-          statusId: status.id,
-          subtotalAmountCents,
-          taxAmountCents,
-          taxRateBps,
-          discountAmountCents,
-          couponCode: couponToConsume?.code ?? null,
-          totalAmountCents,
-          shippingCostCents,
-          commissionSnapshotCents,
-          platformRevenueCents,
-          sellerPayoutCents,
-          currency: 'TRY',
-          calculationProfileId: resolvedRuleConfig.calculationProfileId,
-          calculationVersion,
-          breakdownJson: breakdownJson as Prisma.InputJsonValue,
-          priceMismatch: hasPriceMismatch,
-          priceMismatchMetaJson,
-          countryCode: 'TR',
-          taxProfileCode: resolvedRuleConfig.taxProfileCode,
-          commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
-          source,
-          notes: payload.notes ?? null,
-          idempotencyKey: normalizedIdempotencyKey,
-          idempotencyOperation: normalizedIdempotencyKey
-            ? idempotencyOperation
-            : null,
-          idempotencyChannel: normalizedIdempotencyKey
-            ? idempotencyChannel
-            : null,
-          idempotencyHash,
-        },
-        select: {
-          id: true,
-          customerId: true,
-          totalAmountCents: true,
-          source: true,
-          createdByUserId: true,
-          createdAt: true,
-          notes: true,
-          shipmentCarrier: true,
-          shipmentTrackingNumber: true,
-          priceMismatch: true,
-        },
-      });
-
-      await (tx as any).orderItem.createMany({
-        data: itemData.map((i) => ({
-          businessId: i.businessId,
-          orderId: order.id,
-          productId: i.productId,
-          variantId: i.variantId,
-          productName: i.productName,
-          quantity: i.quantity,
-          unitPriceCents: i.unitPriceCents,
-          subtotalAmountCents: i.subtotalAmountCents,
-          taxAmountCents: i.taxAmountCents,
-          taxRateBps: i.taxRateBps,
-          totalAmountCents: i.totalAmountCents,
-          costSnapshotCents: i.costSnapshotCents,
-        })),
-      });
-
-      if (couponToConsume) {
-        await (tx as any).coupon.update({
-          where: { id: couponToConsume.id },
-          data: { usedCount: { increment: 1 } },
-        });
-      }
-
-      await this.ledgerPostingService.postOrderSaleSnapshot(
-        {
-          businessId,
-          orderId: order.id,
-          sellerId: sellerId ?? null,
-          currency: 'TRY',
-          totalAmountCents: order.totalAmountCents,
-          sellerPayoutCents,
-          platformRevenueCents,
-          metadata: {
-            source,
-            calculationVersion,
-            calculationProfileId: resolvedRuleConfig.calculationProfileId,
+        const shippingCostCents = Math.max(
+          Math.trunc(Number(payload.shippingCostCents ?? 0)),
+          0,
+        );
+        const commissionSnapshotCents = Math.max(
+          0,
+          resolvedRuleConfig.commissionPolicy.type === 'FIXED'
+            ? Math.min(
+                resolvedRuleConfig.commissionPolicy.value,
+                totalAmountCents,
+              )
+            : Math.round(
+                (totalAmountCents * resolvedRuleConfig.commissionPolicy.value) /
+                  10_000,
+              ),
+        );
+        const platformRevenueCents = commissionSnapshotCents;
+        const sellerPayoutCents = Math.max(
+          totalAmountCents - platformRevenueCents,
+          0,
+        );
+        const calculationSeed: CalculationVersionSeed = {
+          stepOrder: [
+            'pricing',
+            'discount',
+            'tax',
+            'commission',
+            'delivery',
+            'rounding',
+            'finalize',
+          ],
+          ruleProfileId: resolvedRuleConfig.calculationProfileId,
+          commissionRuleSnapshot: resolvedRuleConfig.commissionPolicy,
+          taxProfile: {
+            inclusive: false,
+            code: resolvedRuleConfig.taxProfileCode,
+            rates: [taxRateBps],
           },
-        },
-        tx,
-      );
+          roundingPolicy: 'HALF_UP',
+          discountRules: {
+            lineDiscountTotalCents: lineDiscountAmountCents,
+            cartDiscountAmountCents,
+            couponDiscountAmountCents,
+            couponCode: couponToConsume?.code ?? null,
+          },
+        };
+        const calculationVersion = buildCalculationVersion(calculationSeed);
+        const breakdownJson = {
+          source: 'legacy-order-create',
+          pricing: {
+            subtotalAmountCents,
+            shippingCostCents,
+          },
+          discount: {
+            lineDiscountAmountCents,
+            cartDiscountAmountCents,
+            couponDiscountAmountCents,
+            discountAmountCents,
+          },
+          tax: {
+            taxRateBps,
+            taxAmountCents,
+          },
+          commission: {
+            policyType: resolvedRuleConfig.commissionPolicy.type,
+            policyValue: resolvedRuleConfig.commissionPolicy.value,
+            rate:
+              resolvedRuleConfig.commissionPolicy.type === 'PERCENT'
+                ? resolvedRuleConfig.commissionPolicy.value / 10_000
+                : null,
+            commissionSnapshotCents,
+          },
+          payout: {
+            platformRevenueCents,
+            sellerPayoutCents,
+          },
+          ruleResolution: {
+            source: resolvedRuleConfig.source,
+            calculationProfileId: resolvedRuleConfig.calculationProfileId,
+            commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
+            taxProfileCode: resolvedRuleConfig.taxProfileCode,
+          },
+          calculationVersionSeed: calculationSeed as unknown as Record<
+            string,
+            unknown
+          >,
+        };
 
-      let creditLimitWarned = false;
-      if (isCreditPosSale && typeof sellerId === 'number') {
-        const creditCustomer = await tx.customer.findFirst({
-          where: {
-            id: resolvedCustomerId,
+        const order = await (tx as any).order.create({
+          data: {
             businessId,
-            deletedAt: null,
+            customerId: resolvedCustomerId,
+            createdByUserId,
+            sellerId: sellerId ?? null,
+            statusId: status.id,
+            subtotalAmountCents,
+            taxAmountCents,
+            taxRateBps,
+            discountAmountCents,
+            couponCode: couponToConsume?.code ?? null,
+            totalAmountCents,
+            shippingCostCents,
+            commissionSnapshotCents,
+            platformRevenueCents,
+            sellerPayoutCents,
+            currency: 'TRY',
+            calculationProfileId: resolvedRuleConfig.calculationProfileId,
+            calculationVersion,
+            breakdownJson: breakdownJson as Prisma.InputJsonValue,
+            priceMismatch: hasPriceMismatch,
+            priceMismatchMetaJson,
+            countryCode: 'TR',
+            taxProfileCode: resolvedRuleConfig.taxProfileCode,
+            commissionProfileCode: resolvedRuleConfig.commissionProfileCode,
+            source,
+            notes: payload.notes ?? null,
+            idempotencyKey: normalizedIdempotencyKey,
+            idempotencyOperation: normalizedIdempotencyKey
+              ? idempotencyOperation
+              : null,
+            idempotencyChannel: normalizedIdempotencyKey
+              ? idempotencyChannel
+              : null,
+            idempotencyHash,
           },
           select: {
             id: true,
-            phone: true,
-            creditLimitCents: true,
-            creditBlockPolicy: true,
+            customerId: true,
+            totalAmountCents: true,
+            source: true,
+            createdByUserId: true,
+            createdAt: true,
+            notes: true,
+            shipmentCarrier: true,
+            shipmentTrackingNumber: true,
+            priceMismatch: true,
           },
         });
-        if (!creditCustomer || creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE) {
-          throw new BadRequestException('Veresiye satis icin musteri secimi zorunlu');
+
+        await (tx as any).orderItem.createMany({
+          data: itemData.map((i) => ({
+            businessId: i.businessId,
+            orderId: order.id,
+            productId: i.productId,
+            variantId: i.variantId,
+            productName: i.productName,
+            quantity: i.quantity,
+            unitPriceCents: i.unitPriceCents,
+            subtotalAmountCents: i.subtotalAmountCents,
+            taxAmountCents: i.taxAmountCents,
+            taxRateBps: i.taxRateBps,
+            totalAmountCents: i.totalAmountCents,
+            costSnapshotCents: i.costSnapshotCents,
+          })),
+        });
+
+        if (couponToConsume) {
+          await (tx as any).coupon.update({
+            where: { id: couponToConsume.id },
+            data: { usedCount: { increment: 1 } },
+          });
         }
 
-        const currentDebt = await this.getCustomerDebtCents({
+        await this.ledgerPostingService.postOrderSaleSnapshot(
+          {
+            businessId,
+            orderId: order.id,
+            sellerId: sellerId ?? null,
+            currency: 'TRY',
+            totalAmountCents: order.totalAmountCents,
+            sellerPayoutCents,
+            platformRevenueCents,
+            metadata: {
+              source,
+              calculationVersion,
+              calculationProfileId: resolvedRuleConfig.calculationProfileId,
+            },
+          },
           tx,
-          businessId,
-          sellerId,
-          customerId: resolvedCustomerId,
-        });
-        const projectedDebt = currentDebt + totalAmountCents;
-        if (
-          typeof creditCustomer.creditLimitCents === 'number' &&
-          creditCustomer.creditLimitCents >= 0 &&
-          projectedDebt > creditCustomer.creditLimitCents
-        ) {
+        );
+
+        let creditLimitWarned = false;
+        if (isCreditPosSale && typeof sellerId === 'number') {
+          const creditCustomer = await tx.customer.findFirst({
+            where: {
+              id: resolvedCustomerId,
+              businessId,
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              phone: true,
+              creditLimitCents: true,
+              creditBlockPolicy: true,
+            },
+          });
           if (
-            creditCustomer.creditBlockPolicy === 'WARN' ||
-            creditCustomer.creditBlockPolicy === 'BLOCK'
+            !creditCustomer ||
+            creditCustomer.phone === POS_GUEST_CUSTOMER_PHONE
           ) {
-            creditLimitWarned = true;
+            throw new BadRequestException(
+              'Veresiye satis icin musteri secimi zorunlu',
+            );
+          }
+
+          const currentDebt = await this.getCustomerDebtCents({
+            tx,
+            businessId,
+            sellerId,
+            customerId: resolvedCustomerId,
+          });
+          const projectedDebt = currentDebt + totalAmountCents;
+          if (
+            typeof creditCustomer.creditLimitCents === 'number' &&
+            creditCustomer.creditLimitCents >= 0 &&
+            projectedDebt > creditCustomer.creditLimitCents
+          ) {
+            if (
+              creditCustomer.creditBlockPolicy === 'WARN' ||
+              creditCustomer.creditBlockPolicy === 'BLOCK'
+            ) {
+              creditLimitWarned = true;
+            }
           }
         }
-      }
 
-      const items = await (tx as any).orderItem.findMany({
-        where: { businessId, orderId: order.id },
-        select: {
-          id: true,
-          productId: true,
-          variantId: true,
-          productName: true,
-          quantity: true,
-          unitPriceCents: true,
-          totalAmountCents: true,
-        },
-      });
-
-      if (isCreditPosSale && typeof sellerId === 'number') {
-        await this.createCustomerLedgerEntry({
-          tx,
-          businessId,
-          sellerId,
-          customerId: resolvedCustomerId,
-          orderId: order.id,
-          type: 'DEBIT',
-          sourceType: 'SALE_DEBIT',
-          amountCents: order.totalAmountCents,
-          createdByUserId,
+        const items = await (tx as any).orderItem.findMany({
+          where: { businessId, orderId: order.id },
+          select: {
+            id: true,
+            productId: true,
+            variantId: true,
+            productName: true,
+            quantity: true,
+            unitPriceCents: true,
+            totalAmountCents: true,
+          },
         });
-      }
+
+        if (isCreditPosSale && typeof sellerId === 'number') {
+          await this.createCustomerLedgerEntry({
+            tx,
+            businessId,
+            sellerId,
+            customerId: resolvedCustomerId,
+            orderId: order.id,
+            type: 'DEBIT',
+            sourceType: 'SALE_DEBIT',
+            amountCents: order.totalAmountCents,
+            createdByUserId,
+          });
+        }
 
         return { order, items, creditLimitWarned };
       });
@@ -2126,7 +2204,10 @@ export class OrdersService {
       },
     });
 
-    const hydratedOrder = await this.findOne(currentUser, createdOrderDetail.id);
+    const hydratedOrder = await this.findOne(
+      currentUser,
+      createdOrderDetail.id,
+    );
     hydratedOrder.creditLimitWarned = Boolean(result.creditLimitWarned);
     return hydratedOrder;
   }
@@ -2135,7 +2216,10 @@ export class OrdersService {
     const businessId = this.requireBusinessId(currentUser);
 
     if (currentUser.role === 'CUSTOMER') {
-      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      const customerId = await this.resolveCustomerIdForUser(
+        currentUser,
+        businessId,
+      );
       if (!customerId) {
         return [];
       }
@@ -2223,7 +2307,10 @@ export class OrdersService {
 
     if (currentUser.role === 'USER') {
       const sellerIds = await this.resolveUserTeamSellerIds(businessId, userId);
-      if (!sellerIds.length || !sellerIds.includes(Number(order.sellerId ?? 0))) {
+      if (
+        !sellerIds.length ||
+        !sellerIds.includes(Number(order.sellerId ?? 0))
+      ) {
         throw new ForbiddenException('Access denied');
       }
       await this.assertUserPermission(
@@ -2241,7 +2328,10 @@ export class OrdersService {
     }
 
     if (currentUser.role === 'CUSTOMER') {
-      const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
+      const customerId = await this.resolveCustomerIdForUser(
+        currentUser,
+        businessId,
+      );
       if (!customerId || order.customerId !== customerId) {
         throw new ForbiddenException('Access denied');
       }
@@ -2354,7 +2444,9 @@ export class OrdersService {
     });
 
     if (existing && String(existing.status).toUpperCase() === 'PENDING') {
-      throw new BadRequestException('Bu sipariş için aktif iade talebi zaten var.');
+      throw new BadRequestException(
+        'Bu sipariş için aktif iade talebi zaten var.',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -2530,11 +2622,14 @@ export class OrdersService {
 
     const resolved = await this.prisma.$transaction(async (tx) => {
       if (isApprove) {
-        const items: Array<{ productId: number; variantId?: number | null; quantity: number }> =
-          await (tx as any).orderItem.findMany({
-            where: { orderId: request.orderId },
-            select: { productId: true, variantId: true, quantity: true },
-          });
+        const items: Array<{
+          productId: number;
+          variantId?: number | null;
+          quantity: number;
+        }> = await (tx as any).orderItem.findMany({
+          where: { orderId: request.orderId },
+          select: { productId: true, variantId: true, quantity: true },
+        });
 
         const aggregated = this.aggregateStockLines(items);
         for (const [variantId, quantity] of aggregated.byVariant.entries()) {
@@ -2551,7 +2646,9 @@ export class OrdersService {
         }
 
         if (typeof request.order?.sellerId === 'number') {
-          const debitAggregate = await (tx as any).customerLedgerEntry.aggregate({
+          const debitAggregate = await (
+            tx as any
+          ).customerLedgerEntry.aggregate({
             where: {
               businessId,
               sellerId: request.order.sellerId,
@@ -2560,7 +2657,9 @@ export class OrdersService {
             },
             _sum: { amountCents: true },
           });
-          const creditAggregate = await (tx as any).customerLedgerEntry.aggregate({
+          const creditAggregate = await (
+            tx as any
+          ).customerLedgerEntry.aggregate({
             where: {
               businessId,
               sellerId: request.order.sellerId,
@@ -2710,7 +2809,8 @@ export class OrdersService {
       priceMismatchMetaJson: order.priceMismatchMetaJson ?? undefined,
       notes: order.notes ?? undefined,
       shipmentCarrier: (order as any).shipmentCarrier ?? undefined,
-      shipmentTrackingNumber: (order as any).shipmentTrackingNumber ?? undefined,
+      shipmentTrackingNumber:
+        (order as any).shipmentTrackingNumber ?? undefined,
       items,
       ledgerEntries,
       auditLogs,
@@ -2817,7 +2917,8 @@ export class OrdersService {
       });
     }
 
-    const isCancellingNow = newStatusKey && this.isCancelledStatus(newStatusKey);
+    const isCancellingNow =
+      newStatusKey && this.isCancelledStatus(newStatusKey);
 
     // Use transaction to ensure stock restoration is atomic with status update
     const result = await this.prisma.$transaction(async (tx) => {
@@ -2831,8 +2932,11 @@ export class OrdersService {
 
       // Restore stock if transitioning to cancelled status (and wasn't already cancelled)
       if (isCancellingNow && !wasCancelled) {
-        const items: Array<{ productId: number; variantId?: number | null; quantity: number }> =
-          await (tx as any).orderItem.findMany({
+        const items: Array<{
+          productId: number;
+          variantId?: number | null;
+          quantity: number;
+        }> = await (tx as any).orderItem.findMany({
           where: { orderId: updated.id },
           select: { productId: true, variantId: true, quantity: true },
         });
@@ -2852,7 +2956,9 @@ export class OrdersService {
         }
 
         if (typeof updated.sellerId === 'number') {
-          const debitAggregate = await (tx as any).customerLedgerEntry.aggregate({
+          const debitAggregate = await (
+            tx as any
+          ).customerLedgerEntry.aggregate({
             where: {
               businessId: updated.businessId,
               sellerId: updated.sellerId,
@@ -2861,7 +2967,9 @@ export class OrdersService {
             },
             _sum: { amountCents: true },
           });
-          const creditAggregate = await (tx as any).customerLedgerEntry.aggregate({
+          const creditAggregate = await (
+            tx as any
+          ).customerLedgerEntry.aggregate({
             where: {
               businessId: updated.businessId,
               sellerId: updated.sellerId,
@@ -3020,15 +3128,17 @@ export class OrdersService {
       });
       const totalDebit = Number(debitAggregate._sum.amountCents ?? 0);
       if (totalDebit > 0) {
-        const creditAggregate = await this.prisma.customerLedgerEntry.aggregate({
-          where: {
-            businessId: order.businessId,
-            orderId: order.id,
-            sellerId: order.sellerId,
-            type: 'CREDIT',
+        const creditAggregate = await this.prisma.customerLedgerEntry.aggregate(
+          {
+            where: {
+              businessId: order.businessId,
+              orderId: order.id,
+              sellerId: order.sellerId,
+              type: 'CREDIT',
+            },
+            _sum: { amountCents: true },
           },
-          _sum: { amountCents: true },
-        });
+        );
         const totalCredit = Number(creditAggregate._sum.amountCents ?? 0);
         const remainingDebt = Math.max(totalDebit - totalCredit, 0);
         const creditAmount = Math.min(remainingDebt, payment.amountCents);
@@ -3042,7 +3152,9 @@ export class OrdersService {
             type: 'CREDIT',
             sourceType: 'PAYMENT_CREDIT',
             amountCents: creditAmount,
-            createdByUserId: Number.isFinite(actorUserId) ? actorUserId : undefined,
+            createdByUserId: Number.isFinite(actorUserId)
+              ? actorUserId
+              : undefined,
           });
         }
       }
@@ -3082,4 +3194,3 @@ export class OrdersService {
     return paymentSummary;
   }
 }
-

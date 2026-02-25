@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -87,8 +83,9 @@ export class PrismaService
                 : null;
 
             const delegate =
-              delegateKey && Object.prototype.hasOwnProperty.call(this, delegateKey)
-                ? (this as any)[delegateKey]
+              delegateKey &&
+              Object.prototype.hasOwnProperty.call(this, delegateKey)
+                ? this[delegateKey]
                 : null;
 
             if (!Number.isFinite(businessId) || !model) {
@@ -201,10 +198,7 @@ export class PrismaService
               }
             }
 
-            if (
-              operation === 'createMany' &&
-              Array.isArray(args?.data)
-            ) {
+            if (operation === 'createMany' && Array.isArray(args?.data)) {
               for (const row of args.data) {
                 if (row && typeof row === 'object' && !('businessId' in row)) {
                   row.businessId = businessId;

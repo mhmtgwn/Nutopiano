@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  ParseIntPipe,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -72,14 +82,10 @@ export class PlatformOrdersController {
   @ApiOkResponse({ description: 'Resolved return request.' })
   resolvePlatformReturnRequest(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: ResolveReturnRequestDto,
   ) {
-    return this.ordersService.resolveReturnRequest(
-      req.user,
-      Number(id),
-      payload,
-    );
+    return this.ordersService.resolveReturnRequest(req.user, id, payload);
   }
 }
 

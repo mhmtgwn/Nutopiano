@@ -1200,29 +1200,8 @@ export default function PosPage() {
     return 'border-[#D8DED8] bg-white text-[#1A3C34]';
   }, [queueCount]);
 
-  if (isCheckingAccess && !user) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            Yetki kontrol ediliyor...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user || !isPosRoleAllowed(user.role)) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            Yönlendiriliyor...
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isCheckingAccessView = isCheckingAccess && !user;
+  const isUnauthorizedView = !isCheckingAccessView && (!user || !isPosRoleAllowed(user.role));
   const parsedQuantityInput = Number(quantity);
   const parsedUnitPriceInput = Number(unitPriceCents);
   const parsedItemDiscountInput = Number(itemDiscountCents);
@@ -2160,6 +2139,30 @@ export default function PosPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (isCheckingAccessView) {
+    return (
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+            Yetki kontrol ediliyor...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isUnauthorizedView) {
+    return (
+      <div className="min-h-[calc(100vh-140px)] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+            Yönlendiriliyor...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-[1380px] flex-col gap-5 px-3 py-5 md:px-6 md:py-8">

@@ -38,7 +38,7 @@ export class AuditService {
         actionType: input.actionType,
         targetType: String(input.targetType),
         targetId: String(input.targetId),
-        payloadJson: (input.payloadJson ?? {}) as Prisma.InputJsonValue,
+        payloadJson: input.payloadJson ?? {},
       },
       select: {
         id: true,

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  ParseIntPipe,
   Param,
   Patch,
   Post,
@@ -95,8 +96,11 @@ export class CustomersController {
     description:
       'Customer with the given id does not exist in the current business.',
   })
-  findOne(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.customersService.findOne(req.user, Number(id));
+  findOne(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.customersService.findOne(req.user, id);
   }
 
   @Patch(':id')
@@ -116,10 +120,10 @@ export class CustomersController {
   })
   update(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateCustomerDto,
   ) {
-    return this.customersService.update(req.user, Number(id), payload);
+    return this.customersService.update(req.user, id, payload);
   }
 
   @Delete(':id')
@@ -137,8 +141,11 @@ export class CustomersController {
     description:
       'Customer with the given id does not exist in the current business.',
   })
-  remove(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.customersService.remove(req.user, Number(id));
+  remove(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.customersService.remove(req.user, id);
   }
 
   @Get('me')

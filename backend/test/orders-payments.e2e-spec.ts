@@ -425,6 +425,7 @@ describe('Orders & Payments (e2e)', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           customerId: customer1.id,
+          source: 'WEB',
           items: [
             {
               productId: product1.id,

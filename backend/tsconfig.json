@@ -32,8 +32,6 @@
     "dist",
     "test",
     "generated",
-    "prisma.config.ts",
-    "src/modules/payments/payments-webhook-queue.service.ts",
-    "src/modules/payments/payments-webhook.processor.ts"
+    "prisma.config.ts"
   ]
 }

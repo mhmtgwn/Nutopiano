@@ -21,7 +21,8 @@ export class PaymentsProcessorService {
   }
 
   private safePayloadKeys(payload: unknown): string[] {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+      return [];
     return Object.keys(payload as Record<string, unknown>).slice(0, 40);
   }
 
@@ -42,7 +43,11 @@ export class PaymentsProcessorService {
 
       if (typeof value === 'object') {
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          if (needle.has(k.toLowerCase()) && typeof v === 'string' && v.trim()) {
+          if (
+            needle.has(k.toLowerCase()) &&
+            typeof v === 'string' &&
+            v.trim()
+          ) {
             return v.trim();
           }
           const nested = visit(v);
@@ -88,7 +93,9 @@ export class PaymentsProcessorService {
     return visit(obj);
   }
 
-  private async processEvent(ev: WebhookEventRecord): Promise<'processed' | 'skipped' | 'failed'> {
+  private async processEvent(
+    ev: WebhookEventRecord,
+  ): Promise<'processed' | 'skipped' | 'failed'> {
     // Idempotent claim: if another worker already processed it, updateMany count will be 0.
     const claimed = await (this.prisma as any).paymentWebhookEvent.updateMany({
       where: {
@@ -110,7 +117,7 @@ export class PaymentsProcessorService {
       // Best-effort event processing.
       // If we can find token/paymentId we will bind to PaymentSession and create Payment.
       if (String(ev.provider).toUpperCase() === 'IYZICO') {
-        const payload = ev.payload as unknown;
+        const payload = ev.payload;
         const debug = this.isDevDebugEnabled();
 
         const token = this.findFirstString(payload, [
@@ -120,14 +127,21 @@ export class PaymentsProcessorService {
           'checkoutformtoken',
         ]);
 
-        const paymentId = this.findFirstString(payload, ['paymentId', 'paymentid']);
+        const paymentId = this.findFirstString(payload, [
+          'paymentId',
+          'paymentid',
+        ]);
         const paymentStatus = this.findFirstString(payload, [
           'paymentStatus',
           'status',
           'result',
         ]);
 
-        const paidPrice = this.findFirstNumber(payload, ['paidPrice', 'paidprice', 'price']);
+        const paidPrice = this.findFirstNumber(payload, [
+          'paidPrice',
+          'paidprice',
+          'price',
+        ]);
 
         if (debug && !token) {
           this.logger.debug(

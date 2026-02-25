@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  ParseIntPipe,
   Param,
   Patch,
   Post,
@@ -128,8 +129,11 @@ export class OrdersController {
     description:
       'Order with the given id does not exist in the current business.',
   })
-  findOne(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.ordersService.findOne(req.user, Number(id));
+  findOne(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.ordersService.findOne(req.user, id);
   }
 
   @Patch(':id')
@@ -149,10 +153,10 @@ export class OrdersController {
   })
   update(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateOrderDto,
   ) {
-    return this.ordersService.update(req.user, Number(id), payload);
+    return this.ordersService.update(req.user, id, payload);
   }
 
   @Get(':id/payments')
@@ -174,8 +178,11 @@ export class OrdersController {
     description:
       'Order with the given id does not exist in the current business.',
   })
-  listPayments(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.ordersService.listPayments(req.user, Number(id));
+  listPayments(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.ordersService.listPayments(req.user, id);
   }
 
   @Post(':id/payments')
@@ -196,10 +203,10 @@ export class OrdersController {
   })
   addPayment(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: CreatePaymentDto,
   ) {
-    return this.ordersService.addPayment(req.user, Number(id), payload);
+    return this.ordersService.addPayment(req.user, id, payload);
   }
 }
 

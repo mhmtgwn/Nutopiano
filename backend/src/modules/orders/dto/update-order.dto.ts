@@ -17,7 +17,7 @@ export class UpdateOrderDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
-  @Matches(/^[A-Za-z0-9\-_.\/]+$/, {
+  @Matches(/^[A-Za-z0-9\-_./]+$/, {
     message: 'Geçersiz takip numarası formatı',
   })
   shipmentTrackingNumber?: string;

@@ -52,8 +52,8 @@ export class DashboardService {
 
     const orderScopeWhere =
       currentUser.role === 'USER'
-        ? { businessId, createdByUserId: userId, deletedAt: null as null }
-        : { businessId, deletedAt: null as null };
+        ? { businessId, createdByUserId: userId, deletedAt: null }
+        : { businessId, deletedAt: null };
 
     const [
       activeProducts,
@@ -129,8 +129,8 @@ export class DashboardService {
 
     const orderScopeWhere =
       currentUser.role === 'USER'
-        ? { businessId, createdByUserId: userId, deletedAt: null as null }
-        : { businessId, deletedAt: null as null };
+        ? { businessId, createdByUserId: userId, deletedAt: null }
+        : { businessId, deletedAt: null };
 
     const ordersWhere = {
       ...orderScopeWhere,
@@ -197,4 +197,3 @@ export class DashboardService {
     };
   }
 }
-

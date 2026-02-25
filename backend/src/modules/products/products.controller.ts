@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  ParseIntPipe,
   Param,
   Patch,
   Post,
@@ -173,8 +174,8 @@ export class ProductsController {
   @ApiNotFoundResponse({
     description: 'Product with the given id does not exist.',
   })
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOnePublic(Number(id));
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findOnePublic(id);
   }
 
   @Get(':id/reviews')
@@ -184,8 +185,8 @@ export class ProductsController {
       'Public endpoint to list reviews for a product in the default business.',
   })
   @ApiOkResponse({ description: 'Array of product reviews.' })
-  listReviews(@Param('id') id: string) {
-    return this.productsService.listReviewsPublic(Number(id));
+  listReviews(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.listReviewsPublic(id);
   }
 
   @Get(':id/variants')
@@ -194,8 +195,8 @@ export class ProductsController {
     description: 'Public endpoint to list active variants for a product.',
   })
   @ApiOkResponse({ description: 'Array of active product variants.' })
-  listVariantsPublic(@Param('id') id: string) {
-    return this.productsService.listVariantsPublic(Number(id));
+  listVariantsPublic(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.listVariantsPublic(id);
   }
 
   @Patch(':id')
@@ -217,10 +218,10 @@ export class ProductsController {
   })
   update(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: UpdateProductDto,
   ) {
-    return this.productsService.update(req.user, Number(id), payload);
+    return this.productsService.update(req.user, id, payload);
   }
 
   @Delete(':id')
@@ -240,8 +241,11 @@ export class ProductsController {
     description:
       'Product with the given id does not exist in the current business.',
   })
-  remove(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.productsService.remove(req.user, Number(id));
+  remove(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.productsService.remove(req.user, id);
   }
 
   @Post(':id/variants')
@@ -256,10 +260,10 @@ export class ProductsController {
   @ApiOkResponse({ description: 'The created product variant.' })
   createVariant(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: CreateProductVariantDto,
   ) {
-    return this.productsService.createVariant(req.user, Number(id), payload);
+    return this.productsService.createVariant(req.user, id, payload);
   }
 
   @Get(':id/variants/manage')
@@ -273,9 +277,9 @@ export class ProductsController {
   @ApiOkResponse({ description: 'Array of product variants.' })
   listVariantsManage(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.productsService.listVariants(req.user, Number(id), {
+    return this.productsService.listVariants(req.user, id, {
       includeInactive: true,
     });
   }
@@ -291,16 +295,11 @@ export class ProductsController {
   @ApiOkResponse({ description: 'Updated product variant.' })
   updateVariant(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
-    @Param('variantId') variantId: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('variantId', ParseIntPipe) variantId: number,
     @Body() payload: UpdateProductVariantDto,
   ) {
-    return this.productsService.updateVariant(
-      req.user,
-      Number(id),
-      Number(variantId),
-      payload,
-    );
+    return this.productsService.updateVariant(req.user, id, variantId, payload);
   }
 
   @Delete(':id/variants/:variantId')
@@ -314,14 +313,10 @@ export class ProductsController {
   @ApiOkResponse({ description: 'Archived product variant.' })
   removeVariant(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
-    @Param('variantId') variantId: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('variantId', ParseIntPipe) variantId: number,
   ) {
-    return this.productsService.removeVariant(
-      req.user,
-      Number(id),
-      Number(variantId),
-    );
+    return this.productsService.removeVariant(req.user, id, variantId);
   }
 }
 

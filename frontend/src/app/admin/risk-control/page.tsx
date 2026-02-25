@@ -88,18 +88,9 @@ export default function RiskControlPage() {
   const basePath = isPlatformPath ? '/platform' : '/admin';
   const canViewRiskHub = canAny(['VIEW_AUDIT', 'VIEW_OUTBOX']);
 
-  if (!canViewRiskHub) {
-    return (
-      <section className="rounded-[var(--radius-xl)] border border-red-200 bg-red-50 px-6 py-6">
-        <p className="text-sm text-red-700">
-          Risk & Control ekranini goruntulemek icin yetkiniz yok.
-        </p>
-      </section>
-    );
-  }
-
   const metricsQuery = useQuery<OutboxMetrics>({
     queryKey: ['risk-control-outbox-metrics'],
+    enabled: canViewRiskHub,
     queryFn: async () => {
       const res = await api.get<OutboxMetrics>('/platform/outbox/metrics');
       return res.data;
@@ -108,6 +99,7 @@ export default function RiskControlPage() {
 
   const outboxEventsQuery = useQuery<PaginatedOutbox>({
     queryKey: ['risk-control-outbox-events'],
+    enabled: canViewRiskHub,
     queryFn: async () => {
       const res = await api.get<PaginatedOutbox>(
         '/platform/outbox/events?page=1&pageSize=20',
@@ -118,6 +110,7 @@ export default function RiskControlPage() {
 
   const auditQuery = useQuery<PaginatedAuditLogs>({
     queryKey: ['risk-control-audit'],
+    enabled: canViewRiskHub,
     queryFn: async () => {
       const res = await api.get<PaginatedAuditLogs>(
         '/platform/audit/logs?page=1&pageSize=20',
@@ -128,6 +121,7 @@ export default function RiskControlPage() {
 
   const webhookQuery = useQuery<WebhookEventRow[]>({
     queryKey: ['risk-control-webhooks'],
+    enabled: canViewRiskHub,
     queryFn: async () => {
       const res = await api.get<WebhookEventRow[]>(
         '/payments/admin/webhook-events?provider=IYZICO',
@@ -182,6 +176,16 @@ export default function RiskControlPage() {
       }),
     [auditLogs],
   );
+
+  if (!canViewRiskHub) {
+    return (
+      <section className="rounded-[var(--radius-xl)] border border-red-200 bg-red-50 px-6 py-6">
+        <p className="text-sm text-red-700">
+          Risk & Control ekranini goruntulemek icin yetkiniz yok.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -209,6 +209,18 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current user (alias)',
+    description: 'Alias for /auth/profile to keep backward compatibility.',
+  })
+  @ApiOkResponse({ description: 'Current user profile.' })
+  me(@Req() req: { user: JwtPayload }) {
+    return this.authService.profile(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('profile')
   @ApiBearerAuth()
   @ApiOperation({

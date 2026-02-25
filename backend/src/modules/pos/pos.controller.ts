@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  ParseIntPipe,
   Param,
   Post,
   Query,
@@ -147,8 +148,11 @@ export class PosController {
   @ApiOkResponse({
     description: 'Customer summary with current balance.',
   })
-  findCustomer(@Req() req: { user: JwtPayload }, @Param('id') id: string) {
-    return this.posService.findCustomerById(req.user, Number(id));
+  findCustomer(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.posService.findCustomerById(req.user, id);
   }
 
   @Post('customers')
@@ -322,10 +326,10 @@ export class PosController {
   })
   returnPosOrder(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: PosReturnOrderDto,
   ) {
-    return this.posService.returnPosOrder(req.user, Number(id), payload);
+    return this.posService.returnPosOrder(req.user, id, payload);
   }
 
   @Get('orders/:id/invoice')
@@ -339,9 +343,9 @@ export class PosController {
   })
   getOrderInvoice(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.posService.getOrderInvoice(req.user, Number(id));
+    return this.posService.getOrderInvoice(req.user, id);
   }
 
   @Post('orders/:id/apply-balance')
@@ -355,10 +359,10 @@ export class PosController {
   })
   applyBalance(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: ApplyCustomerBalanceDto,
   ) {
-    return this.posService.applyCustomerBalance(req.user, Number(id), payload);
+    return this.posService.applyCustomerBalance(req.user, id, payload);
   }
 
   @Post('orders/:id/split-payment')
@@ -372,10 +376,10 @@ export class PosController {
   })
   applySplitPayment(
     @Req() req: { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() payload: ApplySplitPaymentsDto,
   ) {
-    return this.posService.applySplitPayments(req.user, Number(id), payload);
+    return this.posService.applySplitPayments(req.user, id, payload);
   }
 }
 

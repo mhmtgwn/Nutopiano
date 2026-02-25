@@ -46,7 +46,7 @@ export class OutboxService {
           aggregateId,
           eventType,
           idempotencyKey: idempotencyKey || null,
-          payloadJson: (input.payloadJson ?? {}) as Prisma.InputJsonValue,
+          payloadJson: input.payloadJson ?? {},
         },
         select: {
           id: true,

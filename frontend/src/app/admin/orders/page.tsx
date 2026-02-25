@@ -3,7 +3,21 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, PackageCheck, Truck, X } from 'lucide-react';
+import {
+  Activity,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Package,
+  PackageCheck,
+  RefreshCw,
+  Truck,
+  X,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
 
 import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import Spinner from '@/components/common/Spinner';
@@ -11,549 +25,355 @@ import { isConflictError, resolveApiErrorMessage } from '@/lib/api-errors';
 import api from '@/services/api';
 import { formatDate, formatPrice } from '@/utils/helpers';
 
+/* ─── Types ──────────────────────────────────────────────── */
 interface OrderRow {
-  id: number;
-  customerId: number;
-  totalAmountCents: number;
-  statusKey: string;
-  source: string;
-  createdByUserId: number;
-  createdAt: string;
+  id: number; customerId: number; totalAmountCents: number;
+  statusKey: string; source: string; createdByUserId: number; createdAt: string;
 }
-
 interface OrderItemRow {
-  id: number;
-  productId: number;
-  productName?: string;
-  quantity: number;
-  unitPriceCents: number;
-  totalAmountCents: number;
+  id: number; productId: number; productName?: string;
+  quantity: number; unitPriceCents: number; totalAmountCents: number;
 }
-
 interface OrderDetail {
-  id: number;
-  customerId: number;
-  totalAmountCents: number;
-  statusKey: string;
-  source: string;
-  createdByUserId: number;
-  createdAt: string;
-  notes?: string;
-  items: OrderItemRow[];
+  id: number; customerId: number; totalAmountCents: number;
+  statusKey: string; source: string; createdByUserId: number; createdAt: string;
+  notes?: string; items: OrderItemRow[];
 }
-
 interface PaymentRow {
-  id: number;
-  amountCents: number;
-  method: string;
-  reference?: string;
-  createdAt: string;
+  id: number; amountCents: number; method: string; reference?: string; createdAt: string;
 }
-
 interface OrderStatusRow {
-  id: number;
-  key: string;
-  label: string;
-  orderIndex: number;
-  isFinal: boolean;
-  isDefault: boolean;
+  id: number; key: string; label: string; orderIndex: number; isFinal: boolean; isDefault: boolean;
+}
+interface PaginationMeta { total: number; page: number; pageSize: number; totalPages: number; }
+interface PaginatedOrders { data: OrderRow[]; meta: PaginationMeta; }
+
+/* ─── Helpers ────────────────────────────────────────────── */
+function getStatusStyle(key: string) {
+  const k = key.trim().toUpperCase();
+  if (k.includes('NEW')) return { bg: 'bg-blue-50', text: 'text-blue-700', icon: Clock };
+  if (k.includes('PAID')) return { bg: 'bg-green-50', text: 'text-green-700', icon: CheckCircle2 };
+  if (k.includes('PREP')) return { bg: 'bg-amber-50', text: 'text-amber-700', icon: PackageCheck };
+  if (k.includes('SHIP')) return { bg: 'bg-violet-50', text: 'text-violet-700', icon: Truck };
+  if (k.includes('DELIV') || k.includes('COMP')) return { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle2 };
+  if (k.includes('CANCEL')) return { bg: 'bg-red-50', text: 'text-red-700', icon: XCircle };
+  if (k.includes('PROCESS')) return { bg: 'bg-purple-50', text: 'text-purple-700', icon: Activity };
+  return { bg: 'bg-gray-50', text: 'text-gray-600', icon: Clock };
 }
 
-interface PaginationMeta {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+function StatusBadge({ status }: { status: string }) {
+  const { bg, text, icon: Icon } = getStatusStyle(status);
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${bg} ${text}`}>
+      <Icon className="h-3 w-3" />{status}
+    </span>
+  );
 }
 
-interface PaginatedOrders {
-  data: OrderRow[];
-  meta: PaginationMeta;
+function SourceBadge({ source }: { source: string }) {
+  const map: Record<string, string> = { POS: 'POS', MOBILE: 'Mobil', WEB: 'Web', MANUAL: 'Manuel', ONLINE: 'Online' };
+  return <span className="rounded text-[11px] font-medium text-gray-500">{map[source] ?? source}</span>;
 }
 
-const statusBadgeClassName = (statusKey: string) => {
-  const key = statusKey.trim().toUpperCase();
-  if (key.includes('NEW')) return 'bg-[#E8F1FF] text-[#0B3B91]';
-  if (key.includes('PAID')) return 'bg-[#E6FBF2] text-[#0F5132]';
-  if (key.includes('PREP')) return 'bg-[#FFF7E6] text-[#7A4B00]';
-  if (key.includes('SHIP')) return 'bg-[#F3EEE3] text-[#3E2723]';
-  if (key.includes('DELIV') || key.includes('COMP')) return 'bg-[#E6FBF2] text-[#0F5132]';
-  if (key.includes('CANCEL')) return 'bg-[#FDECEC] text-[#9B1C1C]';
-  return 'bg-[#F3EEE3] text-[#3E2723]';
-};
-
-const buildKpis = (orders: OrderRow[]) => {
-  const total = orders.length;
-  const byStatus = orders.reduce<Record<string, number>>((acc, order) => {
-    acc[order.statusKey] = (acc[order.statusKey] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return {
-    total,
-    newCount: byStatus.NEW ?? byStatus.New ?? byStatus.new ?? 0,
-    preparingCount: byStatus.PREPARING ?? byStatus.Preparing ?? byStatus.preparing ?? 0,
-    deliveredCount: byStatus.DELIVERED ?? byStatus.Delivered ?? byStatus.delivered ?? 0,
-  };
-};
-
+/* ─── Page ───────────────────────────────────────────────── */
 export default function AdminOrdersPage() {
   const queryClient = useQueryClient();
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [source, setSource] = useState<string>('');
+  const [source, setSource] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const pageSize = 20;
   const [conflictDetail, setConflictDetail] = useState<string | null>(null);
 
-  const {
-    data: ordersPayload,
-    isLoading,
-    isError,
-  } = useQuery<PaginatedOrders>({
+  const { data: ordersPayload, isLoading, isError } = useQuery<PaginatedOrders>({
     queryKey: ['admin-orders', { page, pageSize, source }],
-    queryFn: async () => {
-      const res = await api.get<PaginatedOrders>('/platform/orders', {
-        params: {
-          source: source || undefined,
-          page,
-          pageSize,
-        },
-      });
-      return res.data;
-    },
+    queryFn: async () => (await api.get<PaginatedOrders>('/platform/orders', {
+      params: { source: source || undefined, page, pageSize },
+    })).data,
+  });
+
+  const { data: statuses, isLoading: isStatusesLoading, isError: isStatusesError } = useQuery<OrderStatusRow[]>({
+    queryKey: ['admin-order-statuses'],
+    queryFn: async () => (await api.get<OrderStatusRow[]>('/order-status')).data,
+  });
+
+  const { data: orderDetail, isLoading: isDetailLoading, isError: isDetailError } = useQuery<OrderDetail>({
+    queryKey: ['admin-order-detail', selectedOrderId],
+    enabled: typeof selectedOrderId === 'number',
+    queryFn: async () => (await api.get<OrderDetail>(`/orders/${selectedOrderId}`)).data,
+  });
+
+  const { data: payments, isLoading: isPaymentsLoading, isError: isPaymentsError } = useQuery<PaymentRow[]>({
+    queryKey: ['admin-order-payments', selectedOrderId],
+    enabled: typeof selectedOrderId === 'number',
+    queryFn: async () => (await api.get<PaymentRow[]>(`/orders/${selectedOrderId}/payments`)).data,
   });
 
   const orders = ordersPayload?.data ?? [];
   const meta = ordersPayload?.meta;
 
-  const {
-    data: statuses,
-    isLoading: isStatusesLoading,
-    isError: isStatusesError,
-  } = useQuery<OrderStatusRow[]>({
-    queryKey: ['admin-order-statuses'],
-    queryFn: async () => {
-      const res = await api.get<OrderStatusRow[]>('/order-status');
-      return res.data;
-    },
-  });
+  const kpis = useMemo(() => {
+    const byStatus = orders.reduce<Record<string, number>>((acc, o) => {
+      const k = o.statusKey.toUpperCase();
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+    return {
+      total: meta?.total ?? orders.length,
+      newCount: Object.entries(byStatus).filter(([k]) => k.includes('NEW')).reduce((s, [, v]) => s + v, 0),
+      preparingCount: Object.entries(byStatus).filter(([k]) => k.includes('PREP')).reduce((s, [, v]) => s + v, 0),
+      deliveredCount: Object.entries(byStatus).filter(([k]) => k.includes('DELIV') || k.includes('COMP')).reduce((s, [, v]) => s + v, 0),
+    };
+  }, [orders, meta?.total]);
 
-  const {
-    data: orderDetail,
-    isLoading: isDetailLoading,
-    isError: isDetailError,
-  } = useQuery<OrderDetail>({
-    queryKey: ['admin-order-detail', selectedOrderId],
-    enabled: typeof selectedOrderId === 'number',
-    queryFn: async () => {
-      const res = await api.get<OrderDetail>(`/orders/${selectedOrderId}`);
-      return res.data;
-    },
-  });
-
-  const {
-    data: payments,
-    isLoading: isPaymentsLoading,
-    isError: isPaymentsError,
-  } = useQuery<PaymentRow[]>({
-    queryKey: ['admin-order-payments', selectedOrderId],
-    enabled: typeof selectedOrderId === 'number',
-    queryFn: async () => {
-      const res = await api.get<PaymentRow[]>(`/orders/${selectedOrderId}/payments`);
-      return res.data;
-    },
-  });
-
-  const kpis = useMemo(() => buildKpis(orders ?? []), [orders]);
-
-  const closeDrawer = () => setSelectedOrderId(null);
-
-  const updateStatusMutation = useMutation({
+  const updateStatus = useMutation({
     mutationFn: async (nextStatusKey: string) => {
       if (!selectedOrderId) return;
       await api.patch(`/orders/${selectedOrderId}`, { statusKey: nextStatusKey });
     },
-    onError: (error: unknown) => {
-      if (isConflictError(error)) {
-        setConflictDetail(
-          resolveApiErrorMessage(
-            error,
-            'Siparis baska bir kullanici tarafindan guncellendi.',
-          ),
-        );
+    onError: (err: unknown) => {
+      if (isConflictError(err)) {
+        setConflictDetail(resolveApiErrorMessage(err, 'Sipariş başka bir kullanıcı tarafından güncellendi.'));
         return;
       }
-      toast.error(resolveApiErrorMessage(error, 'Sipariş durumu güncellenemedi.'));
+      toast.error(resolveApiErrorMessage(err, 'Durum güncellenemedi.'));
     },
     onSuccess: async () => {
       toast.success('Sipariş durumu güncellendi.');
       await queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
-      if (selectedOrderId) {
-        await queryClient.invalidateQueries({ queryKey: ['admin-order-detail', selectedOrderId] });
-      }
+      if (selectedOrderId) await queryClient.invalidateQueries({ queryKey: ['admin-order-detail', selectedOrderId] });
     },
   });
 
-  const statusCards = useMemo(
-    () => [
-      {
-        title: 'Toplam sipariş',
-        value: String(kpis.total),
-        note: 'Panel',
-        icon: ClipboardList,
-      },
-      {
-        title: 'Yeni',
-        value: String(kpis.newCount),
-        note: 'Status',
-        icon: ClipboardList,
-      },
-      {
-        title: 'Hazırlık',
-        value: String(kpis.preparingCount),
-        note: 'Status',
-        icon: PackageCheck,
-      },
-      {
-        title: 'Teslim',
-        value: String(kpis.deliveredCount),
-        note: 'Status',
-        icon: CheckCircle2,
-      },
-    ],
-    [kpis],
-  );
-
   return (
-    <div className="space-y-6">
-      <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/90 px-6 py-6 shadow-[0_30px_90px_rgba(26,60,52,0.12)]">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-              Sipariş
-            </p>
-            <h1 className="text-3xl font-serif text-[#1A3C34] md:text-4xl">
-              Sipariş yönetimi
-            </h1>
-            <p className="text-sm text-[#5C5C5C]">
-              Siparişleri takip edin, durumları görüntüleyin.
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/10 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
-            <Truck className="h-4 w-4" />
-            Canlı liste
-          </div>
-        </div>
-      </section>
+    <div className="space-y-8">
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {statusCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div
-              key={card.title}
-              className="rounded-[28px] border border-[#E0D7C6] bg-white/90 px-5 py-5 shadow-[0_20px_60px_rgba(26,60,52,0.08)]"
-            >
-              <div className="flex items-center justify-between">
-                <Icon className="h-5 w-5 text-[#C5A059]" />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#AC9C7A]">
-                  {card.note}
-                </span>
-              </div>
-              <p className="mt-4 text-2xl font-serif text-[#1A3C34]">{card.value}</p>
-              <p className="mt-1 text-sm text-[#5C5C5C]">{card.title}</p>
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Sipariş Yönetimi</h1>
+        <p className="mt-1 text-sm text-[var(--neutral-600)]">Tüm siparişleri izleyin, durumlarını güncelleyin.</p>
+      </div>
+
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+        {[
+          { label: 'Toplam', value: kpis.total, icon: ClipboardList },
+          { label: 'Yeni', value: kpis.newCount, icon: Clock },
+          { label: 'Hazırlık', value: kpis.preparingCount, icon: PackageCheck },
+          { label: 'Teslim', value: kpis.deliveredCount, icon: CheckCircle2 },
+        ].map(({ label, value, icon: Icon }) => (
+          <div key={label}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">{label}</p>
+            <div className="mt-1 flex items-end gap-2">
+              <span className="text-2xl font-semibold text-[var(--primary-800)]">{value}</span>
+              <Icon className="mb-1 h-4 w-4 text-[var(--neutral-400)]" />
             </div>
-          );
-        })}
-      </section>
+          </div>
+        ))}
+      </div>
 
-      <section className="rounded-[28px] border border-[#E0D7C6] bg-white/90 px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-serif text-[#1A3C34]">Siparişler</h2>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#1A3C34]/60">
-            Toplam: {meta?.total ?? orders?.length ?? 0}
-          </span>
+      {/* ── Toolbar ── */}
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--neutral-200)] pb-3">
+        <p className="text-sm font-medium text-[var(--neutral-700)]">
+          {meta?.total ? `${meta.total} sipariş` : ''}
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--neutral-500)]">Kaynak:</span>
+          <select
+            value={source}
+            onChange={(e) => { setSource(e.target.value); setPage(1); }}
+            className="h-8 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-2.5 text-xs text-[var(--neutral-700)] outline-none focus:border-[var(--primary-800)]/40"
+          >
+            <option value="">Tümü</option>
+            <option value="POS">POS</option>
+            <option value="MOBILE">Mobil</option>
+            <option value="WEB">Web</option>
+          </select>
         </div>
+      </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
-            Filtre
-          </div>
-          <div className="w-full max-w-xs">
-            <select
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-                setPage(1);
-              }}
-              className="h-11 w-full rounded-2xl border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm outline-none"
-            >
-              <option value="">Tümü</option>
-              <option value="POS">POS</option>
-              <option value="MOBILE">MOBILE</option>
-              <option value="WEB">WEB</option>
-            </select>
-          </div>
+      {/* ── States ── */}
+      {isLoading && <Spinner label="Siparişler yükleniyor..." />}
+      {isError && !isLoading && (
+        <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4" /> Siparişler yüklenemedi.
         </div>
+      )}
 
-        {isLoading && (
-          <div className="pt-6">
-            <Spinner fullscreen />
-          </div>
-        )}
+      {/* ── Table ── */}
+      {!isLoading && !isError && orders.length === 0 && (
+        <p className="py-10 text-center text-sm text-[var(--neutral-500)]">Sipariş bulunamadı.</p>
+      )}
 
-        {isError && !isLoading && (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Siparişler yüklenemedi. Token veya yetki problemi olabilir.
-          </div>
-        )}
-
-        {!isLoading && !isError && (!orders || orders.length === 0) && (
-          <div className="mt-6 rounded-2xl border border-[#E0D7C6] bg-white px-4 py-4 text-sm text-[#5C5C5C]">
-            Sipariş bulunamadı.
-          </div>
-        )}
-
-        {!isLoading && !isError && orders && orders.length > 0 && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-[#1A3C34]/10 bg-white">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-3 border-b border-[#E5E5E0] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
-              <span>Sipariş</span>
-              <span>Müşteri</span>
-              <span>Tutar</span>
-              <span>Durum</span>
-              <span>Kaynak</span>
-            </div>
-            <div className="divide-y divide-[#F0F0EA]">
+      {!isLoading && !isError && orders.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--neutral-200)]">
+                {['Sipariş', 'Müşteri', 'Tutar', 'Durum', 'Kaynak', 'Tarih'].map((h) => (
+                  <th key={h} className={`pb-3 pr-6 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)] ${h === 'Tutar' ? 'text-right' : ''}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--neutral-100)]">
               {orders.map((order) => (
-                <div
+                <tr
                   key={order.id}
-                  role="button"
-                  tabIndex={0}
                   onClick={() => setSelectedOrderId(order.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') setSelectedOrderId(order.id);
-                  }}
-                  className="grid cursor-pointer grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-3 px-4 py-3 text-sm text-[#1A3C34] transition hover:bg-[#F7F4EF]"
+                  className="cursor-pointer transition-colors hover:bg-[var(--neutral-50)]"
                 >
-                  <div className="flex flex-col">
-                    <span className="font-semibold">#{order.id}</span>
-                    <span className="text-xs text-[#5C5C5C]">
-                      {formatDate(order.createdAt)}
-                    </span>
-                  </div>
-                  <div className="text-sm text-[#5C5C5C]">ID: {order.customerId}</div>
-                  <div className="font-semibold">
-                    {formatPrice(order.totalAmountCents / 100)}
-                  </div>
-                  <div>
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadgeClassName(
-                        order.statusKey,
-                      )}`}
-                    >
-                      {order.statusKey}
-                    </span>
-                  </div>
-                  <div className="text-sm text-[#5C5C5C]">{order.source}</div>
-                </div>
+                  <td className="py-3 pr-6 font-semibold text-[var(--primary-800)]">#{order.id}</td>
+                  <td className="py-3 pr-6 text-[var(--neutral-600)]">#{order.customerId}</td>
+                  <td className="py-3 pr-6 text-right font-semibold text-[var(--primary-800)]">{formatPrice(order.totalAmountCents)}</td>
+                  <td className="py-3 pr-6"><StatusBadge status={order.statusKey} /></td>
+                  <td className="py-3 pr-6"><SourceBadge source={order.source} /></td>
+                  <td className="py-3 text-[var(--neutral-500)]">
+                    {new Date(order.createdAt).toLocaleString('tr-TR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-        )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        {!isLoading && !isError && meta && meta.totalPages > 1 && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E5E0] pt-4 text-xs text-[#5C5C5C]">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
-              Sayfa {meta.page} / {meta.totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={meta.page <= 1}
-                className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#E5E5E0] bg-white px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1A3C34] shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Önceki
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
-                disabled={meta.page >= meta.totalPages}
-                className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[#1A3C34]/10 bg-[#1A3C34] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Sonraki
-              </button>
-            </div>
+      {/* ── Pagination ── */}
+      {meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-[var(--neutral-200)] pt-4">
+          <p className="text-xs text-[var(--neutral-500)]">Sayfa {meta.page} / {meta.totalPages}</p>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.page <= 1}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white text-[var(--neutral-700)] hover:bg-[var(--neutral-50)] disabled:opacity-40">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))} disabled={meta.page >= meta.totalPages}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white text-[var(--neutral-700)] hover:bg-[var(--neutral-50)] disabled:opacity-40">
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-        )}
-      </section>
+        </div>
+      )}
 
+      {/* ── Order Detail Drawer ── */}
       {selectedOrderId !== null && (
         <div className="fixed inset-0 z-50">
-          <button
-            type="button"
-            aria-label="Kapat"
-            onClick={closeDrawer}
-            className="absolute inset-0 bg-black/40"
-          />
-          <aside className="absolute right-0 top-0 flex h-full w-full max-w-xl flex-col overflow-y-auto bg-[#F7F4EF] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#1A3C34]/10 bg-white px-6 py-4">
+          <button type="button" aria-label="Kapat" onClick={() => setSelectedOrderId(null)}
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-lg flex flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--neutral-200)]">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                  Sipariş detayı
-                </p>
-                <h3 className="mt-1 text-xl font-serif text-[#1A3C34]">#{selectedOrderId}</h3>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">Sipariş Detayı</p>
+                <h3 className="mt-0.5 text-lg font-semibold text-[var(--primary-800)]">#{selectedOrderId}</h3>
               </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#1A3C34]/15 bg-white"
-              >
-                <X className="h-5 w-5 text-[#1A3C34]" />
+              <button type="button" onClick={() => setSelectedOrderId(null)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--neutral-200)] text-[var(--neutral-600)] hover:bg-[var(--neutral-50)]">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {(isDetailLoading || isPaymentsLoading) && (
-              <div className="px-6 py-8">
-                <Spinner fullscreen label="Yükleniyor..." />
-              </div>
-            )}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+              {(isDetailLoading || isPaymentsLoading) && <Spinner label="Yükleniyor..." />}
+              {(isDetailError || isPaymentsError) && (
+                <p className="text-sm text-red-600">Detay yüklenemedi.</p>
+              )}
 
-            {(isDetailError || isPaymentsError) && !(isDetailLoading || isPaymentsLoading) && (
-              <div className="px-6 py-6 text-sm text-red-700">
-                Sipariş detayı yüklenemedi.
-              </div>
-            )}
-
-            {!isDetailLoading && !isDetailError && orderDetail && (
-              <div className="space-y-4 px-6 py-6">
-                <section className="rounded-2xl border border-[#E0D7C6] bg-white px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                    Özet
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-[11px] text-[#8A8A8A]">Müşteri</p>
-                      <p className="text-sm font-semibold text-[#1A3C34]">ID: {orderDetail.customerId}</p>
+              {!isDetailLoading && !isDetailError && orderDetail && (
+                <>
+                  {/* Summary */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-3">Özet</p>
+                    <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                      {[
+                        { l: 'Müşteri', v: `#${orderDetail.customerId}` },
+                        { l: 'Tarih', v: formatDate(orderDetail.createdAt) },
+                        { l: 'Toplam', v: formatPrice(orderDetail.totalAmountCents) },
+                        { l: 'Kaynak', v: orderDetail.source },
+                      ].map(({ l, v }) => (
+                        <div key={l}>
+                          <p className="text-[11px] text-[var(--neutral-500)]">{l}</p>
+                          <p className="mt-0.5 font-semibold text-[var(--primary-800)]">{v}</p>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <p className="text-[11px] text-[#8A8A8A]">Tarih</p>
-                      <p className="text-sm font-semibold text-[#1A3C34]">{formatDate(orderDetail.createdAt)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-[#8A8A8A]">Toplam</p>
-                      <p className="text-sm font-semibold text-[#1A3C34]">{formatPrice(orderDetail.totalAmountCents / 100)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-[#8A8A8A]">Kaynak</p>
-                      <p className="text-sm font-semibold text-[#1A3C34]">{orderDetail.source}</p>
-                    </div>
+                    {orderDetail.notes && (
+                      <div className="mt-4 pt-4 border-t border-[var(--neutral-200)]">
+                        <p className="text-[11px] text-[var(--neutral-500)]">Not</p>
+                        <p className="mt-1 text-sm text-[var(--neutral-700)]">{orderDetail.notes}</p>
+                      </div>
+                    )}
                   </div>
-                </section>
 
-                <section className="rounded-2xl border border-[#E0D7C6] bg-white px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                        Durum
-                      </p>
-                      <span
-                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadgeClassName(
-                          orderDetail.statusKey,
-                        )}`}
-                      >
-                        {orderDetail.statusKey}
-                      </span>
-                    </div>
-
-                    <div className="w-52">
+                  {/* Status */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-3">Durum Güncelle</p>
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={orderDetail.statusKey} />
                       <select
                         value={orderDetail.statusKey}
-                        onChange={(e) => updateStatusMutation.mutate(e.target.value)}
-                        disabled={
-                          updateStatusMutation.isPending ||
-                          isStatusesLoading ||
-                          isStatusesError ||
-                          !statuses ||
-                          statuses.length === 0
-                        }
-                        className="h-10 w-full rounded-xl border border-[#E5E5E0] bg-white px-3 text-sm text-[#1A3C34] shadow-sm outline-none"
+                        onChange={(e) => updateStatus.mutate(e.target.value)}
+                        disabled={updateStatus.isPending || isStatusesLoading || isStatusesError || !statuses?.length}
+                        className="h-9 flex-1 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)] outline-none focus:border-[var(--primary-800)]/40 disabled:opacity-60"
                       >
-                        {(statuses ?? [])
-                          .slice()
-                          .sort((a, b) => a.orderIndex - b.orderIndex)
-                          .map((s) => (
-                            <option key={s.id} value={s.key}>
-                              {s.label}
-                            </option>
-                          ))}
+                        {(statuses ?? []).slice().sort((a, b) => a.orderIndex - b.orderIndex).map((s) => (
+                          <option key={s.id} value={s.key}>{s.label}</option>
+                        ))}
                       </select>
-                      {isStatusesError && (
-                        <p className="mt-2 text-[11px] text-red-700">Durum listesi yüklenemedi.</p>
-                      )}
+                      {updateStatus.isPending && <RefreshCw className="h-4 w-4 animate-spin text-[var(--neutral-400)]" />}
                     </div>
                   </div>
-                </section>
 
-                <section className="rounded-2xl border border-[#E0D7C6] bg-white px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                    Ürünler
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {orderDetail.items.length === 0 ? (
-                      <p className="text-sm text-[#5C5C5C]">Ürün satırı yok.</p>
-                    ) : (
-                      orderDetail.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between rounded-xl border border-[#1A3C34]/10 bg-white px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <p className="font-semibold text-[#1A3C34]">
-                              {item.productName || `Ürün #${item.productId}`}
-                            </p>
-                            <p className="text-xs text-[#5C5C5C]">Adet: {item.quantity}</p>
+                  {/* Items */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-3">
+                      Ürünler ({orderDetail.items.length})
+                    </p>
+                    <div className="divide-y divide-[var(--neutral-100)]">
+                      {orderDetail.items.length === 0 ? (
+                        <p className="text-sm text-[var(--neutral-500)]">Ürün satırı yok.</p>
+                      ) : orderDetail.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between py-2.5">
+                          <div className="flex items-center gap-3">
+                            <div className="h-7 w-7 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] flex items-center justify-center flex-shrink-0">
+                              <Package className="h-3.5 w-3.5 text-[var(--neutral-400)]" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-[var(--primary-800)]">
+                                {item.productName ?? `Ürün #${item.productId}`}
+                              </p>
+                              <p className="text-[11px] text-[var(--neutral-500)]">
+                                {item.quantity} × {formatPrice(item.unitPriceCents)}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-[#1A3C34]">{formatPrice(item.totalAmountCents / 100)}</p>
-                            <p className="text-xs text-[#5C5C5C]">Birim: {formatPrice(item.unitPriceCents / 100)}</p>
-                          </div>
+                          <p className="text-sm font-semibold text-[var(--primary-800)]">{formatPrice(item.totalAmountCents)}</p>
                         </div>
-                      ))
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </section>
 
-                <section className="rounded-2xl border border-[#E0D7C6] bg-white px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
-                    Ödemeler
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {!payments || payments.length === 0 ? (
-                      <p className="text-sm text-[#5C5C5C]">Ödeme kaydı yok.</p>
-                    ) : (
-                      payments.map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between rounded-xl border border-[#1A3C34]/10 bg-white px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <p className="font-semibold text-[#1A3C34]">{p.method}</p>
-                            <p className="text-xs text-[#5C5C5C]">{formatDate(p.createdAt)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-[#1A3C34]">{formatPrice(p.amountCents / 100)}</p>
-                            {p.reference && (
-                              <p className="text-xs text-[#5C5C5C]">Ref: {p.reference}</p>
-                            )}
-                          </div>
+                  {/* Payments */}
+                  {!isPaymentsLoading && (
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-3">Ödemeler</p>
+                      {!payments || payments.length === 0 ? (
+                        <p className="text-sm text-[var(--neutral-500)]">Ödeme kaydı yok.</p>
+                      ) : (
+                        <div className="divide-y divide-[var(--neutral-100)]">
+                          {payments.map((p) => (
+                            <div key={p.id} className="flex items-center justify-between py-2.5">
+                              <div>
+                                <p className="text-sm font-semibold text-[var(--primary-800)]">{p.method}</p>
+                                <p className="text-[11px] text-[var(--neutral-500)]">{formatDate(p.createdAt)}</p>
+                              </div>
+                              <p className="text-sm font-semibold text-[var(--primary-800)]">{formatPrice(p.amountCents)}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </div>
-            )}
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </aside>
         </div>
       )}
@@ -566,12 +386,8 @@ export default function AdminOrdersPage() {
           setConflictDetail(null);
           void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
           if (selectedOrderId) {
-            void queryClient.invalidateQueries({
-              queryKey: ['admin-order-detail', selectedOrderId],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ['admin-order-payments', selectedOrderId],
-            });
+            void queryClient.invalidateQueries({ queryKey: ['admin-order-detail', selectedOrderId] });
+            void queryClient.invalidateQueries({ queryKey: ['admin-order-payments', selectedOrderId] });
           }
         }}
       />

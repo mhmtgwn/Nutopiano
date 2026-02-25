@@ -51,6 +51,7 @@ interface CreateOrderItemPayload {
 
 interface CreateOrderPayload {
   customerId: number;
+  source?: 'POS' | 'MOBILE' | 'WEB' | 'API';
   notes?: string;
   items: CreateOrderItemPayload[];
 }
@@ -174,6 +175,7 @@ export default function CheckoutPage() {
 
     const payload: CreateOrderPayload = {
       customerId,
+      source: 'WEB',
       notes: notes.trim() || undefined,
       items: items.map((item) => ({
         productId: Number(item.productId),

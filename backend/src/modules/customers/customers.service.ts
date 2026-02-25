@@ -601,8 +601,8 @@ export class CustomersService {
 
     const where =
       currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN'
-        ? { businessId, deletedAt: null as null }
-        : { businessId, createdByUserId: userId, deletedAt: null as null };
+        ? { businessId, deletedAt: null }
+        : { businessId, createdByUserId: userId, deletedAt: null };
 
     const total = await this.prisma.customer.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
@@ -775,8 +775,8 @@ export class CustomersService {
 
     const where =
       currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN'
-        ? { businessId, deletedAt: null as null }
-        : { businessId, createdByUserId: userId, deletedAt: null as null };
+        ? { businessId, deletedAt: null }
+        : { businessId, createdByUserId: userId, deletedAt: null };
 
     return this.prisma.customer.findMany({
       where,
@@ -894,7 +894,7 @@ export class CustomersService {
 
     return await this.prisma.$transaction(async (tx) => {
       // First, check if user already has a linked customer record
-      let customer = await tx.customer.findFirst({
+      const customer = await tx.customer.findFirst({
         where: { businessId, userId, deletedAt: null },
         select: {
           id: true,
@@ -961,4 +961,3 @@ export class CustomersService {
     });
   }
 }
-

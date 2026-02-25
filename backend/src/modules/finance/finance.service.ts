@@ -106,7 +106,10 @@ export class FinanceService {
     return { startAt, endAt: endAtExclusive };
   }
 
-  private parseOptionalDateRange(params?: { dateFrom?: string; dateTo?: string }) {
+  private parseOptionalDateRange(params?: {
+    dateFrom?: string;
+    dateTo?: string;
+  }) {
     const fromRaw = params?.dateFrom?.trim();
     const toRaw = params?.dateTo?.trim();
 
@@ -186,7 +189,8 @@ export class FinanceService {
     const userId = Number(currentUser.userId);
 
     const normalizedRequestedSellerId =
-      typeof requestedSellerId === 'number' && Number.isFinite(requestedSellerId)
+      typeof requestedSellerId === 'number' &&
+      Number.isFinite(requestedSellerId)
         ? Math.trunc(requestedSellerId)
         : undefined;
 
@@ -197,12 +201,12 @@ export class FinanceService {
       throw new BadRequestException('sellerId gecersiz');
     }
 
-    if (
-      currentUser.role === 'SUPER_ADMIN' ||
-      currentUser.role === 'ADMIN'
-    ) {
+    if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') {
       if (normalizedRequestedSellerId !== undefined) {
-        await this.assertSellerInBusiness(businessId, normalizedRequestedSellerId);
+        await this.assertSellerInBusiness(
+          businessId,
+          normalizedRequestedSellerId,
+        );
         return {
           businessId,
           sellerIds: [normalizedRequestedSellerId],
@@ -437,7 +441,9 @@ export class FinanceService {
       where: {
         businessId,
         sellerId,
-        status: { in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED] },
+        status: {
+          in: [PayoutRequestStatus.REQUESTED, PayoutRequestStatus.APPROVED],
+        },
       },
       _sum: { amountCents: true },
     });
@@ -1015,7 +1021,7 @@ export class FinanceService {
 
     const where = {
       businessId,
-      deletedAt: null as null,
+      deletedAt: null,
       priceMismatch: true,
     };
 
@@ -1125,16 +1131,24 @@ export class FinanceService {
     const typeRaw = (params?.type ?? '').trim().toUpperCase();
     if (typeRaw) {
       const groupedTypeMap: Record<string, FinanceLedgerEventType[]> = {
-        ORDER: [FinanceLedgerEventType.ORDER_SALE, FinanceLedgerEventType.RELEASE_AVAILABLE],
+        ORDER: [
+          FinanceLedgerEventType.ORDER_SALE,
+          FinanceLedgerEventType.RELEASE_AVAILABLE,
+        ],
         REFUND: [FinanceLedgerEventType.ORDER_REFUND],
-        PAYOUT: [FinanceLedgerEventType.PAYOUT_REQUEST, FinanceLedgerEventType.PAYOUT_PAID],
+        PAYOUT: [
+          FinanceLedgerEventType.PAYOUT_REQUEST,
+          FinanceLedgerEventType.PAYOUT_PAID,
+        ],
       };
 
       if (groupedTypeMap[typeRaw]) {
         where.eventType = { in: groupedTypeMap[typeRaw] };
       } else {
         const normalizedEventType = typeRaw as FinanceLedgerEventType;
-        if (!Object.values(FinanceLedgerEventType).includes(normalizedEventType)) {
+        if (
+          !Object.values(FinanceLedgerEventType).includes(normalizedEventType)
+        ) {
           throw new BadRequestException('type gecersiz');
         }
         where.eventType = normalizedEventType;
@@ -1255,77 +1269,83 @@ export class FinanceService {
     const meta = buildPaginationMeta(total, page, pageSize);
     const { skip, take } = paginationToSkipTake(meta);
 
-    const [walletRows, earnedRows, paidOutRows, activityRows] = await Promise.all([
-      this.prisma.sellerWallet.findMany({
-        where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        skip,
-        take,
-        select: {
-          sellerId: true,
-          currency: true,
-          pendingBalanceCents: true,
-          availableBalanceCents: true,
-          seller: {
-            select: {
-              displayName: true,
-              user: {
-                select: {
-                  name: true,
+    const [walletRows, earnedRows, paidOutRows, activityRows] =
+      await Promise.all([
+        this.prisma.sellerWallet.findMany({
+          where,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          skip,
+          take,
+          select: {
+            sellerId: true,
+            currency: true,
+            pendingBalanceCents: true,
+            availableBalanceCents: true,
+            seller: {
+              select: {
+                displayName: true,
+                user: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
           },
-        },
-      }),
-      this.prisma.financeLedgerEntry.groupBy({
-        by: ['sellerId'],
-        where: {
-          businessId,
-          sellerId: { not: null },
-          eventType: FinanceLedgerEventType.ORDER_SALE,
-          accountType: FinanceLedgerAccountType.SELLER_PENDING,
-          direction: FinanceLedgerDirection.CREDIT,
-        },
-        _sum: { amountCents: true },
-      }),
-      this.prisma.financeLedgerEntry.groupBy({
-        by: ['sellerId'],
-        where: {
-          businessId,
-          sellerId: { not: null },
-          eventType: FinanceLedgerEventType.PAYOUT_PAID,
-          accountType: FinanceLedgerAccountType.SELLER_AVAILABLE,
-          direction: FinanceLedgerDirection.DEBIT,
-        },
-        _sum: { amountCents: true },
-      }),
-      this.prisma.financeLedgerEntry.groupBy({
-        by: ['sellerId'],
-        where: {
-          businessId,
-          sellerId: { not: null },
-        },
-        _max: { createdAt: true },
-      }),
-    ]);
+        }),
+        this.prisma.financeLedgerEntry.groupBy({
+          by: ['sellerId'],
+          where: {
+            businessId,
+            sellerId: { not: null },
+            eventType: FinanceLedgerEventType.ORDER_SALE,
+            accountType: FinanceLedgerAccountType.SELLER_PENDING,
+            direction: FinanceLedgerDirection.CREDIT,
+          },
+          _sum: { amountCents: true },
+        }),
+        this.prisma.financeLedgerEntry.groupBy({
+          by: ['sellerId'],
+          where: {
+            businessId,
+            sellerId: { not: null },
+            eventType: FinanceLedgerEventType.PAYOUT_PAID,
+            accountType: FinanceLedgerAccountType.SELLER_AVAILABLE,
+            direction: FinanceLedgerDirection.DEBIT,
+          },
+          _sum: { amountCents: true },
+        }),
+        this.prisma.financeLedgerEntry.groupBy({
+          by: ['sellerId'],
+          where: {
+            businessId,
+            sellerId: { not: null },
+          },
+          _max: { createdAt: true },
+        }),
+      ]);
 
     const earnedBySeller = new Map(
       earnedRows
         .filter((row) => typeof row.sellerId === 'number')
-        .map((row) => [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const),
+        .map(
+          (row) =>
+            [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const,
+        ),
     );
     const paidOutBySeller = new Map(
       paidOutRows
         .filter((row) => typeof row.sellerId === 'number')
-        .map((row) => [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const),
+        .map(
+          (row) =>
+            [Number(row.sellerId), Number(row._sum.amountCents ?? 0)] as const,
+        ),
     );
     const activityBySeller = new Map(
       activityRows
         .filter((row) => typeof row.sellerId === 'number')
         .map(
-          (row) =>
-            [Number(row.sellerId), (row._max.createdAt as Date | null) ?? null] as const,
+          (row) => [Number(row.sellerId), row._max.createdAt ?? null] as const,
         ),
     );
 
@@ -1441,7 +1461,9 @@ export class FinanceService {
       },
     });
 
-    const orderIds = Array.from(new Set(requests.map((row) => Number(row.orderId))));
+    const orderIds = Array.from(
+      new Set(requests.map((row) => Number(row.orderId))),
+    );
     const refundLedgerRows =
       orderIds.length > 0
         ? await this.prisma.financeLedgerEntry.findMany({
@@ -1486,11 +1508,15 @@ export class FinanceService {
       data: requests.map((row) => {
         const snapshot = {
           subtotalAmountCents: Number(row.order?.subtotalAmountCents ?? 0),
-          commissionAmountCents: Number(row.order?.commissionSnapshotCents ?? 0),
+          commissionAmountCents: Number(
+            row.order?.commissionSnapshotCents ?? 0,
+          ),
           taxAmountCents: Number(row.order?.taxAmountCents ?? 0),
           totalAmountCents: Number(row.order?.totalAmountCents ?? 0),
         };
-        const ledgerPreview = (ledgerByOrderId.get(Number(row.orderId)) ?? []).slice(0, 8);
+        const ledgerPreview = (
+          ledgerByOrderId.get(Number(row.orderId)) ?? []
+        ).slice(0, 8);
         const refundAmountCents = ledgerPreview
           .filter(
             (item) =>
@@ -1540,49 +1566,55 @@ export class FinanceService {
       scope.sellerIds,
     );
 
-    const [orderAggregate, paymentAggregate, debitAggregate, creditAggregate, profitRows, warnRows] =
-      await Promise.all([
-        this.prisma.order.aggregate({
-          where: orderWhere,
-          _count: { _all: true },
-          _sum: { totalAmountCents: true },
-        }),
-        this.prisma.payment.aggregate({
-          where: {
-            businessId: scope.businessId,
-            createdAt: { gte: startAt, lt: endAt },
-            order: {
-              ...scope.orderWhere,
-              deletedAt: null,
-            },
+    const [
+      orderAggregate,
+      paymentAggregate,
+      debitAggregate,
+      creditAggregate,
+      profitRows,
+      warnRows,
+    ] = await Promise.all([
+      this.prisma.order.aggregate({
+        where: orderWhere,
+        _count: { _all: true },
+        _sum: { totalAmountCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          businessId: scope.businessId,
+          createdAt: { gte: startAt, lt: endAt },
+          order: {
+            ...scope.orderWhere,
+            deletedAt: null,
           },
-          _sum: { amountCents: true },
-        }),
-        this.prisma.customerLedgerEntry.aggregate({
-          where: {
-            businessId: scope.businessId,
-            ...(scope.sellerIds ? { sellerId: { in: scope.sellerIds } } : {}),
-            type: 'DEBIT',
-          },
-          _sum: { amountCents: true },
-        }),
-        this.prisma.customerLedgerEntry.aggregate({
-          where: {
-            businessId: scope.businessId,
-            ...(scope.sellerIds ? { sellerId: { in: scope.sellerIds } } : {}),
-            type: 'CREDIT',
-          },
-          _sum: { amountCents: true },
-        }),
-        this.prisma.$queryRaw<
-          Array<{
-            grossProfitCents: bigint | number;
-            shippingCostCents: bigint | number;
-            commissionCostCents: bigint | number;
-            returnCostCents: bigint | number;
-          }>
-        >(
-          Prisma.sql`
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.customerLedgerEntry.aggregate({
+        where: {
+          businessId: scope.businessId,
+          ...(scope.sellerIds ? { sellerId: { in: scope.sellerIds } } : {}),
+          type: 'DEBIT',
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.customerLedgerEntry.aggregate({
+        where: {
+          businessId: scope.businessId,
+          ...(scope.sellerIds ? { sellerId: { in: scope.sellerIds } } : {}),
+          type: 'CREDIT',
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.$queryRaw<
+        Array<{
+          grossProfitCents: bigint | number;
+          shippingCostCents: bigint | number;
+          commissionCostCents: bigint | number;
+          returnCostCents: bigint | number;
+        }>
+      >(
+        Prisma.sql`
             SELECT
               COALESCE(
                 SUM((oi."unitPriceCents" - COALESCE(oi."costSnapshotCents", 0)) * oi."quantity"),
@@ -1646,8 +1678,8 @@ export class FinanceService {
               AND o."createdAt" < ${endAt}
               ${sellerOrderSql}
           `,
-        ),
-        this.prisma.$queryRaw<Array<{ warnCount: bigint | number }>>(Prisma.sql`
+      ),
+      this.prisma.$queryRaw<Array<{ warnCount: bigint | number }>>(Prisma.sql`
           SELECT COUNT(*)::int AS "warnCount"
           FROM (
             SELECT c."id"
@@ -1676,7 +1708,7 @@ export class FinanceService {
               AND debt."debtCents" > c."creditLimitCents"
           ) warn_customers
         `),
-      ]);
+    ]);
 
     const grossRevenueCents = Number(orderAggregate._sum.totalAmountCents ?? 0);
     const collectedCents = Number(paymentAggregate._sum.amountCents ?? 0);
@@ -1688,7 +1720,10 @@ export class FinanceService {
     const commissionCostCents = Number(profitRows[0]?.commissionCostCents ?? 0);
     const returnCostCents = Number(profitRows[0]?.returnCostCents ?? 0);
     const netProfitV2Cents =
-      grossProfitCents - shippingCostCents - commissionCostCents - returnCostCents;
+      grossProfitCents -
+      shippingCostCents -
+      commissionCostCents -
+      returnCostCents;
     const warnCount = Number(warnRows[0]?.warnCount ?? 0);
 
     return {
@@ -1831,15 +1866,18 @@ export class FinanceService {
 
     const userMap = new Map(users.map((row) => [row.id, row] as const));
     const profitMap = new Map(
-      profitRows.map((row) => [
-        Number(row.userId),
-        {
-          grossProfitCents: Number(row.profitCents ?? 0),
-          shippingCostCents: Number(row.shippingCostCents ?? 0),
-          commissionCostCents: Number(row.commissionCostCents ?? 0),
-          returnCostCents: Number(row.returnCostCents ?? 0),
-        },
-      ] as const),
+      profitRows.map(
+        (row) =>
+          [
+            Number(row.userId),
+            {
+              grossProfitCents: Number(row.profitCents ?? 0),
+              shippingCostCents: Number(row.shippingCostCents ?? 0),
+              commissionCostCents: Number(row.commissionCostCents ?? 0),
+              returnCostCents: Number(row.returnCostCents ?? 0),
+            },
+          ] as const,
+      ),
     );
 
     const rows = orderGroups
@@ -1881,15 +1919,27 @@ export class FinanceService {
       rows,
       totals: {
         orderCount: rows.reduce((acc, row) => acc + row.orderCount, 0),
-        salesTotalCents: rows.reduce((acc, row) => acc + row.salesTotalCents, 0),
+        salesTotalCents: rows.reduce(
+          (acc, row) => acc + row.salesTotalCents,
+          0,
+        ),
         profitCents: rows.reduce((acc, row) => acc + row.profitCents, 0),
-        netProfitV2Cents: rows.reduce((acc, row) => acc + row.netProfitV2Cents, 0),
-        shippingCostCents: rows.reduce((acc, row) => acc + row.shippingCostCents, 0),
+        netProfitV2Cents: rows.reduce(
+          (acc, row) => acc + row.netProfitV2Cents,
+          0,
+        ),
+        shippingCostCents: rows.reduce(
+          (acc, row) => acc + row.shippingCostCents,
+          0,
+        ),
         commissionCostCents: rows.reduce(
           (acc, row) => acc + row.commissionCostCents,
           0,
         ),
-        returnCostCents: rows.reduce((acc, row) => acc + row.returnCostCents, 0),
+        returnCostCents: rows.reduce(
+          (acc, row) => acc + row.returnCostCents,
+          0,
+        ),
       },
     };
   }
@@ -2019,9 +2069,15 @@ export class FinanceService {
       rows: normalizedRows,
       totals: {
         quantity: normalizedRows.reduce((acc, row) => acc + row.quantity, 0),
-        salesCents: normalizedRows.reduce((acc, row) => acc + row.salesCents, 0),
+        salesCents: normalizedRows.reduce(
+          (acc, row) => acc + row.salesCents,
+          0,
+        ),
         costCents: normalizedRows.reduce((acc, row) => acc + row.costCents, 0),
-        profitCents: normalizedRows.reduce((acc, row) => acc + row.profitCents, 0),
+        profitCents: normalizedRows.reduce(
+          (acc, row) => acc + row.profitCents,
+          0,
+        ),
         netProfitV2Cents: normalizedRows.reduce(
           (acc, row) => acc + row.netProfitV2Cents,
           0,
@@ -2081,4 +2137,3 @@ export class FinanceService {
     });
   }
 }
-

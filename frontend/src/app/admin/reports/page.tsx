@@ -10,7 +10,10 @@ import {
   CreditCard,
   Package,
   RefreshCcw,
+  TrendingUp,
   Wallet,
+  AlertTriangle,
+  ShoppingBag,
 } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
@@ -18,408 +21,235 @@ import api from '@/services/api';
 import { formatPrice } from '@/lib/format';
 
 interface DashboardSummary {
-  activeProducts: number;
-  lowStockProducts: number;
-  ordersTotal: number;
-  ordersToday: number;
-  revenueTodayCents: number;
+  activeProducts: number; lowStockProducts: number;
+  ordersTotal: number; ordersToday: number; revenueTodayCents: number;
 }
-
 interface DashboardReportsSummary {
-  range: {
-    from: string;
-    to: string;
-    days: number;
-  };
-  ordersCount: number;
-  revenueCents: number;
-  averageOrderValueCents: number;
-  topProducts: Array<{
-    productId: number;
-    name: string;
-    quantity: number;
-    revenueCents: number;
-  }>;
+  range: { from: string; to: string; days: number };
+  ordersCount: number; revenueCents: number; averageOrderValueCents: number;
+  topProducts: Array<{ productId: number; name: string; quantity: number; revenueCents: number }>;
 }
-
-interface PaginationMeta {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
 interface OrderListResponse {
-  data: Array<{
-    id: number;
-    source: string;
-    statusKey: string;
-  }>;
-  meta: PaginationMeta;
+  data: Array<{ id: number; source: string; statusKey: string }>;
+  meta: { total: number };
 }
+interface ReturnRequestSummary { id: number; }
+interface PaginatedPayouts { data: Array<{ id: number }>; meta: { total: number }; }
 
-interface ReturnRequestSummary {
-  id: number;
-}
-
-interface PaginatedPayouts {
-  data: Array<{
-    id: number;
-  }>;
-  meta: PaginationMeta;
-}
-
-const resolveLabel = (value: string) => {
-  const key = String(value ?? '').trim().toUpperCase();
-  const labels: Record<string, string> = {
-    POS: 'POS',
-    WEB: 'Web',
-    MOBILE: 'Mobil',
-    API: 'API',
-    CREATED: 'Oluşturuldu',
-    NEW: 'Yeni',
-    PAID: 'Ödendi',
-    IN_PROGRESS: 'Hazırlanıyor',
-    PREPARING: 'Hazırlanıyor',
-    SHIPPED: 'Kargoda',
-    DELIVERED: 'Teslim',
-    COMPLETED: 'Tamamlandı',
-    CANCELLED: 'İptal',
-    RETURN_REQUESTED: 'İade talebi',
-    RETURNED: 'İade',
-    RETURN_REJECTED: 'İade red',
-  };
-
-  return labels[key] ?? value;
+const statusLabels: Record<string, string> = {
+  CREATED: 'Oluşturuldu', NEW: 'Yeni', PAID: 'Ödendi',
+  IN_PROGRESS: 'Hazırlanıyor', PREPARING: 'Hazırlanıyor',
+  SHIPPED: 'Kargoda', DELIVERED: 'Teslim', COMPLETED: 'Tamamlandı',
+  CANCELLED: 'İptal', RETURN_REQUESTED: 'İade Talebi',
+  RETURNED: 'İade', RETURN_REJECTED: 'İade Ret',
+  POS: 'POS', WEB: 'Web', MOBILE: 'Mobil', API: 'API',
 };
+const resolveLabel = (v: string) => statusLabels[v.toUpperCase()] ?? v;
+
+const barColors = ['bg-[var(--primary-800)]', 'bg-amber-500', 'bg-violet-500', 'bg-blue-500', 'bg-red-400'];
 
 export default function AdminReportsPage() {
-  const summaryQuery = useQuery<DashboardSummary>({
+  const summaryQ = useQuery<DashboardSummary>({
     queryKey: ['admin-reports-summary-kpi'],
-    queryFn: async () => {
-      const res = await api.get<DashboardSummary>('/dashboard/summary');
-      return res.data;
-    },
+    queryFn: async () => (await api.get<DashboardSummary>('/dashboard/summary')).data,
   });
-
-  const reportsQuery = useQuery<DashboardReportsSummary>({
+  const reportsQ = useQuery<DashboardReportsSummary>({
     queryKey: ['admin-reports-period-summary'],
-    queryFn: async () => {
-      const res = await api.get<DashboardReportsSummary>('/dashboard/reports/summary');
-      return res.data;
-    },
+    queryFn: async () => (await api.get<DashboardReportsSummary>('/dashboard/reports/summary')).data,
   });
-
-  const ordersSampleQuery = useQuery<OrderListResponse>({
+  const ordersQ = useQuery<OrderListResponse>({
     queryKey: ['admin-reports-orders-sample'],
-    queryFn: async () => {
-      const res = await api.get<OrderListResponse>('/platform/orders?page=1&pageSize=80');
-      return res.data;
-    },
+    queryFn: async () => (await api.get<OrderListResponse>('/platform/orders?page=1&pageSize=80')).data,
   });
-
-  const pendingReturnsQuery = useQuery<ReturnRequestSummary[]>({
+  const returnsQ = useQuery<ReturnRequestSummary[]>({
     queryKey: ['admin-reports-pending-returns'],
-    queryFn: async () => {
-      const res = await api.get<ReturnRequestSummary[]>('/platform/return-requests?status=PENDING');
-      return res.data;
-    },
+    queryFn: async () => (await api.get<ReturnRequestSummary[]>('/platform/return-requests?status=PENDING')).data,
   });
-
-  const pendingPayoutsQuery = useQuery<PaginatedPayouts>({
+  const payoutsQ = useQuery<PaginatedPayouts>({
     queryKey: ['admin-reports-pending-payouts'],
-    queryFn: async () => {
-      const res = await api.get<PaginatedPayouts>(
-        '/platform/finance/payouts?status=pending&page=1&pageSize=20',
-      );
-      return res.data;
-    },
+    queryFn: async () => (await api.get<PaginatedPayouts>('/platform/finance/payouts?status=pending&page=1&pageSize=20')).data,
   });
 
-  const isPrimaryLoading = summaryQuery.isLoading || reportsQuery.isLoading;
-  const isPrimaryError = summaryQuery.isError || reportsQuery.isError;
-
-  const sourceDistribution = useMemo(() => {
-    const orders = ordersSampleQuery.data?.data ?? [];
-    const counts = orders.reduce<Record<string, number>>((acc, order) => {
-      const key = String(order.source ?? 'UNKNOWN').toUpperCase();
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts)
-      .map(([key, count]) => ({ key, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [ordersSampleQuery.data?.data]);
-
-  const statusDistribution = useMemo(() => {
-    const orders = ordersSampleQuery.data?.data ?? [];
-    const counts = orders.reduce<Record<string, number>>((acc, order) => {
-      const key = String(order.statusKey ?? 'UNKNOWN').toUpperCase();
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts)
-      .map(([key, count]) => ({ key, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [ordersSampleQuery.data?.data]);
-
-  const reports = reportsQuery.data;
-  const summary = summaryQuery.data;
-  const ordersSampleCount = ordersSampleQuery.data?.data.length ?? 0;
-  const pendingReturnsCount = pendingReturnsQuery.data?.length ?? 0;
-  const pendingPayoutCount = pendingPayoutsQuery.data?.meta.total ?? 0;
+  const isLoading = summaryQ.isLoading || reportsQ.isLoading;
+  const isError = summaryQ.isError || reportsQ.isError;
+  const reports = reportsQ.data;
+  const summary = summaryQ.data;
+  const ordersSample = ordersQ.data?.data ?? [];
+  const pendingReturns = returnsQ.data?.length ?? 0;
+  const pendingPayouts = payoutsQ.data?.meta?.total ?? 0;
 
   const rangeLabel = reports
-    ? `${new Date(reports.range.from).toLocaleDateString('tr-TR')} - ${new Date(
-        reports.range.to,
-      ).toLocaleDateString('tr-TR')}`
-    : '-';
+    ? `${new Date(reports.range.from).toLocaleDateString('tr-TR')} – ${new Date(reports.range.to).toLocaleDateString('tr-TR')}`
+    : '—';
+
+  const sourceDistribution = useMemo(() => {
+    const counts = ordersSample.reduce<Record<string, number>>((acc, o) => {
+      const k = (o.source ?? 'UNKNOWN').toUpperCase(); acc[k] = (acc[k] ?? 0) + 1; return acc;
+    }, {});
+    return Object.entries(counts).map(([k, c]) => ({ key: k, count: c })).sort((a, b) => b.count - a.count);
+  }, [ordersSample]);
+
+  const statusDistribution = useMemo(() => {
+    const counts = ordersSample.reduce<Record<string, number>>((acc, o) => {
+      const k = (o.statusKey ?? 'UNKNOWN').toUpperCase(); acc[k] = (acc[k] ?? 0) + 1; return acc;
+    }, {});
+    return Object.entries(counts).map(([k, c]) => ({ key: k, count: c })).sort((a, b) => b.count - a.count);
+  }, [ordersSample]);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-gradient-to-br from-[#F7F1E5] via-white to-[#ECF6F3] px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Raporlar
-            </p>
-            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
-              Operasyon raporları
-            </h1>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">
-              Satış, ürün ve operasyon metriklerini tek ekranda izleyin.
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--primary-800)]">
-            Dönem: {rangeLabel}
-          </div>
+    <div className="space-y-8">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Operasyon Raporları</h1>
+          <p className="mt-1 text-sm text-[var(--neutral-600)]">Satış, ürün ve operasyon metriklerini izleyin.</p>
         </div>
-      </section>
+        <span className="text-xs font-medium text-[var(--neutral-500)]">📅 {rangeLabel}</span>
+      </div>
 
-      {isPrimaryLoading ? (
-        <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-10">
-          <Spinner label="Rapor verileri yükleniyor..." />
-        </section>
-      ) : null}
+      {isLoading && <Spinner label="Rapor verileri yükleniyor..." />}
+      {isError && (
+        <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4" /> Rapor verileri alınamadı.
+        </div>
+      )}
 
-      {isPrimaryError ? (
-        <section className="rounded-[var(--radius-xl)] border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
-          Rapor verileri alınamadı. Oturumu yenileyip tekrar deneyin.
-        </section>
-      ) : null}
-
-      {!isPrimaryLoading && !isPrimaryError && reports && summary ? (
+      {!isLoading && !isError && reports && summary && (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                30 gün ciro
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {formatPrice(reports.revenueCents / 100)}
-              </p>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                30 gün sipariş
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">{reports.ordersCount}</p>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                Ortalama sepet
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {formatPrice(reports.averageOrderValueCents / 100)}
-              </p>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                Bugün sipariş
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">{summary.ordersToday}</p>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                Bugün ciro
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {formatPrice(summary.revenueTodayCents / 100)}
-              </p>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-                Düşük stok
-              </p>
-              <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {summary.lowStockProducts}
-              </p>
-            </div>
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                    Satış
-                  </p>
-                  <h2 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                    En çok satan ürünler
-                  </h2>
+          {/* ── KPIs ── */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { label: '30 Gün Ciro', value: formatPrice(reports.revenueCents), icon: TrendingUp },
+              { label: '30 Gün Sipariş', value: String(reports.ordersCount), icon: ShoppingBag },
+              { label: 'Ort. Sepet', value: formatPrice(reports.averageOrderValueCents), icon: BarChart3 },
+              { label: 'Bugün Sipariş', value: String(summary.ordersToday), icon: ClipboardList },
+              { label: 'Bugün Ciro', value: formatPrice(summary.revenueTodayCents), icon: CreditCard },
+              { label: 'Düşük Stok', value: String(summary.lowStockProducts), icon: Package },
+            ].map(({ label, value, icon: Icon }) => (
+              <div key={label}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">{label}</p>
+                <div className="mt-1 flex items-end gap-2">
+                  <span className="text-xl font-semibold text-[var(--primary-800)]">{value}</span>
+                  <Icon className="mb-0.5 h-4 w-4 text-[var(--neutral-400)]" />
                 </div>
-                <BarChart3 className="h-5 w-5 text-[var(--primary-800)]/70" />
               </div>
+            ))}
+          </div>
 
+          {/* ── Divider ── */}
+          <div className="border-t border-[var(--neutral-200)]" />
+
+          {/* ── Top Products + Distributions ── */}
+          <div className="grid gap-10 xl:grid-cols-[1fr_320px]">
+
+            {/* Top Products Table */}
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-4">
+                En Çok Satan Ürünler — Son 30 Gün
+              </p>
               {reports.topProducts.length === 0 ? (
-                <p className="mt-4 text-sm text-[var(--neutral-600)]">Bu dönemde ürün satışı yok.</p>
+                <p className="text-sm text-[var(--neutral-500)]">Bu dönemde ürün satışı yok.</p>
               ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="text-[10px] uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                      <tr>
-                        <th className="pb-3 pr-4">Ürün</th>
-                        <th className="pb-3 pr-4">Adet</th>
-                        <th className="pb-3">Ciro</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reports.topProducts.slice(0, 10).map((product) => (
-                        <tr key={product.productId} className="border-t border-[var(--neutral-200)]">
-                          <td className="py-3 pr-4 font-semibold text-[var(--primary-800)]">
-                            {product.name}
-                          </td>
-                          <td className="py-3 pr-4 text-[var(--neutral-600)]">{product.quantity}</td>
-                          <td className="py-3 text-[var(--primary-800)]">
-                            {formatPrice(product.revenueCents / 100)}
-                          </td>
-                        </tr>
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--neutral-200)]">
+                      {['Sıra', 'Ürün', 'Adet', 'Ciro'].map((h) => (
+                        <th key={h} className={`pb-3 pr-6 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)] ${h === 'Ciro' ? 'text-right' : ''}`}>{h}</th>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--neutral-100)]">
+                    {reports.topProducts.slice(0, 10).map((p, i) => (
+                      <tr key={p.productId} className="hover:bg-[var(--neutral-50)] transition-colors">
+                        <td className="py-3 pr-6 text-[13px] font-bold text-[var(--neutral-400)]">{i + 1}</td>
+                        <td className="py-3 pr-6 font-medium text-[var(--primary-800)]">{p.name}</td>
+                        <td className="py-3 pr-6 text-[var(--neutral-600)]">{p.quantity}</td>
+                        <td className="py-3 text-right font-semibold text-[var(--primary-800)]">{formatPrice(p.revenueCents)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                    Kaynak Dağılımı
-                  </p>
-                  <ClipboardList className="h-5 w-5 text-[var(--primary-800)]/70" />
-                </div>
-                <p className="mt-2 text-xs text-[var(--neutral-500)]">
-                  Son {ordersSampleCount} sipariş örneklemi
+            {/* Right Column */}
+            <div className="space-y-8">
+              {/* Source Distribution */}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-4">
+                  Kaynak Dağılımı
+                  <span className="ml-2 normal-case tracking-normal font-normal text-[var(--neutral-400)]">({ordersSample.length} örnek)</span>
                 </p>
-                <div className="mt-4 space-y-3">
-                  {sourceDistribution.length === 0 ? (
-                    <p className="text-sm text-[var(--neutral-600)]">Veri yok.</p>
-                  ) : (
-                    sourceDistribution.map((entry) => {
-                      const percent =
-                        ordersSampleCount > 0
-                          ? Math.round((entry.count / ordersSampleCount) * 100)
-                          : 0;
-                      return (
-                        <div key={entry.key}>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-[var(--primary-800)]">
-                              {resolveLabel(entry.key)}
-                            </span>
-                            <span className="text-[var(--neutral-600)]">
-                              {entry.count} ({percent}%)
-                            </span>
+                {sourceDistribution.length === 0
+                  ? <p className="text-sm text-[var(--neutral-500)]">Veri yok.</p>
+                  : (
+                    <div className="space-y-3">
+                      {sourceDistribution.map((entry, i) => {
+                        const pct = ordersSample.length > 0 ? Math.round((entry.count / ordersSample.length) * 100) : 0;
+                        return (
+                          <div key={entry.key}>
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="font-medium text-[var(--neutral-700)]">{resolveLabel(entry.key)}</span>
+                              <span className="text-[var(--neutral-500)]">{entry.count} ({pct}%)</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-[var(--neutral-100)]">
+                              <div className={`h-full rounded-full ${barColors[i % barColors.length]}`} style={{ width: `${pct}%` }} />
+                            </div>
                           </div>
-                          <div className="mt-1 h-2 rounded-full bg-[var(--neutral-100)]">
-                            <div
-                              className="h-2 rounded-full bg-[var(--primary-800)]"
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                }
+              </div>
+
+              {/* Status Distribution */}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)] mb-4">Durum Dağılımı</p>
+                {statusDistribution.length === 0
+                  ? <p className="text-sm text-[var(--neutral-500)]">Veri yok.</p>
+                  : (
+                    <div className="divide-y divide-[var(--neutral-100)]">
+                      {statusDistribution.slice(0, 7).map((entry) => (
+                        <div key={entry.key} className="flex items-center justify-between py-2 text-sm">
+                          <span className="text-[var(--neutral-700)]">{resolveLabel(entry.key)}</span>
+                          <span className="font-semibold text-[var(--primary-800)]">{entry.count}</span>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-                    Durum Dağılımı
-                  </p>
-                  <Package className="h-5 w-5 text-[var(--primary-800)]/70" />
-                </div>
-                <div className="mt-4 space-y-2">
-                  {statusDistribution.length === 0 ? (
-                    <p className="text-sm text-[var(--neutral-600)]">Veri yok.</p>
-                  ) : (
-                    statusDistribution.slice(0, 6).map((entry) => (
-                      <div
-                        key={entry.key}
-                        className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-2 text-xs"
-                      >
-                        <span className="font-semibold text-[var(--primary-800)]">
-                          {resolveLabel(entry.key)}
-                        </span>
-                        <span className="text-[var(--neutral-600)]">{entry.count}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      ))}
+                    </div>
+                  )
+                }
               </div>
             </div>
-          </section>
+          </div>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <RefreshCcw className="h-5 w-5 text-[var(--primary-800)]/70" />
-              <h3 className="mt-4 text-xl font-serif text-[var(--primary-800)]">Bekleyen iade</h3>
-              <p className="mt-2 text-3xl font-serif text-[var(--primary-800)]">{pendingReturnsCount}</p>
-              <Link
-                href="/admin/orders"
-                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)]"
-              >
-                Siparişlere git <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
+          {/* ── Divider ── */}
+          <div className="border-t border-[var(--neutral-200)]" />
 
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <Wallet className="h-5 w-5 text-[var(--primary-800)]/70" />
-              <h3 className="mt-4 text-xl font-serif text-[var(--primary-800)]">Bekleyen payout</h3>
-              <p className="mt-2 text-3xl font-serif text-[var(--primary-800)]">{pendingPayoutCount}</p>
-              <Link
-                href="/admin/finance/payouts"
-                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)]"
-              >
-                Payout ekranı <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <CreditCard className="h-5 w-5 text-[var(--primary-800)]/70" />
-              <h3 className="mt-4 text-xl font-serif text-[var(--primary-800)]">Ödeme debug</h3>
-              <p className="mt-2 text-sm text-[var(--neutral-600)]">
-                Webhook event akışı ve manuel işleme sonuçlarını inceleyin.
-              </p>
-              <Link
-                href="/admin/payments/webhooks"
-                className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)]"
-              >
-                Webhook listesi <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </section>
+          {/* ── Operation Links ── */}
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              { icon: RefreshCcw, label: 'Bekleyen İade', value: pendingReturns, href: '/admin/orders', link: 'Siparişlere Git' },
+              { icon: Wallet, label: 'Bekleyen Payout', value: pendingPayouts, href: '/admin/finance/payouts', link: 'Payout Ekranı' },
+              { icon: CreditCard, label: 'Ödeme Debug', value: null, href: '/admin/payments/webhooks', link: 'Webhook Listesi' },
+            ].map(({ icon: Icon, label, value, href, link }) => (
+              <div key={label}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon className="h-4 w-4 text-[var(--neutral-500)]" />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">{label}</p>
+                </div>
+                {value !== null && (
+                  <p className="text-3xl font-semibold text-[var(--primary-800)] mb-2">{value}</p>
+                )}
+                <Link href={href} className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary-800)] hover:underline underline-offset-2">
+                  {link} <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            ))}
+          </div>
         </>
-      ) : null}
+      )}
     </div>
   );
 }
