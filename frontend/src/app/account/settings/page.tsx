@@ -128,7 +128,7 @@ export default function AccountSettingsPage() {
 
   if (isLoading && !user) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+      <div className="min-h-[calc(100vh-140px)] bg-transparent">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
           <header className="flex flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
@@ -177,9 +177,9 @@ export default function AccountSettingsPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-white">
+    <div className="min-h-[calc(100vh-140px)] bg-transparent">
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 py-8 md:px-6 md:py-10">
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <header className="surface-panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
               Hesap
@@ -200,7 +200,7 @@ export default function AccountSettingsPage() {
           <button
             type="button"
             onClick={() => router.push('/account/profile')}
-            className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white p-5 text-left shadow-[var(--shadow-md)] transition hover:border-[var(--neutral-300)]"
+            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Profil</p>
             <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Bilgilerimi güncelle</p>
@@ -210,7 +210,7 @@ export default function AccountSettingsPage() {
           <button
             type="button"
             onClick={() => router.push('/account/orders')}
-            className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white p-5 text-left shadow-[var(--shadow-md)] transition hover:border-[var(--neutral-300)]"
+            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Siparişler</p>
             <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Siparişlerimi görüntüle</p>
@@ -220,7 +220,7 @@ export default function AccountSettingsPage() {
           <button
             type="button"
             onClick={() => router.push('/account/addresses')}
-            className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white p-5 text-left shadow-[var(--shadow-md)] transition hover:border-[var(--neutral-300)]"
+            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Adresler</p>
             <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Adres defterim</p>
@@ -230,7 +230,7 @@ export default function AccountSettingsPage() {
           <button
             type="button"
             onClick={() => router.push('/account/reviews')}
-            className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white p-5 text-left shadow-[var(--shadow-md)] transition hover:border-[var(--neutral-300)]"
+            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Yorumlar</p>
             <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Yorumlarımı yönet</p>
@@ -238,7 +238,7 @@ export default function AccountSettingsPage() {
           </button>
         </section>
 
-        <section className="border-t border-[var(--neutral-200)] pt-6">
+        <section className="surface-panel p-5 md:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
             Tercihler
           </p>
@@ -364,7 +364,7 @@ export default function AccountSettingsPage() {
         </section>
 
         {hasBackofficePanel && (
-          <section className="border-t border-[var(--neutral-200)] pt-6">
+          <section className="surface-panel-muted p-5 md:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Yönetim</p>
             <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">{getPanelLabelByRole(user.role)}</p>
             <p className="mt-2 text-sm text-[var(--neutral-600)]">

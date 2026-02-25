@@ -2257,9 +2257,9 @@ export default function PosPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-0">
+    <div className="pos-redesign flex w-full flex-col gap-0 bg-transparent">
       {/* ── Sticky POS Topbar ── */}
-      <header className="sticky top-0 z-40 border-b border-[#163D34]/30 bg-[#0F2D27] px-4 py-3 text-white md:px-6">
+      <header className="sticky top-0 z-40 border-b border-[#163D34]/30 bg-gradient-to-r from-[#0F2D27] via-[#173F36] to-[#0F2D27] px-4 py-3 text-white shadow-[0_10px_30px_rgba(15,45,39,0.25)] md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div>
@@ -2283,7 +2283,7 @@ export default function PosPage() {
           <div className="flex flex-wrap items-center gap-2">
             {!isOnline ? null : (
               <Button
-                className="h-7 px-3 text-xs"
+                className="h-8 rounded-full border border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20"
                 onClick={() => void syncQueuedSales({ force: true })}
                 disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
               >
@@ -2292,7 +2292,7 @@ export default function PosPage() {
             )}
             <Button
               variant="secondary"
-              className="h-7 px-3 text-xs"
+              className="h-8 rounded-full border-white/25 bg-white text-[#163D34] hover:bg-[#f8f2e5]"
               onClick={() => setIsFocusMode((prev) => !prev)}
             >
               {isFocusMode ? 'Focus kapat' : 'Focus'}
@@ -2312,8 +2312,35 @@ export default function PosPage() {
       </header>
 
       {/* ── Main POS Body ── */}
-      <div className="mx-auto w-full max-w-[1380px] px-3 py-4 md:px-6 md:py-5">
+      <div className="mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6">
         <div className="space-y-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article className="surface-panel-muted p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Baglanti</p>
+              <p className="mt-2 text-2xl font-semibold text-[#123228]">{isOnline ? 'Online' : 'Offline'}</p>
+              <p className="mt-1 text-xs text-[#5C6F68]">Terminal ag durumu</p>
+            </article>
+            <article className="surface-panel-muted p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Kuyruk</p>
+              <p className="mt-2 text-2xl font-semibold text-[#123228]">{queueCount}</p>
+              <p className="mt-1 text-xs text-[#5C6F68]">Bekleyen satis</p>
+            </article>
+            <article className="surface-panel-muted p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Vardiya</p>
+              <p className="mt-2 text-2xl font-semibold text-[#123228]">
+                {activeShift ? 'Acik' : 'Kapali'}
+              </p>
+              <p className="mt-1 text-xs text-[#5C6F68]">
+                {activeShift ? activeShift.registerCode : 'Kasa secimi bekleniyor'}
+              </p>
+            </article>
+            <article className="surface-panel-muted p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Toplam</p>
+              <p className="mt-2 text-2xl font-semibold text-[#123228]">{formatMoney(estimatedPayableCents)}</p>
+              <p className="mt-1 text-xs text-[#5C6F68]">Anlik tahsilat tutari</p>
+            </article>
+          </section>
+
           {isFocusMode ? (
             <p className="text-xs text-[#1A3C34]/60">
               Focus mode aktif: ikincil operasyon panelleri gizlendi.
@@ -2322,7 +2349,7 @@ export default function PosPage() {
 
           {isAuthed ? (
             !activeShift ? (
-              <div className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-5 md:px-5 md:py-6">
+              <div className="surface-panel px-4 py-5 md:px-5 md:py-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
                   Vardiya Baslat
                 </p>
@@ -2376,10 +2403,7 @@ export default function PosPage() {
                 </div>
               </div>
             ) : (
-              <div
-                className={`rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5 ${isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''
-                  }`}
-              >
+              <div className={`surface-panel px-4 py-4 md:px-5 md:py-5 ${isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''}`}>
                 <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
                   <div className="space-y-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">

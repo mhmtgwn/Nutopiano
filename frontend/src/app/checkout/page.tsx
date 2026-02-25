@@ -223,7 +223,7 @@ export default function CheckoutPage() {
 
   if (orderSuccess) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+      <div className="min-h-[calc(100vh-140px)] bg-transparent">
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
@@ -239,7 +239,7 @@ export default function CheckoutPage() {
 
           <CheckoutStepper currentStep={3} />
 
-          <section className="space-y-5 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/90 px-6 py-7 shadow-[var(--shadow-2xl)] md:px-8">
+          <section className="surface-panel space-y-5 px-6 py-7 md:px-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-start gap-4">
                 <CheckCircle2 className="mt-1 h-6 w-6 text-[var(--accent-600)]" />
@@ -357,7 +357,7 @@ export default function CheckoutPage() {
 
   if (!hasItems) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+      <div className="min-h-[calc(100vh-140px)] bg-transparent">
         <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
@@ -373,7 +373,7 @@ export default function CheckoutPage() {
 
           <CheckoutStepper currentStep={0} />
 
-          <section className="space-y-4 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/95 px-6 py-7 shadow-[var(--shadow-md)] backdrop-blur">
+          <section className="surface-panel space-y-4 px-6 py-7">
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Sepet durumu
@@ -401,7 +401,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+    <div className="min-h-[calc(100vh-140px)] bg-transparent">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-14">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
@@ -418,7 +418,7 @@ export default function CheckoutPage() {
           </div>
         </header>
 
-        <section className="rounded-[var(--radius-3xl)] border border-[var(--primary-800)]/10 bg-gradient-to-br from-[var(--accent-100)] via-white to-[var(--success-100)] px-6 py-8 shadow-[var(--shadow-2xl)] md:px-10">
+        <section className="surface-panel rounded-[var(--radius-3xl)] bg-gradient-to-br from-[var(--accent-100)]/70 via-white to-[var(--success-100)] px-6 py-8 md:px-10">
           <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] md:items-center">
             <div className="space-y-4">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
@@ -472,10 +472,7 @@ export default function CheckoutPage() {
         <CheckoutStepper currentStep={2} />
 
         <section className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-white/95 px-6 py-6 shadow-[var(--shadow-2xl)]"
-          >
+          <form onSubmit={handleSubmit} className="surface-panel space-y-6 px-6 py-6">
             {formError && (
               <div className="rounded-[var(--radius-md)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-3 text-xs text-[var(--error-600)]">
                 {formError}
@@ -555,7 +552,7 @@ export default function CheckoutPage() {
             </div>
           </form>
 
-          <aside className="space-y-5 rounded-[var(--radius-3xl)] border border-[var(--neutral-200)] bg-gradient-to-b from-white to-[var(--neutral-100)] px-6 py-6 shadow-[var(--shadow-2xl)]">
+          <aside className="surface-panel space-y-5 bg-gradient-to-b from-white to-[var(--neutral-100)] px-6 py-6 md:sticky md:top-24 md:self-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
                 Sipariş özeti

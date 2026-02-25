@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  Bolt,
   ClipboardList,
   CreditCard,
   Heart,
@@ -75,21 +76,27 @@ export default function Header() {
         ];
       case 'SELLER':
         return [
-          { href: '/pos', label: 'Satis', icon: LayoutDashboard },
+          { href: '/pos', label: 'POS', icon: LayoutDashboard },
           { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
-          { href: '/dashboard/inventory', label: 'Stok', icon: Package },
+          { href: '/dashboard/products', label: 'Ürünler', icon: Package },
           { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
-          { href: '/dashboard/customers', label: 'Musteriler', icon: User },
+          { href: '/dashboard/customers', label: 'Müşteriler', icon: User },
         ];
       case 'USER':
         return [
-          { href: '/pos', label: 'Satis', icon: LayoutDashboard },
+          { href: '/pos', label: 'POS', icon: LayoutDashboard },
           { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
         ];
       default:
         return [];
     }
   }, [user?.role]);
+
+  const navigationLinks = [
+    { href: '/categories', label: 'Kategoriler' },
+    { href: '/products', label: 'Ürünler' },
+    { href: '/checkout', label: 'Checkout' },
+  ];
 
   useEffect(() => {
     if (!isSearchOpen) return;
@@ -157,8 +164,12 @@ export default function Header() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[var(--neutral-200)] bg-white/95 backdrop-blur-md shadow-[var(--shadow-sm)] md:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-center px-4 py-3">
-          <Link href="/" aria-label="Nutopiano anasayfa" className="flex items-center transition-opacity hover:opacity-80">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
+          <Link
+            href="/"
+            aria-label="Nutopiano anasayfa"
+            className="flex items-center transition-opacity hover:opacity-80"
+          >
             <Image
               src="/nutopiano-logo.png"
               alt="Nutopiano"
@@ -168,27 +179,83 @@ export default function Header() {
               priority
             />
           </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/categories"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)]"
+              aria-label="Kategoriler"
+            >
+              <Store className="h-4 w-4" />
+            </Link>
+            <Link
+              href="/cart"
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)]"
+              aria-label="Sepet"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              {totalQuantity > 0 && (
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--accent-600)] px-1.5 text-[10px] font-semibold text-white shadow-sm">
+                  {totalQuantity}
+                </span>
+              )}
+            </Link>
+          </div>
         </div>
       </header>
 
-      <header className="hidden sticky top-0 z-40 border-b border-[var(--neutral-200)] bg-white/95 backdrop-blur-md shadow-[var(--shadow-sm)] md:block">
-        <div className="mx-auto flex max-w-6xl flex-nowrap items-center justify-between gap-3 px-4 py-3 md:gap-4 md:px-6 md:py-4">
-          <Link href="/" aria-label="Nutopiano anasayfa" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-80">
-            <Image
-              src="/nutopiano-logo.png"
-              alt="Nutopiano"
-              width={120}
-              height={28}
-              style={{ width: 'auto', height: 'auto' }}
-              priority
-            />
-          </Link>
+      <header className="sticky top-0 z-40 hidden border-b border-[var(--neutral-200)] bg-white/80 backdrop-blur-xl shadow-[var(--shadow-sm)] md:block">
+        <div className="border-b border-[var(--neutral-200)]/80 bg-[var(--brand-ink)] text-[var(--brand-sand)]">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
+            <p className="flex items-center gap-2 text-[var(--brand-sand)]/90">
+              <Bolt className="h-3.5 w-3.5" />
+              Canlı stok ve hızlı POS akışı
+            </p>
+            <div className="flex items-center gap-4">
+              <Link href="/categories" className="text-[var(--brand-sand)]/80 transition hover:text-white">
+                Shop
+              </Link>
+              {isPosRoleAllowed(user?.role) && (
+                <Link href="/pos" className="text-[var(--brand-sand)]/80 transition hover:text-white">
+                  POS Terminal
+                </Link>
+              )}
+              <Link href={panelHref} className="text-[var(--brand-sand)]/80 transition hover:text-white">
+                {panelLabel}
+              </Link>
+            </div>
+          </div>
+        </div>
 
-          <div className="flex min-w-0 flex-nowrap items-center justify-end gap-2 md:gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+          <div className="flex min-w-0 items-center gap-8">
+            <Link href="/" aria-label="Nutopiano anasayfa" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-80">
+              <Image
+                src="/nutopiano-logo.png"
+                alt="Nutopiano"
+                width={142}
+                height={30}
+                style={{ width: 'auto', height: 'auto' }}
+                priority
+              />
+            </Link>
+            <nav className="hidden items-center gap-2 lg:flex">
+              {navigationLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-full px-4 py-2 text-sm font-semibold text-[var(--primary-800)]/75 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-end gap-2">
             <div
               ref={searchWrapRef}
-              className={`relative flex h-9 items-center overflow-hidden rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] transition-all duration-300 ease-out shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-sm)] md:h-10 ${
-                isSearchOpen ? 'w-[240px] md:w-[340px]' : 'w-10'
+              className={`relative flex h-10 items-center overflow-hidden rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition-all duration-300 ease-out ${
+                isSearchOpen ? 'w-[280px] xl:w-[360px]' : 'w-10'
               }`}
             >
               <button
@@ -198,15 +265,13 @@ export default function Header() {
                     setIsSearchOpen(true);
                     return;
                   }
-
                   if (trimmedQuery) {
                     submitSearch();
                     return;
                   }
-
                   setIsSearchOpen(false);
                 }}
-                className="inline-flex h-9 w-10 shrink-0 items-center justify-center transition-colors hover:text-[var(--primary-600)] md:h-10"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center transition-colors hover:text-[var(--primary-600)]"
                 aria-label="Ara"
               >
                 <Search className="h-5 w-5" />
@@ -218,7 +283,7 @@ export default function Header() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') submitSearch();
                 }}
-                className={`h-9 w-full bg-transparent pr-3 text-sm text-[var(--primary-800)] outline-none transition-opacity duration-200 placeholder:text-[var(--neutral-500)] md:h-10 ${
+                className={`h-10 w-full bg-transparent pr-3 text-sm text-[var(--primary-800)] outline-none transition-opacity duration-200 placeholder:text-[var(--neutral-500)] ${
                   isSearchOpen ? 'opacity-100' : 'opacity-0'
                 }`}
                 placeholder="Ürün ara..."
@@ -226,29 +291,29 @@ export default function Header() {
                 tabIndex={isSearchOpen ? 0 : -1}
               />
             </div>
+
             <Link
               href="/categories"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-600)]"
               aria-label="Shop"
             >
               <Store className="h-5 w-5" />
             </Link>
 
-            {/* User Menu */}
             <div ref={userMenuRef} className="relative">
               <button
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
+                onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-600)]"
                 aria-label="Hesap menüsü"
               >
                 <UserCircle2 className="h-5 w-5" />
               </button>
 
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-2xl)]">
+                <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-2xl)]">
                   {user ? (
                     <>
-                      <div className="border-b border-[var(--neutral-200)] px-4 py-3">
+                      <div className="border-b border-[var(--neutral-200)] bg-[var(--neutral-100)]/65 px-4 py-3">
                         <p className="text-sm font-semibold text-[var(--primary-800)]">{user.name}</p>
                         <p className="text-xs text-[var(--neutral-500)]">{user.phone}</p>
                         <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--neutral-500)]">
@@ -290,7 +355,7 @@ export default function Header() {
                             })}
                           </div>
                         ) : null}
-                        {isCustomer ? (
+                        {isCustomer && (
                           <>
                             <Link
                               href="/account/orders"
@@ -325,7 +390,7 @@ export default function Header() {
                               Adreslerim
                             </Link>
                           </>
-                        ) : null}
+                        )}
                         <Link
                           href="/account/settings"
                           className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
@@ -336,7 +401,7 @@ export default function Header() {
                         </Link>
                         <button
                           onClick={handleLogout}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--error-600)] hover:bg-[var(--error-50)]"
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--error-600)] hover:bg-[var(--error-100)]"
                         >
                           <LogOut className="h-4 w-4" />
                           Çıkış Yap
@@ -354,7 +419,7 @@ export default function Header() {
                       </Link>
                       <Link
                         href="/register"
-                        className="flex items-center justify-center rounded-lg border border-[var(--primary-800)] px-4 py-2 text-sm font-semibold text-[var(--primary-800)] hover:bg-[var(--primary-50)]"
+                        className="flex items-center justify-center rounded-lg border border-[var(--primary-800)] px-4 py-2 text-sm font-semibold text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
                         onClick={() => setIsUserMenuOpen(false)}
                       >
                         Kayıt Ol
@@ -364,9 +429,10 @@ export default function Header() {
                 </div>
               )}
             </div>
+
             <Link
               href="/cart"
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)] transition-all hover:shadow-[var(--shadow-sm)] hover:text-[var(--primary-600)] hover:border-[var(--neutral-300)] md:h-10 md:w-10"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-sm)] transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-600)]"
               aria-label="Sepet"
             >
               <ShoppingBag className="h-5 w-5" />

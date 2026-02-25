@@ -114,7 +114,7 @@ export default function ProfilePage() {
 
   if (isLoading && !user) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-[var(--neutral-50)]">
+      <div className="min-h-[calc(100vh-140px)] bg-transparent">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
           <header className="flex flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
@@ -226,10 +226,10 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-white">
+    <div className="min-h-[calc(100vh-140px)] bg-transparent">
       <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 py-8 md:px-6 md:py-10">
         {/* Header */}
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <header className="surface-panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
               Hesap
@@ -248,24 +248,24 @@ export default function ProfilePage() {
         </header>
 
         {/* Tabs */}
-        <div className="border-b border-[var(--neutral-200)]">
-          <div className="flex gap-6">
+        <div className="surface-panel-muted p-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`pb-3 text-sm font-semibold transition-colors ${
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 activeTab === 'profile'
-                  ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
-                  : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+                  ? 'bg-[var(--primary-800)] text-white'
+                  : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
               }`}
             >
               Profil
             </button>
             <button
               onClick={() => setActiveTab('security')}
-              className={`pb-3 text-sm font-semibold transition-colors ${
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 activeTab === 'security'
-                  ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
-                  : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+                  ? 'bg-[var(--primary-800)] text-white'
+                  : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
               }`}
             >
               Güvenlik
@@ -273,10 +273,10 @@ export default function ProfilePage() {
             {hasBackofficePanel && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className={`pb-3 text-sm font-semibold transition-colors ${
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   activeTab === 'admin'
-                    ? 'border-b-2 border-[var(--primary-800)] text-[var(--primary-800)]'
-                    : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+                    ? 'bg-[var(--primary-800)] text-white'
+                    : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
                 }`}
               >
                 Panel
@@ -290,7 +290,7 @@ export default function ProfilePage() {
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <div className="space-y-6">
-              <section className="border-t border-[var(--neutral-200)] pt-6">
+              <section className="surface-panel-muted p-5 md:p-6">
                 <div className="mb-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
                     Bilgileri Görüntüle
@@ -336,7 +336,7 @@ export default function ProfilePage() {
                 </div>
               </section>
 
-              <section className="border-t border-[var(--neutral-200)] pt-6">
+              <section className="surface-panel p-5 md:p-6">
                 <div className="mb-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
                     Düzenle
@@ -404,7 +404,7 @@ export default function ProfilePage() {
 
           {/* Security Tab */}
           {activeTab === 'security' && (
-            <section className="border-t border-[var(--neutral-200)] pt-6">
+            <section className="surface-panel p-5 md:p-6">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
                   Güvenlik
@@ -471,7 +471,7 @@ export default function ProfilePage() {
 
           {/* Admin Tab */}
           {activeTab === 'admin' && hasBackofficePanel && (
-            <section className="border-t border-[var(--neutral-200)] pt-6">
+            <section className="surface-panel-muted p-5 md:p-6">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
                   Panel

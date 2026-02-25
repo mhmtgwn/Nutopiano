@@ -110,6 +110,15 @@
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slower: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Experience Tokens */
+  --brand-ink: #0f2d27;
+  --brand-forest: #245244;
+  --brand-copper: #bf8b4b;
+  --brand-sand: #f6ecd9;
+  --brand-cream: #f8f6f1;
+  --brand-fog: #eef5f1;
+  --brand-night: #122f28;
 }
 
 @theme inline {
@@ -338,4 +347,62 @@ a:focus-visible {
 ::-moz-selection {
   background: var(--accent-200);
   color: var(--primary-900);
+}
+
+/* ============================================
+   EXPERIENCE LAYERS
+   ============================================ */
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 7% -12%, rgba(191, 139, 75, 0.2), transparent 44%),
+    radial-gradient(circle at 93% -18%, rgba(36, 82, 68, 0.18), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, var(--brand-cream) 52%, #f3f0ea 100%);
+}
+
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.62) 48%, rgba(255, 255, 255, 0.86) 100%);
+}
+
+.app-main {
+  position: relative;
+  z-index: 1;
+}
+
+.surface-panel {
+  border: 1px solid rgba(36, 82, 68, 0.14);
+  border-radius: var(--radius-2xl);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-lg);
+}
+
+.surface-panel-muted {
+  border: 1px solid rgba(26, 60, 52, 0.1);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(248, 246, 241, 0.92));
+  box-shadow: var(--shadow-md);
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(26, 60, 52, 0.18);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(15, 45, 39, 0.84);
 }

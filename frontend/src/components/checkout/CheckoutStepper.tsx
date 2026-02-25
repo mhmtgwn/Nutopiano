@@ -16,16 +16,16 @@ export default function CheckoutStepper({
   return (
     <nav
       aria-label="Checkout steps"
-      className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white px-4 py-4 md:px-6"
+      className="surface-panel-muted px-4 py-4 md:px-6"
     >
       <ol className="flex flex-col gap-4 md:flex-row md:items-center">
         {steps.map((step, index) => {
           const isCompleted = index < activeStep;
           const isCurrent = index === activeStep;
           const circleStyles = isCompleted
-            ? 'border-[var(--primary-800)] bg-[var(--primary-800)] text-white'
+            ? 'border-[var(--primary-800)] bg-[var(--primary-800)] text-white shadow-[var(--shadow-sm)]'
             : isCurrent
-              ? 'border-[var(--primary-800)] text-[var(--primary-800)]'
+              ? 'border-[var(--primary-800)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)]'
               : 'border-[var(--neutral-200)] text-[var(--neutral-500)]';
           const labelStyles = isCurrent
             ? 'text-[var(--primary-800)]'

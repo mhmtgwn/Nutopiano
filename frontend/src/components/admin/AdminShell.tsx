@@ -147,30 +147,30 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
     router.push('/login');
   };
 
-  const sidebarColor = isSuperAdmin ? '#0D1B40' : '#0F2420';
-  const accentColor = isSuperAdmin ? '#3B82F6' : '#22C55E';
+  const sidebarColor = isSuperAdmin ? '#11244e' : '#123228';
+  const accentColor = isSuperAdmin ? '#60A5FA' : '#D4B06F';
 
   const SidebarNav = () => (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.08]">
+      <div className="flex items-center gap-3 border-b border-white/[0.1] px-5 py-5">
         <div
-          className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
           style={{ backgroundColor: accentColor }}
         >
           N
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 leading-none">Nutopiano</p>
-          <p className="mt-1 text-[13px] font-semibold text-white leading-none truncate">{panelLabel}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] leading-none text-white/40">Nutopiano</p>
+          <p className="mt-1 truncate text-[13px] font-semibold leading-none text-white">{panelLabel}</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4 scrollbar-thin">
+      <nav className="scrollbar-thin flex-1 space-y-4 overflow-y-auto px-3 py-3">
         {navSections.map((section) => (
           <div key={section.title}>
-            <p className="px-2 mb-1 text-[10px] font-bold uppercase tracking-[0.25em] text-white/30">
+            <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-[0.25em] text-white/35">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -182,19 +182,24 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                     key={item.href}
                     href={item.href}
                     className={`
-                      flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium
+                      flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium
                       transition-all duration-150
                       ${active
-                        ? 'bg-white/12 text-white'
-                        : 'text-white/55 hover:bg-white/[0.06] hover:text-white/85'
+                        ? 'bg-white/14 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
+                        : 'text-white/65 hover:bg-white/[0.08] hover:text-white/90'
                       }
                     `}
                   >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <Icon className="h-4 w-4 flex-shrink-0" />
                     <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge ? (
+                      <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                        {item.badge}
+                      </span>
+                    ) : null}
                     {active && (
                       <div
-                        className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+                        className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
                         style={{ backgroundColor: accentColor }}
                       />
                     )}
@@ -207,20 +212,20 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
       </nav>
 
       {/* User Footer */}
-      <div className="px-3 py-3 border-t border-white/[0.08] space-y-1">
+      <div className="space-y-1 border-t border-white/[0.1] px-3 py-3">
         <Link
           href="/"
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-white/40 hover:bg-white/[0.06] hover:text-white/70 transition-all"
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium text-white/55 transition hover:bg-white/[0.08] hover:text-white"
         >
-          <Store className="w-4 h-4 flex-shrink-0" />
+          <Store className="h-4 w-4 flex-shrink-0" />
           Mağazaya Dön
         </Link>
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-white/40 hover:bg-red-500/10 hover:text-red-400 transition-all"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium text-white/55 transition hover:bg-red-500/10 hover:text-red-200"
         >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
+          <LogOut className="h-4 w-4 flex-shrink-0" />
           Çıkış Yap
         </button>
       </div>
@@ -228,13 +233,13 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[var(--brand-cream)] text-[#16362f]">
       {/* Top Bar */}
-      <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 sticky top-0 z-30 shadow-sm">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[#d8dfd4] bg-white/90 px-4 shadow-[var(--shadow-sm)] backdrop-blur md:px-6">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className="lg:hidden h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9dfd5] text-[#53746b] transition hover:bg-[#f4f7f2] lg:hidden"
           aria-label="Menü"
         >
           <Menu className="h-5 w-5" />
@@ -243,19 +248,19 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         {/* Mobile Logo */}
         <div className="flex lg:hidden items-center gap-2">
           <div
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
             style={{ backgroundColor: sidebarColor }}
           >
             N
           </div>
-          <span className="text-sm font-semibold text-gray-800">{panelLabel}</span>
+          <span className="text-sm font-semibold text-[#16362f]">{panelLabel}</span>
         </div>
 
         {/* Breadcrumb Desktop */}
-        <div className="hidden lg:flex items-center gap-2 text-sm text-gray-500">
-          <span className="font-semibold text-gray-800">{panelLabel}</span>
-          <ChevronRight className="h-4 w-4 text-gray-300" />
-          <span className="text-gray-400">Dashboard</span>
+        <div className="hidden lg:flex items-center gap-2 text-sm text-[#658076]">
+          <span className="font-semibold text-[#16362f]">{panelLabel}</span>
+          <ChevronRight className="h-4 w-4 text-[#c5cec2]" />
+          <span>Dashboard</span>
         </div>
 
         <div className="flex-1" />
@@ -265,21 +270,21 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
           {user && (
             <div className="flex items-center gap-2.5">
               <div
-                className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
                 style={{ backgroundColor: sidebarColor }}
               >
                 {user.name?.charAt(0)?.toUpperCase() ?? 'U'}
               </div>
               <div className="hidden md:block">
-                <p className="text-[13px] font-semibold text-gray-800 leading-none">{user.name}</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">{user.role}</p>
+                <p className="leading-none text-[13px] font-semibold text-[#16362f]">{user.name}</p>
+                <p className="mt-0.5 text-[11px] text-[#6a857b]">{user.role}</p>
               </div>
             </div>
           )}
           <button
             type="button"
             onClick={handleLogout}
-            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 text-[12px] font-medium text-gray-600 hover:bg-gray-50 hover:text-red-600 hover:border-red-200 transition"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#d8dfd4] px-3 text-[12px] font-medium text-[#5a766c] transition hover:border-[#d9b2b2] hover:bg-[#fff4f4] hover:text-[#9a2e2e]"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Çıkış</span>
@@ -288,19 +293,23 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
       </header>
 
       {/* Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-[calc(100vh-4rem)] overflow-hidden">
         {/* Desktop Sidebar */}
         <aside
-          className="hidden lg:flex flex-col w-[256px] flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] overflow-hidden"
-          style={{ backgroundColor: sidebarColor }}
+          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[272px] flex-shrink-0 overflow-hidden lg:flex lg:flex-col"
+          style={{
+            background: `linear-gradient(180deg, ${sidebarColor} 0%, #0d251e 100%)`,
+          }}
         >
           <SidebarNav />
         </aside>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-transparent">
           <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+            <div className="surface-panel p-4 md:p-6">
             {children}
+            </div>
           </div>
         </main>
       </div>
@@ -315,13 +324,15 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
           <aside
-            className="absolute left-0 top-0 h-full w-72 flex flex-col overflow-hidden shadow-2xl"
-            style={{ backgroundColor: sidebarColor }}
+            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden shadow-2xl"
+            style={{
+              background: `linear-gradient(180deg, ${sidebarColor} 0%, #0d251e 100%)`,
+            }}
           >
-            <div className="flex items-center justify-between px-4 py-4 border-b border-white/[0.08]">
+            <div className="flex items-center justify-between border-b border-white/[0.1] px-4 py-4">
               <div className="flex items-center gap-2">
                 <div
-                  className="h-7 w-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
                   style={{ backgroundColor: accentColor }}
                 >
                   N
@@ -331,7 +342,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/10 hover:text-white"
                 aria-label="Kapat"
               >
                 <X className="h-4 w-4" />
