@@ -380,3 +380,4 @@ Queue:
 19. `DONE` UI/UX rollout: Payout actions finalize (approve/reject/mark as paid with immutable warning modal)
 20. `DONE` Build verification + release candidate packaging
 21. `DONE` Production deployment and post-deploy smoke check
+22. `DONE` Post-go-live hotfix batch: POS session/sync stabilization + checkout source WEB + backend lint/test hardening
