@@ -227,7 +227,7 @@ export default function CheckoutPage() {
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Nutopiano Shop
+              Nutopiano Mağaza
             </p>
             <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">
               Siparişiniz onaylandı
@@ -361,7 +361,7 @@ export default function CheckoutPage() {
         <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-8 md:px-6 md:py-14">
           <header className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Checkout
+              Ödeme
             </p>
             <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">
               Ödeme adımı
@@ -385,7 +385,7 @@ export default function CheckoutPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link href="/categories">
-                <Button className="rounded-full px-6">Shop now</Button>
+                <Button className="rounded-full px-6">Alışverişe başla</Button>
               </Link>
               <Link
                 href="/cart"
@@ -406,9 +406,9 @@ export default function CheckoutPage() {
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-              Nutopiano Shop
+              Nutopiano Mağaza
             </p>
-            <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">Checkout</h1>
+            <h1 className="text-4xl font-serif text-[var(--primary-800)] md:text-5xl">Ödeme</h1>
             <p className="text-sm text-[var(--neutral-600)] md:text-base">
               Teslimat ve ödeme bilgilerini girin, ardından siparişi oluşturun.
             </p>
