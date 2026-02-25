@@ -742,6 +742,7 @@ export default function PosPage() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [resolvedProductName, setResolvedProductName] = useState('');
   const scannerBufferRef = useRef('');
+  const syncInFlightRef = useRef(false);
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PosProductSearchRow[]>([]);
   const [isSearchingProduct, setIsSearchingProduct] = useState(false);
@@ -814,9 +815,10 @@ export default function PosPage() {
 
   const syncQueuedSales = useCallback(async () => {
     if (!isAuthed) return;
-    if (isSyncing) return;
+    if (syncInFlightRef.current) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
+    syncInFlightRef.current = true;
     setIsSyncing(true);
     try {
       const items = await listReadyQueuedPosOrders();
@@ -854,9 +856,10 @@ export default function PosPage() {
         toast.success(`${successCount} bekleyen satis senkronize edildi.`);
       }
     } finally {
+      syncInFlightRef.current = false;
       setIsSyncing(false);
     }
-  }, [isAuthed, isSyncing, refreshQueue]);
+  }, [isAuthed, refreshQueue]);
 
   const loadShiftRows = useCallback(async () => {
     if (!isAuthed) return;
