@@ -21,6 +21,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let details: Record<string, unknown> | null = null;
     let errors: unknown[] = [];
 
+    const csrfException =
+      exception &&
+      typeof exception === 'object' &&
+      'code' in exception &&
+      (exception as { code?: unknown }).code === 'EBADCSRFTOKEN';
+    if (csrfException) {
+      status = HttpStatus.FORBIDDEN;
+      message = 'Invalid CSRF token';
+      code = ERROR_CODES.FORBIDDEN;
+    }
+
     if (exception instanceof AppError) {
       status = exception.httpStatus;
       message = exception.message;
