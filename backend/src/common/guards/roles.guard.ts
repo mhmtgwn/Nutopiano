@@ -9,7 +9,8 @@ export class RolesGuard implements CanActivate {
 
   private normalize(role?: string | null): RoleType | null {
     if (!role) return null;
-    return role in ROLES ? (role as RoleType) : null;
+    const normalized = role === 'STAFF' ? ROLES.USER : role;
+    return normalized in ROLES ? (normalized as RoleType) : null;
   }
 
   canActivate(context: ExecutionContext): boolean {

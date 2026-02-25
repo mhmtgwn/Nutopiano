@@ -259,7 +259,7 @@ export default function AdminOverviewPage() {
       },
       {
         title: 'Bugün ciro',
-        value: summary ? formatPrice(summary.revenueTodayCents / 100) : '-',
+        value: summary ? formatPrice(summary.revenueTodayCents) : '-',
         note: 'Tahsilat',
         icon: CreditCard,
       },
@@ -295,7 +295,7 @@ export default function AdminOverviewPage() {
       },
       {
         title: '30 gün ciro',
-        value: reports ? formatPrice(reports.revenueCents / 100) : '-',
+        value: reports ? formatPrice(reports.revenueCents) : '-',
         note: 'Trend özeti',
         icon: TrendingUp,
       },
@@ -334,16 +334,16 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--primary-800)]/10 bg-gradient-to-br from-[#F7F1E5] via-white to-[#ECF6F3] px-6 py-6 shadow-[0_24px_70px_rgba(26,60,52,0.1)]">
+      <section className="overflow-hidden rounded-2xl border border-[var(--primary-800)]/15 bg-gradient-to-br from-[#0F2420] via-[#1A3C34] to-[#245244] px-6 py-7 shadow-[0_20px_50px_rgba(15,36,32,0.25)]">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/50">
               {panelLabel}
             </p>
-            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
+            <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">
               {heroTitle}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-[var(--neutral-600)]">
+            <p className="mt-2 max-w-2xl text-sm text-white/65">
               {heroDescription}
             </p>
           </div>
@@ -351,13 +351,13 @@ export default function AdminOverviewPage() {
             <RiskScoreBadge score={riskScore} label="Risk" />
             <Link
               href={`${basePath}/risk-control`}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/90 transition hover:bg-white/15 backdrop-blur-sm"
             >
               Risk Hub <ArrowUpRight className="h-4 w-4" />
             </Link>
             <Link
               href={reportHref}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--primary-800)]/20 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/90 transition hover:bg-white/15 backdrop-blur-sm"
             >
               Raporlar <ArrowUpRight className="h-4 w-4" />
             </Link>
@@ -406,21 +406,34 @@ export default function AdminOverviewPage() {
           ) : null}
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {statCards.map((item) => {
+            {statCards.map((item, index) => {
               const Icon = item.icon;
+              const accentColors = [
+                'border-l-blue-500',
+                'border-l-emerald-500',
+                'border-l-violet-500',
+                'border-l-amber-500',
+                'border-l-red-500',
+                'border-l-cyan-500',
+                'border-l-orange-500',
+                'border-l-teal-500',
+              ];
+              const accentColor = accentColors[index % accentColors.length];
               return (
                 <div
                   key={item.title}
-                  className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5 shadow-[0_10px_30px_rgba(26,60,52,0.06)]"
+                  className={`rounded-xl border border-gray-200 bg-white px-5 py-5 shadow-sm border-l-4 ${accentColor} hover:shadow-md transition-shadow`}
                 >
                   <div className="flex items-center justify-between">
-                    <Icon className="h-5 w-5 text-[var(--primary-800)]/75" />
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+                    <div className="h-9 w-9 rounded-lg bg-gray-50 flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-gray-500" />
+                    </div>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
                       {item.note}
                     </span>
                   </div>
-                  <p className="mt-4 text-2xl font-serif text-[var(--primary-800)]">{item.value}</p>
-                  <p className="mt-1 text-sm text-[var(--neutral-600)]">{item.title}</p>
+                  <p className="mt-3 text-2xl font-bold text-gray-800 tracking-tight">{item.value}</p>
+                  <p className="mt-1 text-[12px] font-medium text-gray-500">{item.title}</p>
                 </div>
               );
             })}
@@ -475,7 +488,7 @@ export default function AdminOverviewPage() {
                           <td className="py-3 pr-4 text-[var(--neutral-600)]">{order.statusKey}</td>
                           <td className="py-3 pr-4 text-[var(--neutral-600)]">{order.source}</td>
                           <td className="py-3 pr-4 text-[var(--primary-800)]">
-                            {formatPrice(order.totalAmountCents / 100)}
+                            {formatPrice(order.totalAmountCents)}
                           </td>
                           <td className="py-3 text-[var(--neutral-600)]">
                             {new Date(order.createdAt).toLocaleString('tr-TR')}

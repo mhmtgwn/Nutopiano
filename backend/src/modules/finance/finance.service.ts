@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   FinanceLedgerAccountType,
@@ -18,6 +19,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { LedgerPostingService } from '../../core/commerce';
 import { SettingsService } from '../settings/settings.service';
+import { parseBusinessId } from '@common/utils';
 import {
   buildPaginationMeta,
   clampPage,
@@ -41,6 +43,14 @@ export class FinanceService {
     private readonly settingsService: SettingsService,
     private readonly ledgerPostingService: LedgerPostingService,
   ) {}
+
+  private requireBusinessId(currentUser: JwtPayload): number {
+    const businessId = parseBusinessId(currentUser.businessId);
+    if (!businessId) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    return businessId;
+  }
 
   private async getCommissionRate(businessId: number): Promise<number> {
     const rate = await this.settingsService.getJson<number>(
@@ -172,7 +182,7 @@ export class FinanceService {
     currentUser: JwtPayload,
     requestedSellerId?: number,
   ): Promise<SellerScope> {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
 
     const normalizedRequestedSellerId =
@@ -286,7 +296,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
@@ -352,7 +362,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
@@ -452,7 +462,7 @@ export class FinanceService {
   }
 
   async requestPayout(currentUser: JwtPayload, amountCents: number) {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
 
     if (currentUser.role !== 'SELLER') {
@@ -502,7 +512,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
 
     const existing = await this.prisma.payoutRequest.findFirst({
       where: { id: payoutId, businessId },
@@ -555,7 +565,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
 
     return this.prisma.$transaction(async (tx) => {
       const payout = await tx.payoutRequest.findFirst({
@@ -625,7 +635,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
 
     const updated = await this.prisma.payoutRequest.updateMany({
       where: {
@@ -674,7 +684,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
     const sellerId = await this.resolveSellerProfileId(businessId, userId);
     if (!sellerId) {
@@ -700,7 +710,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const limit = Math.max(Math.trunc(Number(params?.limit ?? 200)), 1);
     const now = new Date();
     const releaseThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -783,7 +793,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const now = new Date();
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const todayStart = new Date(
@@ -999,7 +1009,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
@@ -1075,7 +1085,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
     const normalizedSellerId =
@@ -1236,7 +1246,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
@@ -1371,7 +1381,7 @@ export class FinanceService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 

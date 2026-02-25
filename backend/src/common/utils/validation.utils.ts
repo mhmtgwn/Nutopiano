@@ -72,3 +72,16 @@ export function isNumeric(str: string): boolean {
 export function isPositiveInteger(num: any): boolean {
   return Number.isInteger(num) && num > 0;
 }
+
+export function parsePositiveInteger(value: unknown): number | null {
+  const raw = typeof value === 'string' ? value.trim() : value;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  if (i <= 0) return null;
+  return i;
+}
+
+export function parseBusinessId(value: unknown): number | null {
+  return parsePositiveInteger(value);
+}

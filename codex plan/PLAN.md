@@ -374,9 +374,9 @@ Queue:
 13. `DONE` Week-10: Refund reverse posting + payout race guard
 14. `DONE` Week-11: Finance monitoring dashboard ve health endpointleri
 15. `DONE` Week-12: Shadow compare, cutover rehearsal, rollback runbook
-16. `IN_PROGRESS` UI/UX rollout: Seller Orders 4-tab detail (summary/breakdown/ledger/audit)
-17. `IN_PROGRESS` UI/UX rollout: Admin Finance control center (overview/ledger/wallets/refunds/mismatch)
-18. `IN_PROGRESS` UI/UX rollout: POS session gate + offline banner + mismatch modal + queue detail table
-19. `QUEUED` UI/UX rollout: Payout actions finalize (approve/reject/mark as paid with immutable warning modal)
-20. `QUEUED` Build verification + release candidate packaging
-21. `QUEUED` Production deployment and post-deploy smoke check
+16. `DONE` UI/UX rollout: Seller Orders 4-tab detail (summary/breakdown/ledger/audit)
+17. `DONE` UI/UX rollout: Admin Finance control center (overview/ledger/wallets/refunds/mismatch)
+18. `DONE` UI/UX rollout: POS session gate + offline banner + mismatch modal + queue detail table
+19. `DONE` UI/UX rollout: Payout actions finalize (approve/reject/mark as paid with immutable warning modal)
+20. `DONE` Build verification + release candidate packaging
+21. `DONE` Production deployment and post-deploy smoke check

@@ -33,6 +33,12 @@ export const isRateLimitError = (error: unknown) => {
 
 export const isNetworkError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
-  const maybeError = error as { code?: string; response?: unknown };
-  return maybeError.code === 'ERR_NETWORK' || !maybeError.response;
+  const maybeError = error as {
+    code?: string;
+    response?: unknown;
+    request?: unknown;
+    isAxiosError?: boolean;
+  };
+  if (!maybeError.isAxiosError) return false;
+  return maybeError.code === 'ERR_NETWORK' || (Boolean(maybeError.request) && !maybeError.response);
 };

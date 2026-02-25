@@ -49,11 +49,22 @@ export function getCorsConfig() {
         return;
       }
 
-      callback(null, true);
+      const normalizedOrigin = normalizeOrigin(origin);
+      const allow =
+        allowedOriginSet.has(normalizedOrigin) ||
+        nutopianoOriginPattern.test(origin) ||
+        (!isProd && allowedOriginSet.has('*'));
+
+      callback(null, allow);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-CSRF-Token',
+      'Idempotency-Key',
+    ],
     maxAge: 3600, // 1 hour
   };
 }

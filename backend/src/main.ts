@@ -66,30 +66,6 @@ async function bootstrap() {
   // Enable CORS early so middleware errors (e.g. CSRF) still carry CORS headers.
   app.enableCors(getCorsConfig());
 
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (typeof origin === 'string' && origin.length > 0) {
-      res.setHeader('X-Debug-Cors', '1');
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, X-CSRF-Token',
-      );
-      res.setHeader(
-        'Access-Control-Allow-Methods',
-        'GET,POST,PATCH,DELETE,PUT,OPTIONS',
-      );
-
-      if (req.method === 'OPTIONS') {
-        res.status(204).end();
-        return;
-      }
-    }
-    next();
-  });
-
   for (const middleware of csrfMiddleware()) {
     app.use(middleware);
   }

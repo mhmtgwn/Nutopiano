@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
@@ -31,6 +32,7 @@ import {
   paginationToSkipTake,
   type PaginationMeta,
 } from '../../common/utils/pagination';
+import { parseBusinessId } from '../../common/utils';
 
 export interface OrderSummary {
   id: number;
@@ -165,6 +167,14 @@ export class OrdersService {
     private readonly outboxService: OutboxService,
     private readonly ledgerPostingService: LedgerPostingService,
   ) {}
+
+  private requireBusinessId(currentUser: JwtPayload): number {
+    const businessId = parseBusinessId(currentUser.businessId);
+    if (!businessId) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    return businessId;
+  }
 
   private aggregateStockLines(lines: OrderItemStockLine[]) {
     const byProduct = new Map<number, number>();
@@ -809,7 +819,7 @@ export class OrdersService {
       return;
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
 
     const rows = await this.resolveUserTeamPermissionRows(businessId, userId);
@@ -843,7 +853,7 @@ export class OrdersService {
     currentUser: JwtPayload,
     payload: CreateOrderDto,
   ): Promise<number | null> {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
     const requestedSellerId =
       typeof payload.sellerId === 'number' && payload.sellerId > 0
@@ -884,7 +894,7 @@ export class OrdersService {
   }
 
   private async buildOrderReadScopeWhere(currentUser: JwtPayload) {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
 
     if (currentUser.role === 'USER') {
@@ -1025,7 +1035,7 @@ export class OrdersService {
       dateTo?: string;
     },
   ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
 
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
@@ -1188,7 +1198,7 @@ export class OrdersService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
@@ -1248,7 +1258,7 @@ export class OrdersService {
     payload: CreateOrderDto,
     idempotencyKeyHeader?: string,
   ): Promise<OrderDetail> {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const createdByUserId = Number(currentUser.userId);
     const source: OrderSource = payload.source ?? OrderSource.POS;
     const idempotencyOperation = ORDER_CREATE_OPERATION;
@@ -2122,7 +2132,7 @@ export class OrdersService {
   }
 
   async findAll(currentUser: JwtPayload): Promise<OrderSummary[]> {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
 
     if (currentUser.role === 'CUSTOMER') {
       const customerId = await this.resolveCustomerIdForUser(currentUser, businessId);
@@ -2193,7 +2203,7 @@ export class OrdersService {
   }
 
   private async findAccessibleOrder(currentUser: JwtPayload, id: number) {
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const userId = Number(currentUser.userId);
 
     const order = await this.prisma.order.findFirst({
@@ -2400,7 +2410,7 @@ export class OrdersService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     if (currentUser.role === 'USER') {
       await this.assertUserPermission(currentUser, 'orders.read');
     }
@@ -2441,7 +2451,7 @@ export class OrdersService {
       throw new ForbiddenException('Access denied');
     }
 
-    const businessId = Number(currentUser.businessId);
+    const businessId = this.requireBusinessId(currentUser);
     const decidedByUserId = Number(currentUser.userId);
 
     const request = await (this.prisma as any).returnRequest.findFirst({
