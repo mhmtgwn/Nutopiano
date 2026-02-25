@@ -12,6 +12,7 @@ export function csrfMiddleware() {
   }
 
   const isProd = process.env.NODE_ENV === 'production';
+  const cookieDomain = isProd ? '.nutopiano.com' : undefined;
 
   const csurfProtection = csurf({
     cookie: {
@@ -20,12 +21,16 @@ export function csrfMiddleware() {
       secure: isProd,
       sameSite: isProd ? 'strict' : 'lax',
       path: '/',
+      domain: cookieDomain,
     },
   });
 
   return [
     (req: Request, _res: Response, next: (err?: unknown) => void) => {
       const url = req.originalUrl ?? '';
+      const method = String(req.method ?? 'GET').toUpperCase();
+      const isUnsafeMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
       // CSRF is relevant for cookie-based browser sessions.
       // If request uses Authorization bearer token, skip CSRF.
       const authHeader = req.headers['authorization'];
@@ -33,11 +38,13 @@ export function csrfMiddleware() {
         return next();
       }
 
-      // Auth endpoints (login/register/refresh/logout/forgot/reset) must work without CSRF.
+      // Auth mutation endpoints (login/register/refresh/logout/forgot/reset) must work without CSRF.
+      // Safe auth requests (e.g. GET /auth/profile) should pass through csurf to mint token cookies.
       if (
-        url.includes('/auth/') ||
-        url.startsWith('/api/auth/') ||
-        url.startsWith('/api/v1/auth/')
+        isUnsafeMethod &&
+        (url.includes('/auth/') ||
+          url.startsWith('/api/auth/') ||
+          url.startsWith('/api/v1/auth/'))
       ) {
         return next();
       }
@@ -64,6 +71,7 @@ export function csrfMiddleware() {
           secure: isProd,
           sameSite: isProd ? 'strict' : 'lax',
           path: '/',
+          domain: cookieDomain,
         });
         next();
       } catch (err: unknown) {

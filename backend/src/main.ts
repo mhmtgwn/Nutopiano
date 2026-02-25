@@ -63,21 +63,7 @@ async function bootstrap() {
     next();
   });
 
-  for (const middleware of csrfMiddleware()) {
-    app.use(middleware);
-  }
-
-  // Setup uploads directory
-  const uploadsDir =
-    process.env.UPLOADS_DIR?.trim() && process.env.UPLOADS_DIR.trim().length > 0
-      ? process.env.UPLOADS_DIR.trim()
-      : path.join(process.cwd(), 'uploads');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  app.use('/uploads', express.static(uploadsDir));
-  app.use('/api/uploads', express.static(uploadsDir));
-  app.use('/api/v1/uploads', express.static(uploadsDir));
-
-  // Enable CORS with config
+  // Enable CORS early so middleware errors (e.g. CSRF) still carry CORS headers.
   app.enableCors(getCorsConfig());
 
   app.use((req, res, next) => {
@@ -103,6 +89,20 @@ async function bootstrap() {
     }
     next();
   });
+
+  for (const middleware of csrfMiddleware()) {
+    app.use(middleware);
+  }
+
+  // Setup uploads directory
+  const uploadsDir =
+    process.env.UPLOADS_DIR?.trim() && process.env.UPLOADS_DIR.trim().length > 0
+      ? process.env.UPLOADS_DIR.trim()
+      : path.join(process.cwd(), 'uploads');
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use('/uploads', express.static(uploadsDir));
+  app.use('/api/uploads', express.static(uploadsDir));
+  app.use('/api/v1/uploads', express.static(uploadsDir));
 
   // Global pipes and interceptors
   app.useGlobalPipes(
