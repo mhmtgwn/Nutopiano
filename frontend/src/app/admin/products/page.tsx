@@ -223,7 +223,7 @@ export default function AdminProductsPage() {
       const priceCents = Number(createForm.priceCents);
       const stock = createForm.stock ? Number(createForm.stock) : undefined;
       const parsedCategoryId = createForm.categoryId ? Number(createForm.categoryId) : undefined;
-      
+
       if (!createForm.name.trim()) {
         throw new Error('Ürün adı zorunludur.');
       }
@@ -914,7 +914,7 @@ export default function AdminProductsPage() {
                       <div>
                         {!isEditing ? (
                           <span className="font-semibold">
-                            {formatPrice(product.priceCents / 100)}
+                            {formatPrice(product.priceCents)}
                           </span>
                         ) : (
                           <input
@@ -935,11 +935,10 @@ export default function AdminProductsPage() {
                       <div>
                         {!isEditing ? (
                           <span
-                            className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                              typeof product.stock === 'number' && product.stock <= 5
+                            className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${typeof product.stock === 'number' && product.stock <= 5
                                 ? 'bg-[#C5A059] text-[#3E2723]'
                                 : 'bg-[#F3EEE3] text-[#3E2723]'
-                            }`}
+                              }`}
                           >
                             {stockLabel}
                           </span>

@@ -119,93 +119,89 @@ export default function AdminSellersPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-5">
+      {/* Stat strip */}
+      <div className="grid gap-4 border-b border-[var(--neutral-200)] pb-5 md:grid-cols-3">
+        <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
             Toplam
           </p>
-          <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">{meta?.total ?? items.length}</p>
+          <p className="mt-1 text-2xl font-serif text-[var(--primary-800)]">{meta?.total ?? items.length}</p>
         </div>
-        <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-5">
+        <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
             Aktif
           </p>
-          <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">{summary.activeCount}</p>
+          <p className="mt-1 text-2xl font-serif text-[#0F5132]">{summary.activeCount}</p>
         </div>
-        <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-5">
+        <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
             Pasif
           </p>
-          <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">{summary.inactiveCount}</p>
+          <p className="mt-1 text-2xl font-serif text-[var(--neutral-600)]">{summary.inactiveCount}</p>
         </div>
-      </section>
+      </div>
 
+      {/* Data table - no card wrapper */}
       {isLoading ? (
-        <div className="mx-auto flex max-w-6xl flex-col px-4 py-10 md:px-6">
+        <div className="py-10">
           <Spinner fullscreen />
         </div>
       ) : isError ? (
-        <section className="space-y-3 rounded-[var(--radius-2xl)] border border-[var(--error-600)]/20 bg-[var(--error-100)] px-4 py-6 md:px-6">
-          <p className="text-sm text-[var(--error-600)] md:text-base">
-            {resolveApiErrorMessage(error, 'Satıcı listesi yüklenemedi.')}
-          </p>
-        </section>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+          {resolveApiErrorMessage(error, 'Satıcı listesi yüklenemedi.')}
+        </div>
       ) : items.length === 0 ? (
-        <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-          <Users className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">Kayıt yok</h2>
-          <p className="mt-2 text-sm text-[var(--neutral-600)]">Filtreye uygun satıcı bulunamadı.</p>
-        </section>
+        <div className="py-8 text-center">
+          <Users className="mx-auto h-8 w-8 text-[var(--neutral-400)]" />
+          <p className="mt-3 text-sm text-[var(--neutral-500)]">Filtreye uygun satıcı bulunamadı.</p>
+        </div>
       ) : (
-        <section className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-md)]">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[840px] text-left text-sm">
-              <thead className="border-b border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-                <tr>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">ID</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Satıcı</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Slug</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Durum</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Güncelleme</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Link</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--neutral-200)]">
-                {items.map((row) => (
-                  <tr key={row.id} className="hover:bg-[var(--neutral-50)]">
-                    <td className="px-4 py-3 font-semibold text-[var(--primary-800)]">#{row.id}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-[var(--primary-800)]">{row.displayName}</p>
-                      <p className="text-xs text-[var(--neutral-500)]">User: {row.userId}</p>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--neutral-700)]">{row.slug}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                          row.isActive
-                            ? 'bg-[#E6FBF2] text-[#0F5132]'
-                            : 'bg-[#FDECEC] text-[#9B1C1C]'
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[840px] text-left text-sm">
+            <thead className="border-b border-[var(--neutral-200)]">
+              <tr>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">ID</th>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Satıcı</th>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Slug</th>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Durum</th>
+                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Güncelleme</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Link</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--neutral-100)]">
+              {items.map((row) => (
+                <tr key={row.id} className="transition hover:bg-[var(--neutral-50)]">
+                  <td className="px-4 py-3 font-semibold text-[var(--primary-800)]">#{row.id}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[var(--primary-800)]">{row.displayName}</p>
+                    <p className="text-xs text-[var(--neutral-500)]">User: {row.userId}</p>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--neutral-700)]">{row.slug}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${row.isActive
+                          ? 'bg-[#E6FBF2] text-[#0F5132]'
+                          : 'bg-[#FDECEC] text-[#9B1C1C]'
                         }`}
-                      >
-                        {row.isActive ? 'aktif' : 'pasif'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--neutral-600)]">{formatDate(row.updatedAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/magaza/${row.slug}`}
-                        className="text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
-                        target="_blank"
-                      >
-                        Profil
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                    >
+                      {row.isActive ? 'aktif' : 'pasif'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--neutral-600)]">{formatDate(row.updatedAt)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/magaza/${row.slug}`}
+                      className="text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                      target="_blank"
+                    >
+                      Profil
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {meta && meta.totalPages > 1 && (

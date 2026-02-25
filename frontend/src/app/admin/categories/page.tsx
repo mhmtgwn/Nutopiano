@@ -182,7 +182,7 @@ export default function AdminCategoriesPage() {
     mutationFn: async () => {
       const orderIndex = Number(createForm.orderIndex);
       const parentId = createForm.parentId ? Number(createForm.parentId) : undefined;
-      
+
       if (!createForm.name.trim()) {
         throw new Error('Kategori adı zorunludur.');
       }
@@ -216,7 +216,7 @@ export default function AdminCategoriesPage() {
     mutationFn: async (categoryId: number) => {
       const orderIndex = Number(editForm.orderIndex);
       const parentId = editForm.parentId ? Number(editForm.parentId) : null;
-      
+
       if (!editForm.name.trim()) {
         throw new Error('Kategori adı zorunludur.');
       }
@@ -283,36 +283,38 @@ export default function AdminCategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[32px] border border-[#1A3C34]/10 bg-white/90 px-6 py-6 shadow-[0_30px_90px_rgba(26,60,52,0.12)]">
+      {/* Page header */}
+      <div className="border-b border-[var(--neutral-200)] pb-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Katalog
             </p>
-            <h1 className="text-3xl font-serif text-[#1A3C34] md:text-4xl">
+            <h1 className="mt-1 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
               Kategori yönetimi
             </h1>
-            <p className="text-sm text-[#5C5C5C]">
-              Gerçek kategori CRUD akışı (ADMIN yetkisi ile) backend tarafına bağlıdır.
+            <p className="mt-1 text-sm text-[var(--neutral-600)]">
+              Kategori ağacını CRUD işlemleri ile yönetin.
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#1A3C34]/10 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/70">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--neutral-200)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-600)]">
             <LayoutGrid className="h-4 w-4" />
-            Toplam: {meta?.total ?? flatCategories?.length ?? 0}
-          </div>
+            {meta?.total ?? flatCategories?.length ?? 0} kategori
+          </span>
         </div>
-      </section>
+      </div>
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+        {/* Create form */}
         <form
           onSubmit={handleCreate}
-          className="space-y-4 rounded-[28px] border border-[#E0D7C6] bg-white/90 px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]"
+          className="space-y-4"
         >
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+          <div className="border-b border-[var(--neutral-200)] pb-4 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Yeni kategori
             </p>
-            <h2 className="mt-2 text-2xl font-serif text-[#1A3C34]">
+            <h2 className="mt-1 text-xl font-serif text-[var(--primary-800)]">
               Koleksiyon oluştur
             </h2>
           </div>
@@ -414,17 +416,17 @@ export default function AdminCategoriesPage() {
           </Button>
         </form>
 
-        <section className="rounded-[28px] border border-[#E0D7C6] bg-white/90 px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#AC9C7A]">
+        <div>
+          <div className="border-b border-[var(--neutral-200)] pb-4 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Liste
             </p>
-            <h2 className="mt-2 text-2xl font-serif text-[#1A3C34]">
+            <h2 className="mt-1 text-xl font-serif text-[var(--primary-800)]">
               Kategoriler
             </h2>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-2xl border border-[#1A3C34]/10 bg-white">
+          <div className="overflow-hidden border border-[var(--neutral-200)] rounded-xl">
             <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,1fr)] gap-3 border-b border-[#E5E5E0] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#1A3C34]/60">
               <span>Kategori</span>
               <span>Slug</span>
@@ -619,7 +621,7 @@ export default function AdminCategoriesPage() {
               </div>
             </div>
           )}
-        </section>
+        </div>
       </section>
     </div>
   );

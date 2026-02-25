@@ -521,8 +521,8 @@ const buildA4InvoiceHtml = (invoice: PosInvoicePayload) => {
   const address = invoice.customer.billingAddress;
   const customerAddress = address
     ? [address.line1, address.line2, `${address.district ?? ''} / ${address.city ?? ''}`, address.postalCode, address.country]
-        .filter(Boolean)
-        .join(', ')
+      .filter(Boolean)
+      .join(', ')
     : '-';
 
   return `
@@ -805,7 +805,9 @@ export default function PosPage() {
           const queueIdempotencyKey =
             item.payload.idempotencyKey ?? `pos-queue-${item.id}`;
 
-          await api.post('/orders', item.payload, {
+          // idempotencyKey is frontend-only — strip it from the body before sending
+          const { idempotencyKey: _ik, ...bodyWithoutKey } = item.payload;
+          await api.post('/orders', bodyWithoutKey, {
             headers: {
               'Idempotency-Key': queueIdempotencyKey,
             },
@@ -1373,9 +1375,9 @@ export default function PosPage() {
             row.productId === nextItem.productId &&
             row.variantId === nextItem.variantId &&
             (row.expectedUnitPriceCents ?? null) ===
-              (nextItem.expectedUnitPriceCents ?? null) &&
+            (nextItem.expectedUnitPriceCents ?? null) &&
             (row.discountAmountCents ?? null) ===
-              (nextItem.discountAmountCents ?? null),
+            (nextItem.discountAmountCents ?? null),
         );
         if (idx < 0) return [...prev, nextItem];
         return prev.map((row, i) =>
@@ -1652,9 +1654,9 @@ export default function PosPage() {
       setSelectedCustomer((prev) =>
         prev
           ? {
-              ...prev,
-              balance: res.data.customerBalanceCents,
-            }
+            ...prev,
+            balance: res.data.customerBalanceCents,
+          }
           : prev,
       );
       toast.success(
@@ -1765,9 +1767,9 @@ export default function PosPage() {
       customerMode === 'CUSTOMER' ? selectedCustomer?.id ?? Number(customerId) : undefined;
     const normalizedCustomerId =
       customerMode === 'CUSTOMER' &&
-      typeof parsedCustomerId === 'number' &&
-      Number.isFinite(parsedCustomerId) &&
-      parsedCustomerId > 0
+        typeof parsedCustomerId === 'number' &&
+        Number.isFinite(parsedCustomerId) &&
+        parsedCustomerId > 0
         ? Math.trunc(parsedCustomerId)
         : undefined;
     const parsedCartDiscountCents = Number(cartDiscountCents);
@@ -1912,11 +1914,11 @@ export default function PosPage() {
     const estimatedPayloadTotalCents =
       payloadSubtotalCents > 0
         ? Math.max(
-            payloadSubtotalCents -
-              payloadLineDiscountCents -
-              (payload.cartDiscountAmountCents ?? 0),
-            0,
-          )
+          payloadSubtotalCents -
+          payloadLineDiscountCents -
+          (payload.cartDiscountAmountCents ?? 0),
+          0,
+        )
         : undefined;
 
     setIsSubmitting(true);
@@ -1945,6 +1947,8 @@ export default function PosPage() {
         return;
       }
 
+      // idempotencyKey is frontend-only — strip it from the body before sending
+      const { idempotencyKey: _idk, ...orderBody } = payload;
       const res = await api.post<{
         id: number;
         customerId?: number;
@@ -1958,7 +1962,7 @@ export default function PosPage() {
           quantity: number;
           unitPriceCents: number;
         }>;
-      }>('/orders', payload, {
+      }>('/orders', orderBody, {
         headers: {
           'Idempotency-Key': payload.idempotencyKey,
         },
@@ -2100,17 +2104,17 @@ export default function PosPage() {
         return;
       }
       if (isNetworkError(error)) {
-                if (splitPaymentPayload.lines.length > 0) {
-                  toast.error(
-                    'Baglanti kesildi. Split odeme satirlari varken offline kuyruga alinmaz.',
-                  );
-                  return;
-                }
-                if (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD') {
-                  toast.error(
-                    'Baglanti kesildi. Hizli nakit/kart seciliyken satis offline kuyruga alinmaz.',
-                  );
-                  return;
+        if (splitPaymentPayload.lines.length > 0) {
+          toast.error(
+            'Baglanti kesildi. Split odeme satirlari varken offline kuyruga alinmaz.',
+          );
+          return;
+        }
+        if (quickPaymentMethod === 'CASH' || quickPaymentMethod === 'CARD') {
+          toast.error(
+            'Baglanti kesildi. Hizli nakit/kart seciliyken satis offline kuyruga alinmaz.',
+          );
+          return;
         }
         const queued = await enqueuePosOrder(payload);
         await refreshQueue();
@@ -2142,1469 +2146,1468 @@ export default function PosPage() {
 
   if (isCheckingAccessView) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            Yetki kontrol ediliyor...
-          </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F7F3]">
+        <span className="text-sm text-[#1A3C34]/60">Yetki kontrol ediliyor...</span>
       </div>
     );
   }
 
   if (isUnauthorizedView) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            Yönlendiriliyor...
-          </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-[#F6F7F3]">
+        <span className="text-sm text-[#1A3C34]/60">Yönlendiriliyor...</span>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1380px] flex-col gap-5 px-3 py-5 md:px-6 md:py-8">
-      <header className="rounded-3xl border border-[#163D34] bg-gradient-to-r from-[#0F2D27] to-[#1E4C40] px-5 py-5 text-white shadow-[0_20px_40px_-26px_rgba(9,34,28,0.85)] md:px-7 md:py-6">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#F2D18C]">
-          Yonetim Modulu
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold md:text-3xl">POS Yonetimi</h1>
-        <p className="mt-1 text-sm text-white/80">
-          Market kasasi akisi: hizli barkod, musteri secimi, odeme ve fis/fatura.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-3xl border border-[#E5E5E0] bg-[#F6F7F3] px-3 py-4 md:px-5 md:py-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center rounded-full border border-[#D8DED8] bg-white px-3 py-1 text-xs font-semibold text-[#1A3C34]">
-            {activeShift ? `Vardiya: ${activeShift.registerCode}` : 'Vardiya: Kapali'}
-          </span>
-          <span
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${onlineBadgeClass}`}
-          >
-            {isOnline ? 'Online' : 'Offline'}
-          </span>
-          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${queueSeverityClass}`}>
-            Kuyruk: {queueCount}
-          </span>
-          <Button
-            className="h-8 px-3 text-xs"
-            onClick={() => void syncQueuedSales()}
-            disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
-          >
-            {isSyncing ? 'Senkronize ediliyor...' : 'Kuyrugu senkronize et'}
-          </Button>
-          <Button
-            variant="secondary"
-            className="h-8 px-3 text-xs"
-            onClick={() => setIsFocusMode((prev) => !prev)}
-          >
-            {isFocusMode ? 'Focus kapat' : 'Focus mode'}
-          </Button>
+    <div className="flex w-full flex-col gap-0">
+      {/* ── Sticky POS Topbar ── */}
+      <header className="sticky top-0 z-40 border-b border-[#163D34]/30 bg-[#0F2D27] px-4 py-3 text-white md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#F2D18C]">POS</span>
+              <span className="ml-2 text-sm font-semibold text-white/90">Yonetim Modulu</span>
+            </div>
+            {/* Status badges */}
+            <span className="hidden h-5 w-px bg-white/20 sm:block" />
+            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${onlineBadgeClass}`}>
+              {isOnline ? '● Online' : '● Offline'}
+            </span>
+            <span className="rounded-full border border-white/20 px-2.5 py-0.5 text-[10px] font-semibold text-white/80">
+              {activeShift ? `■ ${activeShift.registerCode}` : '□ Vardiya kapali'}
+            </span>
+            {hasQueue ? (
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${queueSeverityClass}`}>
+                Kuyruk: {queueCount}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isOnline ? null : (
+              <Button
+                className="h-7 px-3 text-xs"
+                onClick={() => void syncQueuedSales()}
+                disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
+              >
+                {isSyncing ? 'Sync...' : 'Kuyrugu sync et'}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              className="h-7 px-3 text-xs"
+              onClick={() => setIsFocusMode((prev) => !prev)}
+            >
+              {isFocusMode ? 'Focus kapat' : 'Focus'}
+            </Button>
+          </div>
         </div>
         {!isOnline ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Offline - {queueCount} islem kuyruga alindi.
+          <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            Offline — {queueCount} islem kuyruga alindi.
           </div>
         ) : null}
         {isOnline && showSyncSuccessBanner && recentSyncedCount ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="mt-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200">
             {recentSyncedCount} islem basariyla senkronize edildi.
           </div>
         ) : null}
-        {isFocusMode ? (
-          <p className="text-xs text-[#1A3C34]/70">
-            Focus mode aktif: ikincil operasyon panelleri gizlendi.
-          </p>
-        ) : null}
+      </header>
 
-        {isAuthed ? (
-          !activeShift ? (
-            <div className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-5 md:px-5 md:py-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Vardiya Baslat
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-[#1A3C34]">Session Gate</h2>
-              <p className="mt-2 text-sm text-[#5C5C5C]">
-                Kasa kodu ve acilis kasa sayimi olmadan satis ekrani acilmaz.
-              </p>
+      {/* ── Main POS Body ── */}
+      <div className="mx-auto w-full max-w-[1380px] px-3 py-4 md:px-6 md:py-5">
+        <div className="space-y-4">
+          {isFocusMode ? (
+            <p className="text-xs text-[#1A3C34]/60">
+              Focus mode aktif: ikincil operasyon panelleri gizlendi.
+            </p>
+          ) : null}
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Kasa Kodu
-                  <input
-                    value={registerCode}
-                    onChange={(e) => setRegisterCode(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                    placeholder="MAIN"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Acilis Nakit (kurus)
-                  <input
-                    value={openingCashCents}
-                    onChange={(e) => setOpeningCashCents(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                    placeholder="0"
-                    inputMode="numeric"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Acilis Notu
-                  <input
-                    value={shiftNote}
-                    onChange={(e) => setShiftNote(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                    placeholder="Opsiyonel"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={() => void openShift()} disabled={isShiftBusy}>
-                  {isShiftBusy ? 'Islem...' : 'Vardiyayi Baslat'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => void ensureShiftSession()}
-                  disabled={isShiftBusy}
-                >
-                  Yenile
-                </Button>
-              </div>
-            </div>
-          ) : (
-          <div
-            className={`rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5 ${
-              isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''
-            }`}
-          >
-            <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-              <div className="space-y-4">
+          {isAuthed ? (
+            !activeShift ? (
+              <div className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-5 md:px-5 md:py-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Kasiyer Hizli Satis
+                  Vardiya Baslat
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1A3C34]">Session Gate</h2>
+                <p className="mt-2 text-sm text-[#5C5C5C]">
+                  Kasa kodu ve acilis kasa sayimi olmadan satis ekrani acilmaz.
                 </p>
 
-                <div className="grid gap-3 md:grid-cols-12">
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-9">
-                    Barkod / SKU
-                    <div className="flex gap-2">
-                      <input
-                        value={barcodeInput}
-                        onChange={(e) => setBarcodeInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            void lookupBarcode(barcodeInput);
-                          }
-                        }}
-                        className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                        placeholder="Barkod okutun veya kod yazip Enter'a basin"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-11 px-4 text-xs"
-                        onClick={() => setIsProductSearchModalOpen(true)}
-                      >
-                        Ara
-                      </Button>
-                    </div>
-                    <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
-                      Okutulan urun otomatik olarak sepete eklenir.
-                    </span>
-                  </label>
-                  <div className="md:col-span-3 flex items-end">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-11 w-full px-3 text-xs"
-                      onClick={() => setCartItems([])}
-                      disabled={cartItems.length === 0}
-                    >
-                      Sepeti Temizle
-                    </Button>
-                  </div>
-
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-6">
-                    Kalem Iskonto (kurus)
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Kasa Kodu
                     <input
-                      value={itemDiscountCents}
-                      onChange={(e) => setItemDiscountCents(e.target.value)}
-                      className="h-10 rounded-lg border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      value={registerCode}
+                      onChange={(e) => setRegisterCode(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="MAIN"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Acilis Nakit (kurus)
+                    <input
+                      value={openingCashCents}
+                      onChange={(e) => setOpeningCashCents(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
                       placeholder="0"
                       inputMode="numeric"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-6">
-                    Sepet Iskonto (kurus)
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Acilis Notu
                     <input
-                      value={cartDiscountCents}
-                      onChange={(e) => setCartDiscountCents(e.target.value)}
-                      className="h-10 rounded-lg border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                      placeholder="0"
-                      inputMode="numeric"
+                      value={shiftNote}
+                      onChange={(e) => setShiftNote(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="Opsiyonel"
                     />
                   </label>
                 </div>
 
-                <div className="rounded-xl border border-[#E5E5E0] bg-[#F9FBF8] px-3 py-2 text-sm text-[#1A3C34]">
-                  <p>
-                    <span className="font-semibold">Secili urun:</span>{' '}
-                    {resolvedProductName || '-'} {variantId ? `(Varyant #${variantId})` : ''}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-semibold">Secili musteri:</span>{' '}
-                    {customerMode === 'CUSTOMER'
-                      ? selectedCustomer
-                        ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
-                        : 'Secilmedi'
-                      : 'Misafir'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-9 px-3 text-xs"
-                    onClick={() => setIsProductSearchModalOpen(true)}
-                  >
-                    Urun Ara
-                  </Button>
-                </div>
-
-                <div className="rounded-xl border border-[#DCE5DC] bg-white px-3 py-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                      Sepet
-                    </p>
-                    <p className="text-xs text-[#1A3C34]/70">{cartItems.length} kalem</p>
-                  </div>
-                  {cartItems.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#5C5C5C]">
-                      Sepet bos. Tek kalem satmak icin urun bilgisiyle direkt satis da yapabilirsiniz.
-                    </p>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-                      {cartItems.map((row) => (
-                        <div
-                          key={row.key}
-                          className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="font-semibold">
-                              {row.name} {row.variantId ? `(Varyant #${row.variantId})` : ''}
-                            </p>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-7 px-2 text-[11px]"
-                              onClick={() => removeCartItem(row.key)}
-                            >
-                              Kaldir
-                            </Button>
-                          </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-7 px-2 text-[11px]"
-                              onClick={() => updateCartItemQuantity(row.key, row.quantity - 1)}
-                            >
-                              -1
-                            </Button>
-                            <input
-                              value={String(row.quantity)}
-                              onChange={(e) =>
-                                updateCartItemQuantity(row.key, Number(e.target.value))
-                              }
-                              className="h-7 w-16 rounded-md border border-[#D9D9D3] px-2 text-center text-xs text-[#1A3C34]"
-                              inputMode="numeric"
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-7 px-2 text-[11px]"
-                              onClick={() => updateCartItemQuantity(row.key, row.quantity + 1)}
-                            >
-                              +1
-                            </Button>
-                            <span className="ml-auto">
-                              {typeof row.expectedUnitPriceCents === 'number'
-                                ? `${formatMoney(row.expectedUnitPriceCents)} x ${row.quantity}`
-                                : 'Fiyat snapshot yok'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#C8D9C8] bg-[#F8FBF8] px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Kasa Ozeti
-                </p>
-                <p className="mt-2 text-3xl font-semibold text-[#1A3C34]">
-                  {formatMoney(estimatedPayableCents)}
-                </p>
-                <div className="mt-3 space-y-1.5 text-sm text-[#1A3C34]">
-                  <p className="flex items-center justify-between">
-                    <span>Sepet kalemi</span>
-                    <span className="font-semibold">
-                      {cartItems.length > 0 ? cartItems.length : 1}
-                    </span>
-                  </p>
-                  <p className="flex items-center justify-between">
-                    <span>Ara toplam</span>
-                    <span className="font-semibold">{formatMoney(estimatedSubtotalCents)}</span>
-                  </p>
-                  <p className="flex items-center justify-between">
-                    <span>Iskonto</span>
-                    <span className="font-semibold">{formatMoney(estimatedDiscountCents)}</span>
-                  </p>
-                  <p className="flex items-center justify-between">
-                    <span>Split odeme</span>
-                    <span className="font-semibold">{formatMoney(splitTotalCents)}</span>
-                  </p>
-                  <p className="flex items-center justify-between border-t border-[#DBE4DC] pt-2">
-                    <span>Kalan</span>
-                    <span className="font-semibold">{formatMoney(estimatedRemainingCents)}</span>
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                    Musteri
-                    <select
-                      value={customerMode}
-                      onChange={(e) => {
-                        const nextMode = e.target.value as PosCustomerMode;
-                        setCustomerMode(nextMode);
-                        if (nextMode === 'GUEST') {
-                          setSelectedCustomer(null);
-                          setCustomerId('');
-                        }
-                      }}
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    >
-                      <option value="GUEST">Misafir</option>
-                      <option value="CUSTOMER">Musteri sec</option>
-                    </select>
-                  </label>
-                  {customerMode === 'CUSTOMER' ? (
-                    <div className="rounded-lg border border-[#D9D9D3] bg-white px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-9 px-3 text-xs"
-                          onClick={() => setIsCustomerSearchModalOpen(true)}
-                        >
-                          Musteri Ara
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-9 px-3 text-xs"
-                          onClick={() => setIsCustomerCreateModalOpen(true)}
-                        >
-                          Musteri Ekle
-                        </Button>
-                        {selectedCustomer ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-9 px-3 text-xs"
-                            onClick={() => {
-                              setSelectedCustomer(null);
-                              setCustomerId('');
-                            }}
-                          >
-                            Kaldir
-                          </Button>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 text-xs text-[#1A3C34]">
-                        {selectedCustomer
-                          ? `Secili: #${selectedCustomer.id} ${selectedCustomer.name} • ${selectedCustomer.phone}`
-                          : 'Henuz musteri secilmedi.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#1A3C34]/75">
-                      Misafir satis modu aktif.
-                    </p>
-                  )}
-                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                    Tahsilat
-                    <select
-                      value={quickPaymentMethod}
-                      onChange={(e) =>
-                        setQuickPaymentMethod(e.target.value as PosQuickPaymentMethod)
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    >
-                      <option value="NONE">Odeme secilmedi</option>
-                      <option value="CASH">Nakit</option>
-                      <option value="CARD">Kart</option>
-                      <option value="CREDIT">Veresiye</option>
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
-                    <input
-                      type="checkbox"
-                      checked={autoPrintReceipt}
-                      onChange={(e) => setAutoPrintReceipt(e.target.checked)}
-                      className="h-4 w-4 rounded border-[#C8D2C8]"
-                    />
-                    Fisi satis tamamlaninca otomatik yazdir
-                  </label>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  <Button className="h-12 w-full text-base" onClick={() => void handleCreateSale()} disabled={isSubmitting}>
-                    {isSubmitting ? 'Gonderiliyor...' : 'Satisi Tamamla'}
-                  </Button>
-                  <Button variant="secondary" className="h-10 w-full" onClick={() => void printReceipt()} disabled={!lastReceipt}>
-                    Fis Yazdir
-                  </Button>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-[#E0E6E0] bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                    Bakiyeden Odeme
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      value={balanceApplyAmount}
-                      onChange={(e) => setBalanceApplyAmount(e.target.value)}
-                      className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
-                      placeholder="Bakiye (kurus)"
-                      inputMode="numeric"
-                    />
-                    <Button
-                      variant="secondary"
-                      className="h-10 px-3 text-xs"
-                      onClick={() => void applyCustomerBalance()}
-                      disabled={!selectedCustomer || !lastOnlineOrderId || isApplyingBalance}
-                    >
-                      {isApplyingBalance ? 'Uygulaniyor...' : 'Uygula'}
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-xs text-[#5C5C5C]">
-                    Son online siparis: {lastOnlineOrderId ? `#${lastOnlineOrderId}` : 'Yok'}
-                  </p>
-                </div>
-                <p className="mt-3 text-xs text-[#5C5C5C]">
-                  Split odeme ve operasyonel raporlar asagidaki detayli panelde.
-                </p>
-              </div>
-            </div>
-          </div>
-          )
-        ) : null}
-
-        {isAuthed && isProductSearchModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-            <div className="w-full max-w-3xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-[#1A3C34]">Urun Ara ve Sec</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-9 px-3 text-xs"
-                  onClick={() => setIsProductSearchModalOpen(false)}
-                >
-                  Bitti / Kapat
-                </Button>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={productQuery}
-                  onChange={(e) => setProductQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void searchProducts();
-                    }
-                  }}
-                  className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
-                  placeholder="Urun adi / SKU / urun id"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-11 px-4 text-xs"
-                  onClick={() => void searchProducts()}
-                  disabled={isSearchingProduct}
-                >
-                  {isSearchingProduct ? 'Araniyor...' : 'Ara'}
-                </Button>
-              </div>
-              <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
-                {productResults.length === 0 ? (
-                  <p className="text-sm text-[#5C5C5C]">Urun bulunamadi.</p>
-                ) : (
-                  productResults.map((product) => (
-                    <button
-                      key={`picker-${product.type}-${product.variantId ?? product.productId}`}
-                      type="button"
-                      onClick={() => selectProduct(product)}
-                      className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
-                    >
-                      <p className="font-semibold">{product.name}</p>
-                      <p className="text-xs">
-                        {product.sku ? `${product.sku} • ` : ''}
-                        {formatMoney(product.priceCents)}
-                        {typeof product.stock === 'number' ? ` • Stok: ${product.stock}` : ''}
-                      </p>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isAuthed && isCustomerSearchModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-            <div className="w-full max-w-2xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-[#1A3C34]">Musteri Ara</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-9 px-3 text-xs"
-                  onClick={() => setIsCustomerSearchModalOpen(false)}
-                >
-                  Kapat
-                </Button>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={customerQuery}
-                  onChange={(e) => setCustomerQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void searchCustomers();
-                    }
-                  }}
-                  className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
-                  placeholder="Ad / telefon / musteri id"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-11 px-4 text-xs"
-                  onClick={() => void searchCustomers()}
-                  disabled={isSearchingCustomer}
-                >
-                  {isSearchingCustomer ? 'Araniyor...' : 'Ara'}
-                </Button>
-              </div>
-              <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
-                {customerResults.length === 0 ? (
-                  <p className="text-sm text-[#5C5C5C]">Musteri bulunamadi.</p>
-                ) : (
-                  customerResults.map((customer) => (
-                    <button
-                      key={`customer-modal-${customer.id}`}
-                      type="button"
-                      onClick={() => {
-                        selectCustomer(customer);
-                        setCustomerMode('CUSTOMER');
-                        setIsCustomerSearchModalOpen(false);
-                      }}
-                      className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
-                    >
-                      <p className="font-semibold">
-                        #{customer.id} {customer.name}
-                      </p>
-                      <p className="text-xs">
-                        {customer.phone} • Bakiye: {formatMoney(customer.balance)}
-                      </p>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isAuthed && isCustomerCreateModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-            <div className="w-full max-w-lg rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-[#1A3C34]">Yeni Musteri Ekle</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-9 px-3 text-xs"
-                  onClick={() => setIsCustomerCreateModalOpen(false)}
-                >
-                  Kapat
-                </Button>
-              </div>
-              <div className="mt-3 grid gap-3">
-                <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                  Ad Soyad
-                  <input
-                    value={newCustomerName}
-                    onChange={(e) => setNewCustomerName(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="Musteri adi"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                  Telefon
-                  <input
-                    value={newCustomerPhone}
-                    onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="05xxxxxxxxx"
-                  />
-                </label>
-                <Button
-                  type="button"
-                  className="h-10 w-full text-sm"
-                  onClick={() => void createPosCustomer()}
-                  disabled={isCreatingCustomer}
-                >
-                  {isCreatingCustomer ? 'Kaydediliyor...' : 'Kaydet ve Musteriyi Sec'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isAuthed && user?.role !== 'USER' && !isFocusMode ? (
-          <details className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4" open={false}>
-            <summary className="cursor-pointer list-none text-sm font-semibold text-[#1A3C34]">
-              Detayli POS operasyon paneli (vardiya, split, analitik, fatura)
-            </summary>
-            <div className="mt-4 grid gap-4">
-            <div className="rounded-xl border border-[#E5E5E0] bg-[#F7FAFD] px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Vardiya Yonetimi (POS-10)
-              </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-5">
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Kasa Kodu
-                  <input
-                    value={registerCode}
-                    onChange={(e) => setRegisterCode(e.target.value)}
-                    className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="MAIN"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Acilis Nakit (kurus)
-                  <input
-                    value={openingCashCents}
-                    onChange={(e) => setOpeningCashCents(e.target.value)}
-                    className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="0"
-                    inputMode="numeric"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Kapanis Nakit (kurus)
-                  <input
-                    value={closingCashCents}
-                    onChange={(e) => setClosingCashCents(e.target.value)}
-                    className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="0"
-                    inputMode="numeric"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-2">
-                  Vardiya Notu
-                  <input
-                    value={shiftNote}
-                    onChange={(e) => setShiftNote(e.target.value)}
-                    className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="Opsiyonel"
-                  />
-                </label>
-                <div className="md:col-span-5 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Button onClick={() => void openShift()} disabled={isShiftBusy}>
-                    {isShiftBusy ? 'Islem...' : 'Vardiya Ac'}
+                    {isShiftBusy ? 'Islem...' : 'Vardiyayi Baslat'}
                   </Button>
                   <Button
                     variant="secondary"
-                    onClick={() => void closeShift()}
-                    disabled={isShiftBusy || !activeShift}
-                  >
-                    {isShiftBusy ? 'Islem...' : 'Vardiya Kapat'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => void loadShiftRows()}
+                    onClick={() => void ensureShiftSession()}
                     disabled={isShiftBusy}
                   >
                     Yenile
                   </Button>
                 </div>
-                <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
-                  <span className="font-semibold">Aktif Vardiya:</span>{' '}
-                  {activeShift
-                    ? `${activeShift.registerCode} • Acan #${activeShift.openedByUserId} • Acilis ${formatMoney(activeShift.openingCashCents)}`
-                    : 'Secili kasada aktif vardiya yok'}
-                </div>
               </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                    Kasa Vardiya Gecmisi
-                  </p>
-                  {shiftRows.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#5C5C5C]">Vardiya kaydi yok.</p>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-                      {shiftRows.map((row) => (
-                        <div
-                          key={row.id}
-                          className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
-                        >
-                          <p className="font-semibold">
-                            {row.registerCode} • #{row.id}
-                          </p>
-                          <p>
-                            Personel: {row.openedBy?.name ?? `#${row.openedByUserId}`} •
-                            Acilis: {formatMoney(row.openingCashCents)}
-                          </p>
-                          <p>
-                            Kapanis: {formatMoney(row.closingCashCents ?? undefined)} •
-                            Fark: {formatMoney(row.varianceCents ?? undefined)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                    Personel Satis Raporu
-                  </p>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                      Baslangic
-                      <input
-                        type="date"
-                        value={reportDateFrom}
-                        onChange={(e) => setReportDateFrom(e.target.value)}
-                        className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] px-2 text-sm text-[#1A3C34]"
-                      />
-                    </label>
-                    <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                      Bitis
-                      <input
-                        type="date"
-                        value={reportDateTo}
-                        onChange={(e) => setReportDateTo(e.target.value)}
-                        className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] px-2 text-sm text-[#1A3C34]"
-                      />
-                    </label>
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <Button
-                      variant="secondary"
-                      className="h-8 px-3 text-xs"
-                      onClick={() => void loadStaffSalesReport()}
-                      disabled={isSalesReportBusy}
-                    >
-                      {isSalesReportBusy ? 'Yukleniyor...' : 'Raporu yenile'}
-                    </Button>
-                  </div>
-                  {staffSalesReport?.rows?.length ? (
-                    <div className="mt-2 space-y-2">
-                      {staffSalesReport.rows.map((row) => (
-                        <div
-                          key={row.userId}
-                          className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
-                        >
-                          <p className="font-semibold">
-                            {row.userName} ({row.role ?? '-'})
-                          </p>
-                          <p>
-                            Siparis: {row.orderCount} • Ciro: {formatMoney(row.salesTotalCents)}
-                          </p>
-                          <p>
-                            Tahsilat: {formatMoney(row.paymentsTotalCents)} • Vardiya:{' '}
-                            {row.shiftCount}
-                          </p>
-                        </div>
-                      ))}
-                      <div className="rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]">
-                        <p className="font-semibold">Toplam</p>
-                        <p>
-                          Siparis: {staffSalesReport.totals.orderCount} • Ciro:{' '}
-                          {formatMoney(staffSalesReport.totals.salesTotalCents)}
-                        </p>
-                        <p>
-                          Tahsilat: {formatMoney(staffSalesReport.totals.paymentsTotalCents)}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-[#5C5C5C]">Rapor verisi yok.</p>
-                  )}
-
-                  <div className="mt-4 rounded-lg border border-[#E5E5E0] bg-[#FAFCFF] px-3 py-3">
+            ) : (
+              <div
+                className={`rounded-2xl border border-[#D8DED8] bg-white px-4 py-4 md:px-5 md:py-5 ${isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''
+                  }`}
+              >
+                <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+                  <div className="space-y-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                      POS-11 Satis Analitigi
+                      Kasiyer Hizli Satis
                     </p>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                      <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                        Periyot
-                        <select
-                          value={salesPeriod}
-                          onChange={(e) =>
-                            setSalesPeriod(e.target.value as 'day' | 'week' | 'month')
-                          }
-                          className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                        >
-                          <option value="day">Gunluk</option>
-                          <option value="week">Haftalik</option>
-                          <option value="month">Aylik</option>
-                        </select>
+
+                    <div className="grid gap-3 md:grid-cols-12">
+                      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-9">
+                        Barkod / SKU
+                        <div className="flex gap-2">
+                          <input
+                            value={barcodeInput}
+                            onChange={(e) => setBarcodeInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void lookupBarcode(barcodeInput);
+                              }
+                            }}
+                            className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                            placeholder="Barkod okutun veya kod yazip Enter'a basin"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-11 px-4 text-xs"
+                            onClick={() => setIsProductSearchModalOpen(true)}
+                          >
+                            Ara
+                          </Button>
+                        </div>
+                        <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
+                          Okutulan urun otomatik olarak sepete eklenir.
+                        </span>
                       </label>
-                      <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                        Top Urun Limiti
+                      <div className="md:col-span-3 flex items-end">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-11 w-full px-3 text-xs"
+                          onClick={() => setCartItems([])}
+                          disabled={cartItems.length === 0}
+                        >
+                          Sepeti Temizle
+                        </Button>
+                      </div>
+
+                      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-6">
+                        Kalem Iskonto (kurus)
                         <input
-                          value={salesTopLimit}
-                          onChange={(e) => setSalesTopLimit(e.target.value)}
-                          className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                          value={itemDiscountCents}
+                          onChange={(e) => setItemDiscountCents(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                          placeholder="0"
                           inputMode="numeric"
-                          placeholder="10"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70 md:col-span-6">
+                        Sepet Iskonto (kurus)
+                        <input
+                          value={cartDiscountCents}
+                          onChange={(e) => setCartDiscountCents(e.target.value)}
+                          className="h-10 rounded-lg border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                          placeholder="0"
+                          inputMode="numeric"
                         />
                       </label>
                     </div>
 
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="rounded-xl border border-[#E5E5E0] bg-[#F9FBF8] px-3 py-2 text-sm text-[#1A3C34]">
+                      <p>
+                        <span className="font-semibold">Secili urun:</span>{' '}
+                        {resolvedProductName || '-'} {variantId ? `(Varyant #${variantId})` : ''}
+                      </p>
+                      <p className="mt-1">
+                        <span className="font-semibold">Secili musteri:</span>{' '}
+                        {customerMode === 'CUSTOMER'
+                          ? selectedCustomer
+                            ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                            : 'Secilmedi'
+                          : 'Misafir'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
                       <Button
+                        type="button"
                         variant="secondary"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => void loadSalesReport()}
-                        disabled={isSalesAnalyticsBusy}
+                        className="h-9 px-3 text-xs"
+                        onClick={() => setIsProductSearchModalOpen(true)}
                       >
-                        {isSalesAnalyticsBusy ? 'Yukleniyor...' : 'Analitik yenile'}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => void downloadSalesCsv()}
-                        disabled={isSalesAnalyticsBusy}
-                      >
-                        Excel (CSV)
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        className="h-8 px-3 text-xs"
-                        onClick={printSalesReportPdf}
-                        disabled={!salesReport}
-                      >
-                        PDF Yazdir
+                        Urun Ara
                       </Button>
                     </div>
 
-                    {salesReport ? (
-                      <div className="mt-3 space-y-3 text-sm text-[#1A3C34]">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
-                            Siparis: <span className="font-semibold">{salesReport.summary.orderCount}</span>
-                          </p>
-                          <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
-                            Ciro: <span className="font-semibold">{formatMoney(salesReport.summary.salesTotalCents)}</span>
-                          </p>
-                          <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
-                            Tahsilat: <span className="font-semibold">{formatMoney(salesReport.summary.paymentsTotalCents)}</span>
-                          </p>
-                          <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
-                            Ortalama Fis: <span className="font-semibold">{formatMoney(salesReport.summary.avgTicketCents)}</span>
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                            Trend Grafik
-                          </p>
-                          {salesReport.trend.length === 0 ? (
-                            <p className="mt-1 text-sm text-[#5C5C5C]">Trend verisi yok.</p>
-                          ) : (
-                            <div className="mt-2 space-y-2">
-                              {salesReport.trend.map((row) => {
-                                const widthPct =
-                                  maxTrendSales > 0
-                                    ? Math.max(
-                                        Math.round(
-                                          (row.salesTotalCents / maxTrendSales) * 100,
-                                        ),
-                                        2,
-                                      )
-                                    : 0;
-                                return (
-                                  <div key={row.bucketStart} className="space-y-1">
-                                    <div className="flex items-center justify-between text-xs text-[#1A3C34]">
-                                      <span>{new Date(row.bucketStart).toLocaleDateString('tr-TR')}</span>
-                                      <span>
-                                        {formatMoney(row.salesTotalCents)} • {row.orderCount} siparis
-                                      </span>
-                                    </div>
-                                    <div className="h-2 rounded-full bg-[#E8EDF2]">
-                                      <div
-                                        className="h-2 rounded-full bg-[#1A6B5C]"
-                                        style={{ width: `${widthPct}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
-                            Top Urunler
-                          </p>
-                          {salesReport.topProducts.length === 0 ? (
-                            <p className="mt-1 text-sm text-[#5C5C5C]">Urun satis verisi yok.</p>
-                          ) : (
-                            <div className="mt-2 space-y-2">
-                              {salesReport.topProducts.map((row) => (
-                                <div
-                                  key={row.productId}
-                                  className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
-                                >
-                                  <p className="font-semibold">
-                                    #{row.productId} {row.productName}
-                                  </p>
-                                  <p>
-                                    Adet: {row.quantity} • Siparis: {row.orderCount} • Ciro:{' '}
-                                    {formatMoney(row.salesTotalCents)}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    <div className="rounded-xl border border-[#DCE5DC] bg-white px-3 py-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                          Sepet
+                        </p>
+                        <p className="text-xs text-[#1A3C34]/70">{cartItems.length} kalem</p>
                       </div>
-                    ) : (
-                      <p className="mt-2 text-sm text-[#5C5C5C]">Analitik rapor yuklenmedi.</p>
-                    )}
+                      {cartItems.length === 0 ? (
+                        <p className="mt-2 text-sm text-[#5C5C5C]">
+                          Sepet bos. Tek kalem satmak icin urun bilgisiyle direkt satis da yapabilirsiniz.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {cartItems.map((row) => (
+                            <div
+                              key={row.key}
+                              className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-semibold">
+                                  {row.name} {row.variantId ? `(Varyant #${row.variantId})` : ''}
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => removeCartItem(row.key)}
+                                >
+                                  Kaldir
+                                </Button>
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => updateCartItemQuantity(row.key, row.quantity - 1)}
+                                >
+                                  -1
+                                </Button>
+                                <input
+                                  value={String(row.quantity)}
+                                  onChange={(e) =>
+                                    updateCartItemQuantity(row.key, Number(e.target.value))
+                                  }
+                                  className="h-7 w-16 rounded-md border border-[#D9D9D3] px-2 text-center text-xs text-[#1A3C34]"
+                                  inputMode="numeric"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => updateCartItemQuantity(row.key, row.quantity + 1)}
+                                >
+                                  +1
+                                </Button>
+                                <span className="ml-auto">
+                                  {typeof row.expectedUnitPriceCents === 'number'
+                                    ? `${formatMoney(row.expectedUnitPriceCents)} x ${row.quantity}`
+                                    : 'Fiyat snapshot yok'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#C8D9C8] bg-[#F8FBF8] px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Kasa Ozeti
+                    </p>
+                    <p className="mt-2 text-3xl font-semibold text-[#1A3C34]">
+                      {formatMoney(estimatedPayableCents)}
+                    </p>
+                    <div className="mt-3 space-y-1.5 text-sm text-[#1A3C34]">
+                      <p className="flex items-center justify-between">
+                        <span>Sepet kalemi</span>
+                        <span className="font-semibold">
+                          {cartItems.length > 0 ? cartItems.length : 1}
+                        </span>
+                      </p>
+                      <p className="flex items-center justify-between">
+                        <span>Ara toplam</span>
+                        <span className="font-semibold">{formatMoney(estimatedSubtotalCents)}</span>
+                      </p>
+                      <p className="flex items-center justify-between">
+                        <span>Iskonto</span>
+                        <span className="font-semibold">{formatMoney(estimatedDiscountCents)}</span>
+                      </p>
+                      <p className="flex items-center justify-between">
+                        <span>Split odeme</span>
+                        <span className="font-semibold">{formatMoney(splitTotalCents)}</span>
+                      </p>
+                      <p className="flex items-center justify-between border-t border-[#DBE4DC] pt-2">
+                        <span>Kalan</span>
+                        <span className="font-semibold">{formatMoney(estimatedRemainingCents)}</span>
+                      </p>
+                    </div>
+
+                    <div className="mt-4 grid gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                        Musteri
+                        <select
+                          value={customerMode}
+                          onChange={(e) => {
+                            const nextMode = e.target.value as PosCustomerMode;
+                            setCustomerMode(nextMode);
+                            if (nextMode === 'GUEST') {
+                              setSelectedCustomer(null);
+                              setCustomerId('');
+                            }
+                          }}
+                          className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        >
+                          <option value="GUEST">Misafir</option>
+                          <option value="CUSTOMER">Musteri sec</option>
+                        </select>
+                      </label>
+                      {customerMode === 'CUSTOMER' ? (
+                        <div className="rounded-lg border border-[#D9D9D3] bg-white px-3 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-9 px-3 text-xs"
+                              onClick={() => setIsCustomerSearchModalOpen(true)}
+                            >
+                              Musteri Ara
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-9 px-3 text-xs"
+                              onClick={() => setIsCustomerCreateModalOpen(true)}
+                            >
+                              Musteri Ekle
+                            </Button>
+                            {selectedCustomer ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="h-9 px-3 text-xs"
+                                onClick={() => {
+                                  setSelectedCustomer(null);
+                                  setCustomerId('');
+                                }}
+                              >
+                                Kaldir
+                              </Button>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 text-xs text-[#1A3C34]">
+                            {selectedCustomer
+                              ? `Secili: #${selectedCustomer.id} ${selectedCustomer.name} • ${selectedCustomer.phone}`
+                              : 'Henuz musteri secilmedi.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[#1A3C34]/75">
+                          Misafir satis modu aktif.
+                        </p>
+                      )}
+                      <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                        Tahsilat
+                        <select
+                          value={quickPaymentMethod}
+                          onChange={(e) =>
+                            setQuickPaymentMethod(e.target.value as PosQuickPaymentMethod)
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        >
+                          <option value="NONE">Odeme secilmedi</option>
+                          <option value="CASH">Nakit</option>
+                          <option value="CARD">Kart</option>
+                          <option value="CREDIT">Veresiye</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
+                        <input
+                          type="checkbox"
+                          checked={autoPrintReceipt}
+                          onChange={(e) => setAutoPrintReceipt(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#C8D2C8]"
+                        />
+                        Fisi satis tamamlaninca otomatik yazdir
+                      </label>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <Button className="h-12 w-full text-base" onClick={() => void handleCreateSale()} disabled={isSubmitting}>
+                        {isSubmitting ? 'Gonderiliyor...' : 'Satisi Tamamla'}
+                      </Button>
+                      <Button variant="secondary" className="h-10 w-full" onClick={() => void printReceipt()} disabled={!lastReceipt}>
+                        Fis Yazdir
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-[#E0E6E0] bg-white p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                        Bakiyeden Odeme
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={balanceApplyAmount}
+                          onChange={(e) => setBalanceApplyAmount(e.target.value)}
+                          className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                          placeholder="Bakiye (kurus)"
+                          inputMode="numeric"
+                        />
+                        <Button
+                          variant="secondary"
+                          className="h-10 px-3 text-xs"
+                          onClick={() => void applyCustomerBalance()}
+                          disabled={!selectedCustomer || !lastOnlineOrderId || isApplyingBalance}
+                        >
+                          {isApplyingBalance ? 'Uygulaniyor...' : 'Uygula'}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs text-[#5C5C5C]">
+                        Son online siparis: {lastOnlineOrderId ? `#${lastOnlineOrderId}` : 'Yok'}
+                      </p>
+                    </div>
+                    <p className="mt-3 text-xs text-[#5C5C5C]">
+                      Split odeme ve operasyonel raporlar asagidaki detayli panelde.
+                    </p>
                   </div>
                 </div>
               </div>
-            </div>
+            )
+          ) : null}
 
-            <div className="grid gap-3 rounded-xl border border-[#E5E5E0] bg-[#F9FAF7] px-4 py-4 md:grid-cols-5">
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-3">
-                Musteri Ara
-                <div className="flex gap-2">
+          {isAuthed && isProductSearchModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+              <div className="w-full max-w-3xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#1A3C34]">Urun Ara ve Sec</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 px-3 text-xs"
+                    onClick={() => setIsProductSearchModalOpen(false)}
+                  >
+                    Bitti / Kapat
+                  </Button>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={productQuery}
+                    onChange={(e) => setProductQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void searchProducts();
+                      }
+                    }}
+                    className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
+                    placeholder="Urun adi / SKU / urun id"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-11 px-4 text-xs"
+                    onClick={() => void searchProducts()}
+                    disabled={isSearchingProduct}
+                  >
+                    {isSearchingProduct ? 'Araniyor...' : 'Ara'}
+                  </Button>
+                </div>
+                <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
+                  {productResults.length === 0 ? (
+                    <p className="text-sm text-[#5C5C5C]">Urun bulunamadi.</p>
+                  ) : (
+                    productResults.map((product) => (
+                      <button
+                        key={`picker-${product.type}-${product.variantId ?? product.productId}`}
+                        type="button"
+                        onClick={() => selectProduct(product)}
+                        className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
+                      >
+                        <p className="font-semibold">{product.name}</p>
+                        <p className="text-xs">
+                          {product.sku ? `${product.sku} • ` : ''}
+                          {formatMoney(product.priceCents)}
+                          {typeof product.stock === 'number' ? ` • Stok: ${product.stock}` : ''}
+                        </p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {isAuthed && isCustomerSearchModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+              <div className="w-full max-w-2xl rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#1A3C34]">Musteri Ara</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 px-3 text-xs"
+                    onClick={() => setIsCustomerSearchModalOpen(false)}
+                  >
+                    Kapat
+                  </Button>
+                </div>
+                <div className="mt-3 flex gap-2">
                   <input
                     value={customerQuery}
                     onChange={(e) => setCustomerQuery(e.target.value)}
-                    className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void searchCustomers();
+                      }
+                    }}
+                    className="h-11 flex-1 rounded-xl border border-[#D9D9D3] bg-[#FCFDFC] px-3 text-sm text-[#1A3C34]"
                     placeholder="Ad / telefon / musteri id"
                   />
                   <Button
                     type="button"
                     variant="secondary"
-                    className="h-10 px-3"
+                    className="h-11 px-4 text-xs"
                     onClick={() => void searchCustomers()}
                     disabled={isSearchingCustomer}
                   >
                     {isSearchingCustomer ? 'Araniyor...' : 'Ara'}
                   </Button>
                 </div>
-                {customerResults.length > 0 ? (
-                  <div className="mt-2 grid gap-1">
-                    {customerResults.slice(0, 4).map((c) => (
+                <div className="mt-3 max-h-[55vh] space-y-2 overflow-y-auto rounded-xl border border-[#E5E5E0] bg-[#FAFBF8] p-3">
+                  {customerResults.length === 0 ? (
+                    <p className="text-sm text-[#5C5C5C]">Musteri bulunamadi.</p>
+                  ) : (
+                    customerResults.map((customer) => (
                       <button
-                        key={c.id}
+                        key={`customer-modal-${customer.id}`}
                         type="button"
-                        onClick={() => selectCustomer(c)}
-                        className={`rounded-lg border px-3 py-2 text-left text-xs normal-case tracking-normal ${
-                          selectedCustomer?.id === c.id
-                            ? 'border-[#1A3C34] bg-[#EAF3F0] text-[#1A3C34]'
-                            : 'border-[#E5E5E0] bg-white text-[#1A3C34]'
-                        }`}
+                        onClick={() => {
+                          selectCustomer(customer);
+                          setCustomerMode('CUSTOMER');
+                          setIsCustomerSearchModalOpen(false);
+                        }}
+                        className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-left text-sm text-[#1A3C34] hover:border-[#1A3C34]"
                       >
-                        #{c.id} {c.name} • {c.phone} • Bakiye: {formatMoney(c.balance)}
+                        <p className="font-semibold">
+                          #{customer.id} {customer.name}
+                        </p>
+                        <p className="text-xs">
+                          {customer.phone} • Bakiye: {formatMoney(customer.balance)}
+                        </p>
                       </button>
-                    ))}
-                  </div>
-                ) : null}
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-2">
-                Barkod
-                <div className="flex gap-2">
-                  <input
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder="SKU / barkod okutun"
-                  />
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {isAuthed && isCustomerCreateModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+              <div className="w-full max-w-lg rounded-2xl border border-[#D8DED8] bg-white p-4 shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#1A3C34]">Yeni Musteri Ekle</p>
                   <Button
                     type="button"
                     variant="secondary"
-                    className="h-10 px-3"
-                    onClick={() => setIsProductSearchModalOpen(true)}
+                    className="h-9 px-3 text-xs"
+                    onClick={() => setIsCustomerCreateModalOpen(false)}
                   >
-                    Ara
+                    Kapat
                   </Button>
                 </div>
-                <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
-                  Scanner klavye modu desteklenir: odak inputta degilken barkod + Enter.
-                </span>
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Customer ID (opsiyonel)
-                <input
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="Bos birak = misafir"
-                  inputMode="numeric"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Product ID
-                <input
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="10"
-                  inputMode="numeric"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Quantity
-                <input
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="1"
-                  inputMode="numeric"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Unit Price (kurus)
-                <input
-                  value={unitPriceCents}
-                  onChange={(e) => setUnitPriceCents(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="15000"
-                  inputMode="numeric"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Kalem Iskonto (kurus)
-                <input
-                  value={itemDiscountCents}
-                  onChange={(e) => setItemDiscountCents(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Sepet Iskonto (kurus)
-                <input
-                  value={cartDiscountCents}
-                  onChange={(e) => setCartDiscountCents(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </label>
-              <div className="md:col-span-5 rounded-lg border border-[#D9D9D3] bg-white px-3 py-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="mt-3 grid gap-3">
+                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                    Ad Soyad
+                    <input
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="Musteri adi"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                    Telefon
+                    <input
+                      value={newCustomerPhone}
+                      onChange={(e) => setNewCustomerPhone(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="05xxxxxxxxx"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    className="h-10 w-full text-sm"
+                    onClick={() => void createPosCustomer()}
+                    disabled={isCreatingCustomer}
+                  >
+                    {isCreatingCustomer ? 'Kaydediliyor...' : 'Kaydet ve Musteriyi Sec'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {isAuthed && user?.role !== 'USER' && !isFocusMode ? (
+            <details className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4" open={false}>
+              <summary className="cursor-pointer list-none text-sm font-semibold text-[#1A3C34]">
+                Detayli POS operasyon paneli (vardiya, split, analitik, fatura)
+              </summary>
+              <div className="mt-4 grid gap-4">
+                <div className="rounded-xl border border-[#E5E5E0] bg-[#F7FAFD] px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                    POS-03 Split Odeme
+                    Vardiya Yonetimi (POS-10)
                   </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-3 text-xs"
-                    onClick={addSplitPaymentLine}
-                  >
-                    Satir Ekle
-                  </Button>
-                </div>
-                <div className="mt-2 grid gap-2">
-                  {splitPayments.map((line, index) => (
-                    <div
-                      key={`split-${index}`}
-                      className="grid gap-2 rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] p-2 md:grid-cols-12"
-                    >
-                      <label className="md:col-span-3">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                          Yontem
-                        </span>
-                        <select
-                          value={line.method}
-                          onChange={(e) =>
-                            updateSplitPaymentLine(
-                              index,
-                              'method',
-                              e.target.value as PosPaymentMethod,
-                            )
-                          }
-                          className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                        >
-                          <option value="CASH">Nakit</option>
-                          <option value="CARD">Kart</option>
-                          <option value="TRANSFER">Havale</option>
-                          <option value="OTHER">Diger</option>
-                        </select>
-                      </label>
-                      <label className="md:col-span-4">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                          Tutar (kurus)
-                        </span>
-                        <input
-                          value={line.amountCents}
-                          onChange={(e) =>
-                            updateSplitPaymentLine(index, 'amountCents', e.target.value)
-                          }
-                          className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                          placeholder="0"
-                          inputMode="numeric"
-                        />
-                      </label>
-                      <label className="md:col-span-4">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                          Referans
-                        </span>
-                        <input
-                          value={line.reference}
-                          onChange={(e) =>
-                            updateSplitPaymentLine(index, 'reference', e.target.value)
-                          }
-                          className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                          placeholder="Opsiyonel"
-                        />
-                      </label>
-                      <div className="md:col-span-1 flex items-end">
+                  <div className="mt-3 grid gap-3 md:grid-cols-5">
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Kasa Kodu
+                      <input
+                        value={registerCode}
+                        onChange={(e) => setRegisterCode(e.target.value)}
+                        className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="MAIN"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Acilis Nakit (kurus)
+                      <input
+                        value={openingCashCents}
+                        onChange={(e) => setOpeningCashCents(e.target.value)}
+                        className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="0"
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Kapanis Nakit (kurus)
+                      <input
+                        value={closingCashCents}
+                        onChange={(e) => setClosingCashCents(e.target.value)}
+                        className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="0"
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-2">
+                      Vardiya Notu
+                      <input
+                        value={shiftNote}
+                        onChange={(e) => setShiftNote(e.target.value)}
+                        className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="Opsiyonel"
+                      />
+                    </label>
+                    <div className="md:col-span-5 flex flex-wrap gap-2">
+                      <Button onClick={() => void openShift()} disabled={isShiftBusy}>
+                        {isShiftBusy ? 'Islem...' : 'Vardiya Ac'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void closeShift()}
+                        disabled={isShiftBusy || !activeShift}
+                      >
+                        {isShiftBusy ? 'Islem...' : 'Vardiya Kapat'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void loadShiftRows()}
+                        disabled={isShiftBusy}
+                      >
+                        Yenile
+                      </Button>
+                    </div>
+                    <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
+                      <span className="font-semibold">Aktif Vardiya:</span>{' '}
+                      {activeShift
+                        ? `${activeShift.registerCode} • Acan #${activeShift.openedByUserId} • Acilis ${formatMoney(activeShift.openingCashCents)}`
+                        : 'Secili kasada aktif vardiya yok'}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                        Kasa Vardiya Gecmisi
+                      </p>
+                      {shiftRows.length === 0 ? (
+                        <p className="mt-2 text-sm text-[#5C5C5C]">Vardiya kaydi yok.</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {shiftRows.map((row) => (
+                            <div
+                              key={row.id}
+                              className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
+                            >
+                              <p className="font-semibold">
+                                {row.registerCode} • #{row.id}
+                              </p>
+                              <p>
+                                Personel: {row.openedBy?.name ?? `#${row.openedByUserId}`} •
+                                Acilis: {formatMoney(row.openingCashCents)}
+                              </p>
+                              <p>
+                                Kapanis: {formatMoney(row.closingCashCents ?? undefined)} •
+                                Fark: {formatMoney(row.varianceCents ?? undefined)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                        Personel Satis Raporu
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                          Baslangic
+                          <input
+                            type="date"
+                            value={reportDateFrom}
+                            onChange={(e) => setReportDateFrom(e.target.value)}
+                            className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] px-2 text-sm text-[#1A3C34]"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                          Bitis
+                          <input
+                            type="date"
+                            value={reportDateTo}
+                            onChange={(e) => setReportDateTo(e.target.value)}
+                            className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] px-2 text-sm text-[#1A3C34]"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 flex gap-2">
                         <Button
-                          type="button"
                           variant="secondary"
-                          className="h-9 w-full px-2 text-xs"
-                          onClick={() => removeSplitPaymentLine(index)}
-                          disabled={splitPayments.length <= 1}
+                          className="h-8 px-3 text-xs"
+                          onClick={() => void loadStaffSalesReport()}
+                          disabled={isSalesReportBusy}
                         >
-                          Sil
+                          {isSalesReportBusy ? 'Yukleniyor...' : 'Raporu yenile'}
                         </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs text-[#1A3C34]">
-                  Split toplam: <span className="font-semibold">{formatMoney(splitTotalCents)}</span>
-                </p>
-              </div>
-              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Not
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                  placeholder="Opsiyonel"
-                />
-              </label>
-              <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
-                <span className="font-semibold">Secili urun:</span>{' '}
-                {resolvedProductName || '-'}{' '}
-                {variantId ? `(Varyant #${variantId})` : ''}
-              </div>
-              <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
-                <span className="font-semibold">Secili musteri:</span>{' '}
-                {customerMode === 'CUSTOMER'
-                  ? selectedCustomer
-                    ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
-                    : 'Secilmedi'
-                  : 'Misafir'}
-              </div>
-              <div className="md:col-span-5 flex flex-wrap gap-2">
-                <Button onClick={() => void handleCreateSale()} disabled={isSubmitting}>
-                  {isSubmitting ? 'Gonderiliyor...' : 'Satis Olustur'}
-                </Button>
-                <Button variant="secondary" onClick={() => void printReceipt()} disabled={!lastReceipt}>
-                  Fis Yazdir
-                </Button>
-                <input
-                  value={balanceApplyAmount}
-                  onChange={(e) => setBalanceApplyAmount(e.target.value)}
-                  className="h-10 w-44 rounded-full border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
-                  placeholder="Bakiye (kurus)"
-                  inputMode="numeric"
-                />
-                <Button
-                  variant="secondary"
-                  onClick={() => void applyCustomerBalance()}
-                  disabled={!selectedCustomer || !lastOnlineOrderId || isApplyingBalance}
-                >
-                  {isApplyingBalance ? 'Uygulaniyor...' : 'Bakiyeden Ode'}
-                </Button>
-              </div>
-            </div>
+                      {staffSalesReport?.rows?.length ? (
+                        <div className="mt-2 space-y-2">
+                          {staffSalesReport.rows.map((row) => (
+                            <div
+                              key={row.userId}
+                              className="rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] px-3 py-2 text-sm text-[#1A3C34]"
+                            >
+                              <p className="font-semibold">
+                                {row.userName} ({row.role ?? '-'})
+                              </p>
+                              <p>
+                                Siparis: {row.orderCount} • Ciro: {formatMoney(row.salesTotalCents)}
+                              </p>
+                              <p>
+                                Tahsilat: {formatMoney(row.paymentsTotalCents)} • Vardiya:{' '}
+                                {row.shiftCount}
+                              </p>
+                            </div>
+                          ))}
+                          <div className="rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]">
+                            <p className="font-semibold">Toplam</p>
+                            <p>
+                              Siparis: {staffSalesReport.totals.orderCount} • Ciro:{' '}
+                              {formatMoney(staffSalesReport.totals.salesTotalCents)}
+                            </p>
+                            <p>
+                              Tahsilat: {formatMoney(staffSalesReport.totals.paymentsTotalCents)}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-[#5C5C5C]">Rapor verisi yok.</p>
+                      )}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-[#E5E5E0] bg-white px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Fis Ayarlari
-                </p>
-                <div className="mt-3 grid gap-3">
-                  <label className="text-sm text-[#1A3C34]">
-                    Isletme adi
-                    <input
-                      value={receiptSettings.businessName}
-                      onChange={(e) =>
-                        setReceiptSettings((prev) => ({
-                          ...prev,
-                          businessName: e.target.value,
-                        }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
-                    />
-                  </label>
-                  <label className="text-sm text-[#1A3C34]">
-                    Alt not
-                    <input
-                      value={receiptSettings.footerNote}
-                      onChange={(e) =>
-                        setReceiptSettings((prev) => ({
-                          ...prev,
-                          footerNote: e.target.value,
-                        }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
-                    />
-                  </label>
-                  <Button variant="secondary" className="w-fit" onClick={saveReceiptSettings}>
-                    Ayarlari Kaydet
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Fis Onizleme
-                </p>
-                {lastReceipt ? (
-                  <div className="mt-3 space-y-2 text-sm text-[#1A3C34]">
-                    <p className="font-semibold">{receiptSettings.businessName}</p>
-                    <p>Fis: {lastReceipt.saleId}</p>
-                    <p>Tarih: {new Date(lastReceipt.createdAt).toLocaleString('tr-TR')}</p>
-                    <p>
-                      Musteri:{' '}
-                      {typeof lastReceipt.customerId === 'number'
-                        ? lastReceipt.customerId
-                        : 'Misafir'}
-                    </p>
-                    <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
-                      {lastReceipt.lines.map((line, idx) => (
-                        <p key={`${line.productId}-${idx}`}>
-                          Urun #{line.productId} x {line.quantity} ={' '}
-                          {formatMoney(
-                            typeof line.unitPriceCents === 'number'
-                              ? line.unitPriceCents * line.quantity
-                              : undefined,
-                          )}
+                      <div className="mt-4 rounded-lg border border-[#E5E5E0] bg-[#FAFCFF] px-3 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                          POS-11 Satis Analitigi
                         </p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                          <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                            Periyot
+                            <select
+                              value={salesPeriod}
+                              onChange={(e) =>
+                                setSalesPeriod(e.target.value as 'day' | 'week' | 'month')
+                              }
+                              className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                            >
+                              <option value="day">Gunluk</option>
+                              <option value="week">Haftalik</option>
+                              <option value="month">Aylik</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                            Top Urun Limiti
+                            <input
+                              value={salesTopLimit}
+                              onChange={(e) => setSalesTopLimit(e.target.value)}
+                              className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                              inputMode="numeric"
+                              placeholder="10"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            className="h-8 px-3 text-xs"
+                            onClick={() => void loadSalesReport()}
+                            disabled={isSalesAnalyticsBusy}
+                          >
+                            {isSalesAnalyticsBusy ? 'Yukleniyor...' : 'Analitik yenile'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="h-8 px-3 text-xs"
+                            onClick={() => void downloadSalesCsv()}
+                            disabled={isSalesAnalyticsBusy}
+                          >
+                            Excel (CSV)
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="h-8 px-3 text-xs"
+                            onClick={printSalesReportPdf}
+                            disabled={!salesReport}
+                          >
+                            PDF Yazdir
+                          </Button>
+                        </div>
+
+                        {salesReport ? (
+                          <div className="mt-3 space-y-3 text-sm text-[#1A3C34]">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
+                                Siparis: <span className="font-semibold">{salesReport.summary.orderCount}</span>
+                              </p>
+                              <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
+                                Ciro: <span className="font-semibold">{formatMoney(salesReport.summary.salesTotalCents)}</span>
+                              </p>
+                              <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
+                                Tahsilat: <span className="font-semibold">{formatMoney(salesReport.summary.paymentsTotalCents)}</span>
+                              </p>
+                              <p className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
+                                Ortalama Fis: <span className="font-semibold">{formatMoney(salesReport.summary.avgTicketCents)}</span>
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                                Trend Grafik
+                              </p>
+                              {salesReport.trend.length === 0 ? (
+                                <p className="mt-1 text-sm text-[#5C5C5C]">Trend verisi yok.</p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {salesReport.trend.map((row) => {
+                                    const widthPct =
+                                      maxTrendSales > 0
+                                        ? Math.max(
+                                          Math.round(
+                                            (row.salesTotalCents / maxTrendSales) * 100,
+                                          ),
+                                          2,
+                                        )
+                                        : 0;
+                                    return (
+                                      <div key={row.bucketStart} className="space-y-1">
+                                        <div className="flex items-center justify-between text-xs text-[#1A3C34]">
+                                          <span>{new Date(row.bucketStart).toLocaleDateString('tr-TR')}</span>
+                                          <span>
+                                            {formatMoney(row.salesTotalCents)} • {row.orderCount} siparis
+                                          </span>
+                                        </div>
+                                        <div className="h-2 rounded-full bg-[#E8EDF2]">
+                                          <div
+                                            className="h-2 rounded-full bg-[#1A6B5C]"
+                                            style={{ width: `${widthPct}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+                                Top Urunler
+                              </p>
+                              {salesReport.topProducts.length === 0 ? (
+                                <p className="mt-1 text-sm text-[#5C5C5C]">Urun satis verisi yok.</p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {salesReport.topProducts.map((row) => (
+                                    <div
+                                      key={row.productId}
+                                      className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                                    >
+                                      <p className="font-semibold">
+                                        #{row.productId} {row.productName}
+                                      </p>
+                                      <p>
+                                        Adet: {row.quantity} • Siparis: {row.orderCount} • Ciro:{' '}
+                                        {formatMoney(row.salesTotalCents)}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-[#5C5C5C]">Analitik rapor yuklenmedi.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 rounded-xl border border-[#E5E5E0] bg-[#F9FAF7] px-4 py-4 md:grid-cols-5">
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-3">
+                    Musteri Ara
+                    <div className="flex gap-2">
+                      <input
+                        value={customerQuery}
+                        onChange={(e) => setCustomerQuery(e.target.value)}
+                        className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="Ad / telefon / musteri id"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-10 px-3"
+                        onClick={() => void searchCustomers()}
+                        disabled={isSearchingCustomer}
+                      >
+                        {isSearchingCustomer ? 'Araniyor...' : 'Ara'}
+                      </Button>
+                    </div>
+                    {customerResults.length > 0 ? (
+                      <div className="mt-2 grid gap-1">
+                        {customerResults.slice(0, 4).map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => selectCustomer(c)}
+                            className={`rounded-lg border px-3 py-2 text-left text-xs normal-case tracking-normal ${selectedCustomer?.id === c.id
+                              ? 'border-[#1A3C34] bg-[#EAF3F0] text-[#1A3C34]'
+                              : 'border-[#E5E5E0] bg-white text-[#1A3C34]'
+                              }`}
+                          >
+                            #{c.id} {c.name} • {c.phone} • Bakiye: {formatMoney(c.balance)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70 md:col-span-2">
+                    Barkod
+                    <div className="flex gap-2">
+                      <input
+                        value={barcodeInput}
+                        onChange={(e) => setBarcodeInput(e.target.value)}
+                        className="h-10 flex-1 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder="SKU / barkod okutun"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-10 px-3"
+                        onClick={() => setIsProductSearchModalOpen(true)}
+                      >
+                        Ara
+                      </Button>
+                    </div>
+                    <span className="text-[11px] normal-case tracking-normal text-[#5C5C5C]">
+                      Scanner klavye modu desteklenir: odak inputta degilken barkod + Enter.
+                    </span>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Customer ID (opsiyonel)
+                    <input
+                      value={customerId}
+                      onChange={(e) => setCustomerId(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="Bos birak = misafir"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Product ID
+                    <input
+                      value={productId}
+                      onChange={(e) => setProductId(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="10"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Quantity
+                    <input
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="1"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Unit Price (kurus)
+                    <input
+                      value={unitPriceCents}
+                      onChange={(e) => setUnitPriceCents(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="15000"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Kalem Iskonto (kurus)
+                    <input
+                      value={itemDiscountCents}
+                      onChange={(e) => setItemDiscountCents(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Sepet Iskonto (kurus)
+                    <input
+                      value={cartDiscountCents}
+                      onChange={(e) => setCartDiscountCents(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <div className="md:col-span-5 rounded-lg border border-[#D9D9D3] bg-white px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                        POS-03 Split Odeme
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 px-3 text-xs"
+                        onClick={addSplitPaymentLine}
+                      >
+                        Satir Ekle
+                      </Button>
+                    </div>
+                    <div className="mt-2 grid gap-2">
+                      {splitPayments.map((line, index) => (
+                        <div
+                          key={`split-${index}`}
+                          className="grid gap-2 rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] p-2 md:grid-cols-12"
+                        >
+                          <label className="md:col-span-3">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                              Yontem
+                            </span>
+                            <select
+                              value={line.method}
+                              onChange={(e) =>
+                                updateSplitPaymentLine(
+                                  index,
+                                  'method',
+                                  e.target.value as PosPaymentMethod,
+                                )
+                              }
+                              className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                            >
+                              <option value="CASH">Nakit</option>
+                              <option value="CARD">Kart</option>
+                              <option value="TRANSFER">Havale</option>
+                              <option value="OTHER">Diger</option>
+                            </select>
+                          </label>
+                          <label className="md:col-span-4">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                              Tutar (kurus)
+                            </span>
+                            <input
+                              value={line.amountCents}
+                              onChange={(e) =>
+                                updateSplitPaymentLine(index, 'amountCents', e.target.value)
+                              }
+                              className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                              placeholder="0"
+                              inputMode="numeric"
+                            />
+                          </label>
+                          <label className="md:col-span-4">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                              Referans
+                            </span>
+                            <input
+                              value={line.reference}
+                              onChange={(e) =>
+                                updateSplitPaymentLine(index, 'reference', e.target.value)
+                              }
+                              className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                              placeholder="Opsiyonel"
+                            />
+                          </label>
+                          <div className="md:col-span-1 flex items-end">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-9 w-full px-2 text-xs"
+                              onClick={() => removeSplitPaymentLine(index)}
+                              disabled={splitPayments.length <= 1}
+                            >
+                              Sil
+                            </Button>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                    <p className="font-semibold">Toplam: {formatMoney(lastReceipt.totalAmountCents)}</p>
-                    <p className="text-xs text-[#5C5C5C]">
-                      {lastReceipt.isOfflineQueued
-                        ? 'Offline kayit - senkron bekliyor'
-                        : 'Online satis'}
+                    <p className="mt-2 text-xs text-[#1A3C34]">
+                      Split toplam: <span className="font-semibold">{formatMoney(splitTotalCents)}</span>
                     </p>
                   </div>
-                ) : (
-                  <p className="mt-2 text-sm text-[#5C5C5C]">Henuz fis yok.</p>
-                )}
-              </div>
-            </div>
+                  <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Not
+                    <input
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      className="h-10 rounded-lg border border-[#D9D9D3] px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                      placeholder="Opsiyonel"
+                    />
+                  </label>
+                  <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
+                    <span className="font-semibold">Secili urun:</span>{' '}
+                    {resolvedProductName || '-'}{' '}
+                    {variantId ? `(Varyant #${variantId})` : ''}
+                  </div>
+                  <div className="md:col-span-5 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
+                    <span className="font-semibold">Secili musteri:</span>{' '}
+                    {customerMode === 'CUSTOMER'
+                      ? selectedCustomer
+                        ? `#${selectedCustomer.id} ${selectedCustomer.name} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                        : 'Secilmedi'
+                      : 'Misafir'}
+                  </div>
+                  <div className="md:col-span-5 flex flex-wrap gap-2">
+                    <Button onClick={() => void handleCreateSale()} disabled={isSubmitting}>
+                      {isSubmitting ? 'Gonderiliyor...' : 'Satis Olustur'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => void printReceipt()} disabled={!lastReceipt}>
+                      Fis Yazdir
+                    </Button>
+                    <input
+                      value={balanceApplyAmount}
+                      onChange={(e) => setBalanceApplyAmount(e.target.value)}
+                      className="h-10 w-44 rounded-full border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                      placeholder="Bakiye (kurus)"
+                      inputMode="numeric"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={() => void applyCustomerBalance()}
+                      disabled={!selectedCustomer || !lastOnlineOrderId || isApplyingBalance}
+                    >
+                      {isApplyingBalance ? 'Uygulaniyor...' : 'Bakiyeden Ode'}
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="rounded-xl border border-[#E5E5E0] bg-[#FDFCF8] px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                POS-12 A4 Fatura Yazdirma
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-[#E5E5E0] bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Fis Ayarlari
+                    </p>
+                    <div className="mt-3 grid gap-3">
+                      <label className="text-sm text-[#1A3C34]">
+                        Isletme adi
+                        <input
+                          value={receiptSettings.businessName}
+                          onChange={(e) =>
+                            setReceiptSettings((prev) => ({
+                              ...prev,
+                              businessName: e.target.value,
+                            }))
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                        />
+                      </label>
+                      <label className="text-sm text-[#1A3C34]">
+                        Alt not
+                        <input
+                          value={receiptSettings.footerNote}
+                          onChange={(e) =>
+                            setReceiptSettings((prev) => ({
+                              ...prev,
+                              footerNote: e.target.value,
+                            }))
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                        />
+                      </label>
+                      <Button variant="secondary" className="w-fit" onClick={saveReceiptSettings}>
+                        Ayarlari Kaydet
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Fis Onizleme
+                    </p>
+                    {lastReceipt ? (
+                      <div className="mt-3 space-y-2 text-sm text-[#1A3C34]">
+                        <p className="font-semibold">{receiptSettings.businessName}</p>
+                        <p>Fis: {lastReceipt.saleId}</p>
+                        <p>Tarih: {new Date(lastReceipt.createdAt).toLocaleString('tr-TR')}</p>
+                        <p>
+                          Musteri:{' '}
+                          {typeof lastReceipt.customerId === 'number'
+                            ? lastReceipt.customerId
+                            : 'Misafir'}
+                        </p>
+                        <div className="rounded-lg border border-[#E5E5E0] bg-white px-3 py-2">
+                          {lastReceipt.lines.map((line, idx) => (
+                            <p key={`${line.productId}-${idx}`}>
+                              Urun #{line.productId} x {line.quantity} ={' '}
+                              {formatMoney(
+                                typeof line.unitPriceCents === 'number'
+                                  ? line.unitPriceCents * line.quantity
+                                  : undefined,
+                              )}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="font-semibold">Toplam: {formatMoney(lastReceipt.totalAmountCents)}</p>
+                        <p className="text-xs text-[#5C5C5C]">
+                          {lastReceipt.isOfflineQueued
+                            ? 'Offline kayit - senkron bekliyor'
+                            : 'Online satis'}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-[#5C5C5C]">Henuz fis yok.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#E5E5E0] bg-[#FDFCF8] px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    POS-12 A4 Fatura Yazdirma
+                  </p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-4">
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                      Siparis No
+                      <input
+                        value={invoiceOrderId}
+                        onChange={(e) => setInvoiceOrderId(e.target.value)}
+                        className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
+                        placeholder={lastOnlineOrderId ? String(lastOnlineOrderId) : 'Order id'}
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <div className="md:col-span-3 flex flex-wrap items-end gap-2">
+                      <Button
+                        variant="secondary"
+                        className="h-10 px-3 text-xs"
+                        onClick={() => void loadInvoicePayload()}
+                        disabled={isInvoiceBusy}
+                      >
+                        {isInvoiceBusy ? 'Yukleniyor...' : 'Faturayi Yukle'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="h-10 px-3 text-xs"
+                        onClick={printA4Invoice}
+                        disabled={!invoicePayload}
+                      >
+                        A4 Yazdir / PDF
+                      </Button>
+                    </div>
+                  </div>
+
+                  {invoicePayload ? (
+                    <div className="mt-3 space-y-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34]">
+                      <p className="font-semibold">
+                        {invoicePayload.business.name} - {invoicePayload.invoiceNo}
+                      </p>
+                      <p>
+                        Siparis #{invoicePayload.order.id} • Tarih:{' '}
+                        {new Date(invoicePayload.issueDate).toLocaleString('tr-TR')}
+                      </p>
+                      <p>
+                        Musteri: #{invoicePayload.customer.id} {invoicePayload.customer.name}
+                      </p>
+                      <p>
+                        Ara Toplam: {formatMoney(invoicePayload.totals.subtotalAmountCents)} •
+                        KDV: {formatMoney(invoicePayload.totals.taxAmountCents)} •
+                        Toplam: {formatMoney(invoicePayload.totals.totalAmountCents)}
+                      </p>
+                      <p>
+                        Odenen: {formatMoney(invoicePayload.totals.paidAmountCents)} • Kalan:{' '}
+                        {formatMoney(invoicePayload.totals.remainingAmountCents)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-[#5C5C5C]">
+                      Fatura verisi yuklenmedi.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-[#E5E5E0] bg-white px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                    Offline Kuyruk Detayi
+                  </p>
+                  {queueItems.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#5C5C5C]">Bekleyen satis yok.</p>
+                  ) : (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-[#E5E5E0] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5C5C5C]">
+                            <th className="py-2 pr-3">Order ID</th>
+                            <th className="py-2 pr-3">Retry Count</th>
+                            <th className="py-2 pr-3">Last Error</th>
+                            <th className="py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {queueItems.map((item) => (
+                            <tr key={item.id} className="border-b border-[#F0F0EA]">
+                              <td className="py-2 pr-3 text-xs text-[#1A3C34]">
+                                {item.payload.idempotencyKey ?? `Q-${item.id.slice(0, 8)}`}
+                              </td>
+                              <td className="py-2 pr-3 text-xs text-[#1A3C34]">{item.attempts}</td>
+                              <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
+                                {item.lastError || '-'}
+                              </td>
+                              <td className="py-2 text-xs font-semibold text-[#1A3C34]">
+                                {resolveQueueStatus(item)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </details>
+          ) : (
+            <div className="rounded-xl border border-[#E5E5E0] bg-[#FFF9E6] px-4 py-4">
+              <p className="text-sm text-[#1A3C34]">
+                POS ekranlari yalnizca yonetim hesabiyla erisilebilir. Devam etmek
+                icin giris yapin.
               </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                  Siparis No
-                  <input
-                    value={invoiceOrderId}
-                    onChange={(e) => setInvoiceOrderId(e.target.value)}
-                    className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm normal-case tracking-normal text-[#1A3C34]"
-                    placeholder={lastOnlineOrderId ? String(lastOnlineOrderId) : 'Order id'}
-                    inputMode="numeric"
-                  />
-                </label>
-                <div className="md:col-span-3 flex flex-wrap items-end gap-2">
-                  <Button
-                    variant="secondary"
-                    className="h-10 px-3 text-xs"
-                    onClick={() => void loadInvoicePayload()}
-                    disabled={isInvoiceBusy}
-                  >
-                    {isInvoiceBusy ? 'Yukleniyor...' : 'Faturayi Yukle'}
+              <Button className="mt-3 w-fit" onClick={() => router.push('/login')}>
+                Giris yap
+              </Button>
+            </div>
+          )}
+
+          {mismatchModal ? (
+            <div className="fixed inset-0 z-50">
+              <button
+                type="button"
+                onClick={() => resolveMismatchDecision('cancel')}
+                className="absolute inset-0 bg-black/45"
+                aria-label="Mismatch modalini kapat"
+              />
+              <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#E5E5E0] bg-white px-6 py-6 shadow-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9B1C1C]">
+                  Fiyat Degisikligi Algilandi
+                </p>
+                <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
+                  <p>
+                    Beklenen:{' '}
+                    <span className="font-semibold">
+                      {typeof mismatchModal.expectedCents === 'number'
+                        ? formatMoney(mismatchModal.expectedCents)
+                        : '-'}
+                    </span>
+                  </p>
+                  <p>
+                    Guncel:{' '}
+                    <span className="font-semibold">{formatMoney(mismatchModal.actualCents)}</span>
+                  </p>
+                </div>
+                <p className="mt-4 text-sm text-[#5C5C5C]">
+                  Satis devam edecek. Bu islem risk paneline kaydedilecek.
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => resolveMismatchDecision('cancel')}>
+                    Iptal
                   </Button>
-                  <Button
-                    variant="secondary"
-                    className="h-10 px-3 text-xs"
-                    onClick={printA4Invoice}
-                    disabled={!invoicePayload}
-                  >
-                    A4 Yazdir / PDF
-                  </Button>
+                  <Button onClick={() => resolveMismatchDecision('continue')}>Devam Et</Button>
                 </div>
               </div>
-
-              {invoicePayload ? (
-                <div className="mt-3 space-y-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34]">
-                  <p className="font-semibold">
-                    {invoicePayload.business.name} - {invoicePayload.invoiceNo}
-                  </p>
-                  <p>
-                    Siparis #{invoicePayload.order.id} • Tarih:{' '}
-                    {new Date(invoicePayload.issueDate).toLocaleString('tr-TR')}
-                  </p>
-                  <p>
-                    Musteri: #{invoicePayload.customer.id} {invoicePayload.customer.name}
-                  </p>
-                  <p>
-                    Ara Toplam: {formatMoney(invoicePayload.totals.subtotalAmountCents)} •
-                    KDV: {formatMoney(invoicePayload.totals.taxAmountCents)} •
-                    Toplam: {formatMoney(invoicePayload.totals.totalAmountCents)}
-                  </p>
-                  <p>
-                    Odenen: {formatMoney(invoicePayload.totals.paidAmountCents)} • Kalan:{' '}
-                    {formatMoney(invoicePayload.totals.remainingAmountCents)}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-[#5C5C5C]">
-                  Fatura verisi yuklenmedi.
-                </p>
-              )}
             </div>
+          ) : null}
 
-            <div className="rounded-xl border border-[#E5E5E0] bg-white px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
-                Offline Kuyruk Detayi
-              </p>
-              {queueItems.length === 0 ? (
-                <p className="mt-2 text-sm text-[#5C5C5C]">Bekleyen satis yok.</p>
-              ) : (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[#E5E5E0] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5C5C5C]">
-                        <th className="py-2 pr-3">Order ID</th>
-                        <th className="py-2 pr-3">Retry Count</th>
-                        <th className="py-2 pr-3">Last Error</th>
-                        <th className="py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {queueItems.map((item) => (
-                        <tr key={item.id} className="border-b border-[#F0F0EA]">
-                          <td className="py-2 pr-3 text-xs text-[#1A3C34]">
-                            {item.payload.idempotencyKey ?? `Q-${item.id.slice(0, 8)}`}
-                          </td>
-                          <td className="py-2 pr-3 text-xs text-[#1A3C34]">{item.attempts}</td>
-                          <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
-                            {item.lastError || '-'}
-                          </td>
-                          <td className="py-2 text-xs font-semibold text-[#1A3C34]">
-                            {resolveQueueStatus(item)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            </div>
-          </details>
-        ) : (
-          <div className="rounded-xl border border-[#E5E5E0] bg-[#FFF9E6] px-4 py-4">
-            <p className="text-sm text-[#1A3C34]">
-              POS ekranlari yalnizca yonetim hesabiyla erisilebilir. Devam etmek
-              icin giris yapin.
-            </p>
-            <Button className="mt-3 w-fit" onClick={() => router.push('/login')}>
-              Giris yap
-            </Button>
-          </div>
-        )}
-
-        {mismatchModal ? (
-          <div className="fixed inset-0 z-50">
-            <button
-              type="button"
-              onClick={() => resolveMismatchDecision('cancel')}
-              className="absolute inset-0 bg-black/45"
-              aria-label="Mismatch modalini kapat"
-            />
-            <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#E5E5E0] bg-white px-6 py-6 shadow-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9B1C1C]">
-                Fiyat Degisikligi Algilandi
-              </p>
-              <div className="mt-4 space-y-2 text-sm text-[#1A3C34]">
-                <p>
-                  Beklenen:{' '}
-                  <span className="font-semibold">
-                    {typeof mismatchModal.expectedCents === 'number'
-                      ? formatMoney(mismatchModal.expectedCents)
-                      : '-'}
-                  </span>
-                </p>
-                <p>
-                  Guncel:{' '}
-                  <span className="font-semibold">{formatMoney(mismatchModal.actualCents)}</span>
-                </p>
-              </div>
-              <p className="mt-4 text-sm text-[#5C5C5C]">
-                Satis devam edecek. Bu islem risk paneline kaydedilecek.
-              </p>
-              <div className="mt-5 flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => resolveMismatchDecision('cancel')}>
-                  Iptal
-                </Button>
-                <Button onClick={() => resolveMismatchDecision('continue')}>Devam Et</Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <ConflictResolutionModal
-          isOpen={Boolean(conflictDetail)}
-          detail={conflictDetail ?? undefined}
-          message="Ayni kayitta baska terminalde degisiklik tespit edildi."
-          onClose={() => setConflictDetail(null)}
-          onRefresh={() => {
-            setConflictDetail(null);
-            void loadShiftRows();
-            void loadSalesReport();
-            void loadStaffSalesReport();
-            void refreshQueue();
-          }}
-        />
-      </section>
+          <ConflictResolutionModal
+            isOpen={Boolean(conflictDetail)}
+            detail={conflictDetail ?? undefined}
+            message="Ayni kayitta baska terminalde degisiklik tespit edildi."
+            onClose={() => setConflictDetail(null)}
+            onRefresh={() => {
+              setConflictDetail(null);
+              void loadShiftRows();
+              void loadSalesReport();
+              void loadStaffSalesReport();
+              void refreshQueue();
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

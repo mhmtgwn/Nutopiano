@@ -201,8 +201,7 @@ const normalizeDraft = (rows: SettingRow[]): SettingsDraft => {
   };
 };
 
-const sectionCardClass =
-  'rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6';
+const sectionCardClass = 'py-6';
 
 export default function AdminSettingsPage() {
   const queryClient = useQueryClient();
@@ -322,16 +321,17 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-gradient-to-br from-[#F7F1E5] via-white to-[#ECF6F3] px-6 py-6 shadow-[0_20px_60px_rgba(26,60,52,0.08)]">
+      {/* Page header */}
+      <div className="border-b border-[var(--neutral-200)] pb-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Ayarlar
             </p>
-            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
+            <h1 className="mt-1 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
               Genel ayarlar
             </h1>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">
+            <p className="mt-1 text-sm text-[var(--neutral-600)]">
               Operasyon, site bilgisi, yasal metin, marka ve SEO konfigürasyonlarını yönetin.
             </p>
           </div>
@@ -344,7 +344,7 @@ export default function AdminSettingsPage() {
             Sunucudan yenile
           </button>
         </div>
-      </section>
+      </div>
 
       {settingsQuery.isLoading ? (
         <section className={sectionCardClass}>
@@ -352,34 +352,36 @@ export default function AdminSettingsPage() {
         </section>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className={sectionCardClass}>
-          <Settings className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+      {/* Stat strip */}
+      <div className="grid gap-4 border-b border-[var(--neutral-200)] pb-5 md:grid-cols-3">
+        <div>
+          <Settings className="h-5 w-5 text-[var(--primary-800)]/60" />
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
             Moderasyon
           </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">{operationSummary.moderation}</p>
+          <p className="mt-1 text-base font-semibold text-[var(--primary-800)]">{operationSummary.moderation}</p>
         </div>
-        <div className={sectionCardClass}>
-          <FileText className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
-            Randevu varsayılan
+        <div>
+          <FileText className="h-5 w-5 text-[var(--primary-800)]/60" />
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+            Randevu varsıyılan
           </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">
+          <p className="mt-1 text-base font-semibold text-[var(--primary-800)]">
             {operationSummary.appointmentDuration}
           </p>
         </div>
-        <div className={sectionCardClass}>
-          <Globe className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
+        <div>
+          <Globe className="h-5 w-5 text-[var(--primary-800)]/60" />
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
             Komisyon oranı
           </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">{operationSummary.commission}</p>
+          <p className="mt-1 text-base font-semibold text-[var(--primary-800)]">{operationSummary.commission}</p>
         </div>
-      </section>
+      </div>
 
-      <section className={sectionCardClass}>
-        <h2 className="text-2xl font-serif text-[var(--primary-800)]">Operasyon ayarları</h2>
+      {/* Operations section */}
+      <section className="border-t border-[var(--neutral-200)] pt-6">
+        <h2 className="mb-4 text-xl font-serif text-[var(--primary-800)]">Operasyon ayarları</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <label className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-3 text-sm text-[var(--primary-800)]">
             <input
@@ -505,10 +507,13 @@ export default function AdminSettingsPage() {
         </button>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className={sectionCardClass}>
-          <Settings className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">Site ayarları</h2>
+      {/* Site + Legal */}
+      <section className="grid gap-6 border-t border-[var(--neutral-200)] pt-6 md:grid-cols-2">
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Settings className="h-5 w-5 text-[var(--primary-800)]/60" />
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">Site ayarları</h2>
+          </div>
           <div className="mt-3 grid gap-3">
             <input
               value={draft.siteProfile.businessName}
@@ -565,9 +570,11 @@ export default function AdminSettingsPage() {
           </button>
         </div>
 
-        <div className={sectionCardClass}>
-          <FileText className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">Yasal metinler</h2>
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-[var(--primary-800)]/60" />
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">Yasal metinler</h2>
+          </div>
           <div className="mt-3 grid gap-3">
             <input
               value={draft.legal.kvkkUrl}
@@ -614,10 +621,13 @@ export default function AdminSettingsPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className={sectionCardClass}>
-          <Palette className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">Marka görünümü</h2>
+      {/* Brand + SEO */}
+      <section className="grid gap-6 border-t border-[var(--neutral-200)] pt-6 md:grid-cols-2">
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Palette className="h-5 w-5 text-[var(--primary-800)]/60" />
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">Marka görünümü</h2>
+          </div>
           <div className="mt-3 grid gap-3">
             <input
               value={draft.brand.logoUrl}
@@ -663,9 +673,11 @@ export default function AdminSettingsPage() {
           </button>
         </div>
 
-        <div className={sectionCardClass}>
-          <Globe className="h-5 w-5 text-[var(--primary-800)]/70" />
-          <h2 className="mt-4 text-2xl font-serif text-[var(--primary-800)]">SEO ayarları</h2>
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Globe className="h-5 w-5 text-[var(--primary-800)]/60" />
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">SEO ayarları</h2>
+          </div>
           <div className="mt-3 grid gap-3">
             <input
               value={draft.seo.siteUrl}

@@ -189,16 +189,17 @@ export default function RiskControlPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[var(--radius-2xl)] border border-[var(--neutral-200)] bg-gradient-to-br from-[#FFF8EB] via-white to-[#EEF7FF] px-6 py-6">
+      {/* Page header */}
+      <div className="border-b border-[var(--neutral-200)] pb-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--neutral-500)]">
-              Risk & Control
+              Risk &amp; Control
             </p>
-            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)]">
+            <h1 className="mt-1 text-3xl font-serif text-[var(--primary-800)]">
               Operasyon Güvenliği Merkezi
             </h1>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">
+            <p className="mt-1 text-sm text-[var(--neutral-600)]">
               Audit, outbox, concurrency ve export governance sinyallerini tek panelde izleyin.
             </p>
           </div>
@@ -215,27 +216,22 @@ export default function RiskControlPage() {
               key={item.key}
               type="button"
               onClick={() => setTab(item.key)}
-              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${
-                tab === item.key
+              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${tab === item.key
                   ? 'border-[var(--primary-800)] bg-[var(--primary-800)] text-white'
-                  : 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]'
-              }`}
+                  : 'border-[var(--neutral-200)] text-[var(--primary-800)]'
+                }`}
             >
               {item.label}
             </button>
           ))}
         </div>
-      </section>
+      </div>
 
-      {isLoading ? (
-        <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-10">
-          <Spinner label="Risk verileri yükleniyor..." />
-        </section>
-      ) : null}
+      {isLoading ? <Spinner label="Risk verileri yükleniyor..." /> : null}
 
       {!isLoading && tab === 'overview' ? (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+        <section className="grid gap-4 border-t border-[var(--neutral-200)] pt-5 md:grid-cols-2 xl:grid-cols-3">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               Outbox backlog
             </p>
@@ -247,7 +243,7 @@ export default function RiskControlPage() {
             </p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               Payment webhook health
             </p>
@@ -257,7 +253,7 @@ export default function RiskControlPage() {
             <p className="mt-1 text-sm text-[var(--neutral-600)]">Failed event</p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               Override yoğunluğu
             </p>
@@ -269,7 +265,7 @@ export default function RiskControlPage() {
             </p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               SMTP/SMS health
             </p>
@@ -277,7 +273,7 @@ export default function RiskControlPage() {
             <p className="mt-1 text-sm text-[var(--neutral-600)]">Aggregate delivery health bekleniyor.</p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               POS offline ratio
             </p>
@@ -285,7 +281,7 @@ export default function RiskControlPage() {
             <p className="mt-1 text-sm text-[var(--neutral-600)]">Offline/online sipariş oranı için pipeline gerekli.</p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               Support mode
             </p>
@@ -306,8 +302,8 @@ export default function RiskControlPage() {
       ) : null}
 
       {!isLoading && tab === 'audit' ? (
-        <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-          <h2 className="text-xl font-serif text-[var(--primary-800)]">Audit Feed</h2>
+        <section className="border-t border-[var(--neutral-200)] pt-5">
+          <h2 className="mb-4 text-xl font-serif text-[var(--primary-800)]">Audit Feed</h2>
           <div className="mt-4 space-y-2">
             {auditLogs.length === 0 ? (
               <p className="text-sm text-[var(--neutral-600)]">Audit kaydı bulunamadı.</p>
@@ -332,8 +328,8 @@ export default function RiskControlPage() {
       ) : null}
 
       {!isLoading && tab === 'outbox' ? (
-        <section className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-          <h2 className="text-xl font-serif text-[var(--primary-800)]">Outbox Monitor</h2>
+        <section className="border-t border-[var(--neutral-200)] pt-5">
+          <h2 className="mb-4 text-xl font-serif text-[var(--primary-800)]">Outbox Monitor</h2>
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
@@ -377,8 +373,8 @@ export default function RiskControlPage() {
       ) : null}
 
       {!isLoading && tab === 'governance' ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
+        <section className="grid gap-6 border-t border-[var(--neutral-200)] pt-5 lg:grid-cols-2">
+          <div>
             <h2 className="text-xl font-serif text-[var(--primary-800)]">Export Governance</h2>
             <ul className="mt-4 space-y-2 text-sm text-[var(--neutral-700)]">
               <li className="flex items-start gap-2">
@@ -400,7 +396,7 @@ export default function RiskControlPage() {
             </ul>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
+          <div>
             <h2 className="text-xl font-serif text-[var(--primary-800)]">Concurrency Playbook</h2>
             <ul className="mt-4 space-y-2 text-sm text-[var(--neutral-700)]">
               <li className="flex items-start gap-2">
