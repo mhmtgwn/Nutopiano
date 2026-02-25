@@ -1232,7 +1232,11 @@ npx prisma migrate deploy
 # 3. Generate Prisma client
 npx prisma generate
 
-# 4. Seed initial data (optional)
+# 4. Migration parity checks (CI parity)
+npm run prisma:validate -w backend
+npm run prisma:migrate:status -w backend
+
+# 5. Seed initial data (optional)
 npx prisma db seed
 ```
 
@@ -1268,11 +1272,16 @@ test/appointments.e2e-spec.ts
 test/settings.e2e-spec.ts
 ```
 
-### Frontend Tests (TO DO)
+### Frontend UI Smoke (Playwright)
 
 ```bash
-# Jest setup (to be added)
-npm run test
+# Playwright smoke suite
+npm run test:e2e:ui -w frontend
+
+# optional env vars for seller-auth smoke scenarios
+PLAYWRIGHT_SELLER_PHONE=5XXXXXXXXX
+PLAYWRIGHT_SELLER_PASSWORD=your-password
+PLAYWRIGHT_SELLER_SLUG=your-seller-slug
 ```
 
 ---

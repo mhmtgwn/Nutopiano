@@ -89,7 +89,7 @@ async function bootstrap() {
     new RequestContextInterceptor(),
     new ResponseInterceptor(),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(logger));
 
   // Swagger documentation — only in development
   if (process.env.NODE_ENV !== 'production') {

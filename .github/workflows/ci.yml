@@ -11,6 +11,24 @@ jobs:
   backend:
     name: Backend Lint Test Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nutopiano_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nutopiano_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nutopiano_ci
+      JWT_SECRET: ci-jwt-secret
+      NODE_ENV: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +41,15 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      - name: Backend Prisma Validate
+        run: npm run prisma:validate -w backend
+
+      - name: Backend Prisma Migrate Deploy
+        run: npm exec -w backend prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Backend Prisma Migrate Status
+        run: npm run prisma:migrate:status -w backend
 
       - name: Backend Lint
         run: npm run lint -w backend
@@ -54,3 +81,30 @@ jobs:
 
       - name: Frontend Build
         run: npm run build -w frontend
+
+  frontend-ui-smoke:
+    name: Frontend UI Smoke
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browser
+        run: npm exec -w frontend playwright install --with-deps chromium
+
+      - name: Run UI Smoke
+        env:
+          PLAYWRIGHT_SELLER_PHONE: ${{ secrets.PLAYWRIGHT_SELLER_PHONE }}
+          PLAYWRIGHT_SELLER_PASSWORD: ${{ secrets.PLAYWRIGHT_SELLER_PASSWORD }}
+          PLAYWRIGHT_SELLER_SLUG: ${{ secrets.PLAYWRIGHT_SELLER_SLUG }}
+        run: npm run test:e2e:ui -w frontend

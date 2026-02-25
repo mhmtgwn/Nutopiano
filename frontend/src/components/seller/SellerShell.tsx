@@ -38,7 +38,7 @@ type SellerNavItem = {
 const sellerNavItems: SellerNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
   { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'Ürünler', href: '/dashboard/products', icon: Package },
+  { label: 'Ürünler & Yayın', href: '/dashboard/products', icon: Package },
   { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
   { label: 'Müşteriler', href: '/dashboard/customers', icon: Users },
   { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },

@@ -27,12 +27,12 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 @ApiTags('categories')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Create category',
     description: 'ADMIN can create categories within their business.',
@@ -46,6 +46,7 @@ export class CategoriesController {
   }
 
   @Get()
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'List categories',
     description: 'ADMIN can list active categories within their business.',
@@ -69,6 +70,7 @@ export class CategoriesController {
   }
 
   @Get('tree')
+  @Roles('ADMIN', 'SELLER')
   @ApiOperation({
     summary: 'Get category tree',
     description:
@@ -80,6 +82,7 @@ export class CategoriesController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Update category',
     description: 'ADMIN can update categories within their business.',
@@ -94,6 +97,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Archive (soft-delete) category',
     description:

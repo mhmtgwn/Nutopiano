@@ -51,7 +51,7 @@ export type PosPrintedReceiptLog = {
 };
 
 const DB_NAME = 'nutopiano-offline';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const ORDER_QUEUE_STORE = 'pos_order_queue';
 const PRODUCT_CACHE_STORE = 'pos_product_cache';
 const CUSTOMER_CACHE_STORE = 'pos_customer_cache';
@@ -82,10 +82,14 @@ const openDb = async () => {
       const store = db.createObjectStore(ORDER_QUEUE_STORE, { keyPath: 'id' });
       store.createIndex('createdAt', 'createdAt', { unique: false });
       store.createIndex('nextRetryAt', 'nextRetryAt', { unique: false });
+      store.createIndex('lastAttemptAt', 'lastAttemptAt', { unique: false });
     } else {
       const store = request.transaction?.objectStore(ORDER_QUEUE_STORE);
       if (store && !store.indexNames.contains('nextRetryAt')) {
         store.createIndex('nextRetryAt', 'nextRetryAt', { unique: false });
+      }
+      if (store && !store.indexNames.contains('lastAttemptAt')) {
+        store.createIndex('lastAttemptAt', 'lastAttemptAt', { unique: false });
       }
     }
 
@@ -179,6 +183,11 @@ export const listReadyQueuedPosOrders = async (nowIso = new Date().toISOString()
   });
 };
 
+export const listRetryableQueuedPosOrders = async () => {
+  const all = await listQueuedPosOrders();
+  return all.filter((item) => isPosOrderRetryable(item));
+};
+
 export const removeQueuedPosOrder = async (id: string) => {
   await runTx(ORDER_QUEUE_STORE, 'readwrite', (store) => {
     store.delete(id);
@@ -198,6 +207,21 @@ export const markQueuedPosOrderAttempt = async (id: string, error?: string) => {
       lastError: error,
       lastAttemptAt: new Date().toISOString(),
       nextRetryAt,
+    } satisfies PosOrderQueueItem);
+  });
+};
+
+export const markQueuedPosOrderFailed = async (id: string, error?: string) => {
+  await runTx(ORDER_QUEUE_STORE, 'readwrite', async (store) => {
+    const item = (await getRequestResult(store.get(id))) as PosOrderQueueItem | undefined;
+    if (!item) return;
+
+    store.put({
+      ...item,
+      attempts: MAX_RETRY_ATTEMPTS,
+      lastError: error,
+      lastAttemptAt: new Date().toISOString(),
+      nextRetryAt: undefined,
     } satisfies PosOrderQueueItem);
   });
 };

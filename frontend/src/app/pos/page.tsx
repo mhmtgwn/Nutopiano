@@ -20,9 +20,12 @@ import {
   findCachedPosCustomers,
   findCachedPosProductByBarcode,
   hasReceiptBeenPrinted,
+  isPosOrderRetryable,
   listCachedPosProducts,
   listQueuedPosOrders,
   listReadyQueuedPosOrders,
+  listRetryableQueuedPosOrders,
+  markQueuedPosOrderFailed,
   markReceiptPrinted,
   markQueuedPosOrderAttempt,
   purgeOldReceiptPrintLogs,
@@ -258,6 +261,19 @@ type PosMismatchModalState = {
 };
 
 const MAX_QUEUE_RETRY_ATTEMPTS = 8;
+const NON_RETRYABLE_QUEUE_ERROR_STATUS = new Set([400, 401, 403, 404, 422]);
+
+const extractHttpStatus = (error: unknown) => {
+  if (!error || typeof error !== 'object') return null;
+  const maybeError = error as {
+    response?: {
+      status?: number;
+    };
+  };
+  const status = maybeError.response?.status;
+  if (!Number.isFinite(status)) return null;
+  return Math.trunc(status ?? 0);
+};
 
 const extractNestedMetaValue = (payload: unknown, keyPath: string) => {
   if (!payload || typeof payload !== 'object') return undefined;
@@ -745,6 +761,7 @@ export default function PosPage() {
   const [recentSyncedCount, setRecentSyncedCount] = useState<number | null>(null);
   const [showSyncSuccessBanner, setShowSyncSuccessBanner] = useState(false);
   const [queueItems, setQueueItems] = useState<PosOrderQueueItem[]>([]);
+  const [queueActionItemId, setQueueActionItemId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [registerCode, setRegisterCode] = useState('MAIN');
@@ -789,15 +806,28 @@ export default function PosPage() {
     }
   }, []);
 
-  const syncQueuedSales = useCallback(async () => {
+  const syncQueuedSales = useCallback(async (options?: { force?: boolean; queueIds?: string[] }) => {
     if (!isAuthed) return;
     if (syncInFlightRef.current) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
+    const force = Boolean(options?.force);
+    const queueIds = (options?.queueIds ?? []).filter(Boolean);
+    const queueIdSet = queueIds.length > 0 ? new Set(queueIds) : null;
+
     syncInFlightRef.current = true;
     setIsSyncing(true);
     try {
-      const items = await listReadyQueuedPosOrders();
+      let items: PosOrderQueueItem[] = [];
+      if (queueIdSet) {
+        const allItems = await listQueuedPosOrders();
+        items = allItems.filter((item) => queueIdSet.has(item.id));
+      } else if (force) {
+        items = await listRetryableQueuedPosOrders();
+      } else {
+        items = await listReadyQueuedPosOrders();
+      }
+
       let successCount = 0;
 
       for (const item of items) {
@@ -822,6 +852,13 @@ export default function PosPage() {
           }
 
           const message = resolveApiErrorMessage(error, 'Senkronizasyon basarisiz.');
+          const status = extractHttpStatus(error);
+
+          if (status !== null && NON_RETRYABLE_QUEUE_ERROR_STATUS.has(status)) {
+            await markQueuedPosOrderFailed(item.id, message);
+            continue;
+          }
+
           await markQueuedPosOrderAttempt(item.id, message);
           if (isNetworkError(error)) break;
         }
@@ -838,6 +875,39 @@ export default function PosPage() {
       setIsSyncing(false);
     }
   }, [isAuthed, refreshQueue]);
+
+  const retrySingleQueueItem = useCallback(
+    async (item: PosOrderQueueItem) => {
+      if (!isAuthed) return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        toast.error('Cihaz offline. Yeniden deneme icin baglanti gerekli.');
+        return;
+      }
+
+      setQueueActionItemId(item.id);
+      try {
+        await syncQueuedSales({ force: true, queueIds: [item.id] });
+      } finally {
+        setQueueActionItemId((current) => (current === item.id ? null : current));
+      }
+    },
+    [isAuthed, syncQueuedSales],
+  );
+
+  const removeSingleQueueItem = useCallback(
+    async (item: PosOrderQueueItem) => {
+      if (!isAuthed) return;
+      setQueueActionItemId(item.id);
+      try {
+        await removeQueuedPosOrder(item.id);
+        await refreshQueue();
+        toast.success('Kuyruk kaydi kaldirildi.');
+      } finally {
+        setQueueActionItemId((current) => (current === item.id ? null : current));
+      }
+    },
+    [isAuthed, refreshQueue],
+  );
 
   const loadShiftRows = useCallback(async () => {
     if (!isAuthed) return;
@@ -1146,6 +1216,19 @@ export default function PosPage() {
   }, [refreshQueue, syncQueuedSales]);
 
   useEffect(() => {
+    if (!isAuthed) return;
+    if (!isOnline) return;
+
+    const interval = window.setInterval(() => {
+      void syncQueuedSales();
+    }, 20_000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isAuthed, isOnline, syncQueuedSales]);
+
+  useEffect(() => {
     if (!showSyncSuccessBanner) return;
     const timeout = window.setTimeout(() => {
       setShowSyncSuccessBanner(false);
@@ -1255,8 +1338,21 @@ export default function PosPage() {
   const resolveQueueStatus = (item: PosOrderQueueItem) => {
     const attempts = Math.max(0, Math.trunc(item.attempts ?? 0));
     if (attempts >= MAX_QUEUE_RETRY_ATTEMPTS) return 'FAILED';
-    if (attempts > 0) return 'RETRYING';
+    if (attempts > 0) {
+      if (item.nextRetryAt && new Date(item.nextRetryAt).getTime() > Date.now()) {
+        return 'BACKOFF';
+      }
+      return 'RETRYING';
+    }
+    if (!isPosOrderRetryable(item)) return 'FAILED';
     return 'QUEUED';
+  };
+
+  const formatQueueDate = (value?: string) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return '-';
+    return parsed.toLocaleString('tr-TR');
   };
 
   const waitForMismatchDecision = useCallback(
@@ -2188,10 +2284,10 @@ export default function PosPage() {
             {!isOnline ? null : (
               <Button
                 className="h-7 px-3 text-xs"
-                onClick={() => void syncQueuedSales()}
+                onClick={() => void syncQueuedSales({ force: true })}
                 disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
               >
-                {isSyncing ? 'Sync...' : 'Kuyrugu sync et'}
+                {isSyncing ? 'Sync...' : 'Kuyrugu zorla sync et'}
               </Button>
             )}
             <Button
@@ -3517,7 +3613,10 @@ export default function PosPage() {
                             <th className="py-2 pr-3">Order ID</th>
                             <th className="py-2 pr-3">Retry Count</th>
                             <th className="py-2 pr-3">Last Error</th>
-                            <th className="py-2">Status</th>
+                            <th className="py-2 pr-3">Last Attempt</th>
+                            <th className="py-2 pr-3">Next Retry</th>
+                            <th className="py-2 pr-3">Status</th>
+                            <th className="py-2">Aksiyon</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3530,8 +3629,35 @@ export default function PosPage() {
                               <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
                                 {item.lastError || '-'}
                               </td>
-                              <td className="py-2 text-xs font-semibold text-[#1A3C34]">
+                              <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
+                                {formatQueueDate(item.lastAttemptAt)}
+                              </td>
+                              <td className="py-2 pr-3 text-xs text-[#5C5C5C]">
+                                {formatQueueDate(item.nextRetryAt)}
+                              </td>
+                              <td className="py-2 pr-3 text-xs font-semibold text-[#1A3C34]">
                                 {resolveQueueStatus(item)}
+                              </td>
+                              <td className="py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 px-2 text-[10px]"
+                                    onClick={() => void retrySingleQueueItem(item)}
+                                    disabled={isSyncing || queueActionItemId === item.id}
+                                  >
+                                    Tekrar dene
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="h-7 px-2 text-[10px]"
+                                    onClick={() => void removeSingleQueueItem(item)}
+                                    disabled={isSyncing || queueActionItemId === item.id}
+                                  >
+                                    Kuyruktan kaldir
+                                  </Button>
+                                </div>
                               </td>
                             </tr>
                           ))}
