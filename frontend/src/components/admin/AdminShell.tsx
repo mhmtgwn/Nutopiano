@@ -5,32 +5,21 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  AlertTriangle,
   BarChart3,
   Bell,
   CircleHelp,
   ClipboardList,
   CreditCard,
-  FileCheck,
   Home,
-  Landmark,
   LogOut,
-  Mail,
   Menu,
-  MessageCircle,
   Package,
-  RotateCcw,
   Search,
   Settings,
-  Shield,
-  ShieldAlert,
   Store,
-  Tags,
-  Truck,
   UserCheck,
   UserCog,
   X,
-  Zap,
 } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store';
 import { getPanelLabelByRole } from '@/lib/role-routing';
@@ -59,55 +48,25 @@ type NavSection = {
 
 const createNavSections = (basePath: string): NavSection[] => [
   {
-    title: 'Ana Sayfa',
+    title: 'Panel',
     items: [
       { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
-    ],
-  },
-  {
-    title: 'Kullanıcılar',
-    items: [
-      { label: 'Kullanıcılar', href: `${basePath}/users`, icon: UserCog, requiredCapabilities: ['MANAGE_SELLERS'] },
-      { label: 'Müşteriler', href: `${basePath}/customers`, icon: UserCheck },
-      { label: 'Satıcılar', href: `${basePath}/sellers`, icon: Store, requiredCapabilities: ['MANAGE_SELLERS'] },
-      { label: 'Başvurular', href: `${basePath}/sellers/applications`, icon: FileCheck, requiredCapabilities: ['MANAGE_SELLERS'] },
-      { label: 'Planlar', href: `${basePath}/plans`, icon: Zap },
-    ],
-  },
-  {
-    title: 'Mağaza',
-    items: [
-      { label: 'Ürünler', href: `${basePath}/products`, icon: Package },
-      { label: 'Katalog', href: `${basePath}/catalog`, icon: Package },
-      { label: 'Kategoriler', href: `${basePath}/categories`, icon: Tags },
     ],
   },
   {
     title: 'Operasyon',
     items: [
       { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
-      { label: 'İadeler', href: `${basePath}/finance/refunds`, icon: RotateCcw },
-      { label: 'Kapıya Hizmet', href: `${basePath}/services`, icon: Truck },
+      { label: 'Ürün & Kategori', href: `${basePath}/products`, icon: Package },
+      { label: 'Müşteriler', href: `${basePath}/customers`, icon: UserCheck },
       { label: 'Ödemeler', href: `${basePath}/payments`, icon: CreditCard },
     ],
   },
   {
-    title: 'Finans',
+    title: 'Yönetim',
     items: [
-      { label: 'Finans Genel', href: `${basePath}/finance`, icon: Landmark, requiredCapabilities: ['VIEW_FINANCE'] },
-      { label: 'Ledger', href: `${basePath}/finance/ledger`, icon: Landmark, requiredCapabilities: ['VIEW_FINANCE'] },
-      { label: 'Cüzdanlar', href: `${basePath}/finance/wallets`, icon: Landmark, requiredCapabilities: ['VIEW_FINANCE'] },
-      { label: 'Payout', href: `${basePath}/finance/payouts`, icon: Landmark, requiredCapabilities: ['VIEW_FINANCE'] },
-      { label: 'Fiyat Uyuşmazlık', href: `${basePath}/finance/mismatch-monitor`, icon: AlertTriangle, requiredCapabilities: ['VIEW_FINANCE'] },
-    ],
-  },
-  {
-    title: 'Risk & Sistem',
-    items: [
-      { label: 'Risk Kontrolü', href: `${basePath}/risk-control`, icon: ShieldAlert, requireAnyCapabilities: ['VIEW_AUDIT', 'VIEW_OUTBOX'] },
-      { label: 'Destek Modu', href: `${basePath}/support`, icon: Shield, requiredCapabilities: ['VIEW_SUPPORT_MODE'] },
-      { label: 'SMTP', href: `${basePath}/smtp`, icon: Mail },
-      { label: 'SMS', href: `${basePath}/sms`, icon: MessageCircle },
+      { label: 'Satıcı & Kullanıcı', href: `${basePath}/sellers`, icon: UserCog, requiredCapabilities: ['MANAGE_SELLERS'] },
+      { label: 'Finans Merkezi', href: `${basePath}/finance`, icon: CreditCard, requiredCapabilities: ['VIEW_FINANCE'] },
       { label: 'Raporlar', href: `${basePath}/reports`, icon: BarChart3, requiredCapabilities: ['VIEW_REPORTS'] },
       { label: 'Ayarlar', href: `${basePath}/settings`, icon: Settings },
     ],
@@ -149,10 +108,10 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
 
   const handleNavClick = () => setMobileOpen(false);
 
-  const sidebarHighlight = isSuperAdmin ? '#dce9ff' : '#f4efe5';
+  const sidebarHighlight = '#f4f4f3';
 
   const renderSidebarNav = () => (
-    <div className="flex h-full flex-col bg-[#fbfaf7]">
+    <div className="flex h-full flex-col bg-white">
       <div className="flex items-center gap-3 border-b border-[var(--neutral-200)] px-5 py-5">
         <div
           className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--primary-800)] text-sm font-bold text-white"
@@ -183,11 +142,11 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                     href={item.href}
                     onClick={handleNavClick}
                     className={`
-                      flex items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] font-medium
+                      flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium
                       transition-colors duration-150
                       ${active
-                        ? 'border-[var(--neutral-200)] text-[var(--primary-800)]'
-                        : 'border-transparent text-[var(--neutral-700)] hover:border-[var(--neutral-200)] hover:bg-white hover:text-[var(--primary-800)]'
+                        ? 'text-[var(--primary-800)]'
+                        : 'text-[var(--neutral-700)] hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]'
                       }
                     `}
                     style={active ? { backgroundColor: sidebarHighlight } : undefined}
@@ -211,7 +170,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         <Link
           href="/"
           onClick={handleNavClick}
-          className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:border-[var(--neutral-200)] hover:bg-white hover:text-[var(--primary-800)]"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
         >
           <Store className="h-4 w-4 flex-shrink-0" />
           Mağazaya Dön
@@ -219,7 +178,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:bg-red-50 hover:text-red-700"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           Çıkış Yap
@@ -304,13 +263,13 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
 
       <div className="flex min-h-[calc(100vh-4rem)] overflow-hidden">
         <aside
-          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[280px] flex-shrink-0 overflow-hidden border-r border-[var(--neutral-200)] lg:flex lg:flex-col"
+          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[250px] flex-shrink-0 overflow-hidden border-r border-[var(--neutral-200)] lg:flex lg:flex-col"
         >
           {renderSidebarNav()}
         </aside>
 
         <main className="flex-1 overflow-y-auto bg-white">
-          <div className="mx-auto w-full max-w-[1480px] px-4 py-6 md:px-6 md:py-8">
+          <div className="mx-auto w-full max-w-[1160px] px-4 py-6 md:px-6 md:py-8">
             {children}
           </div>
         </main>
@@ -325,7 +284,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
           <aside
-            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden border-r border-[var(--neutral-200)] bg-[#fbfaf7] shadow-2xl"
+            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden border-r border-[var(--neutral-200)] bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-[var(--neutral-200)] px-4 py-4">
               <div className="flex items-center gap-2">

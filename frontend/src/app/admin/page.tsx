@@ -14,7 +14,6 @@ import {
   Clock,
   CreditCard,
   Package,
-  RefreshCcw,
   ShoppingBag,
   XCircle,
 } from 'lucide-react';
@@ -103,7 +102,9 @@ function StatusBadge({ status }: { status: string }) {
     className: 'bg-gray-100 text-gray-700',
     icon: Clock,
   };
+
   const Icon = meta.icon;
+
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${meta.className}`}>
       <Icon className="h-3 w-3" />
@@ -137,26 +138,22 @@ function formatOrderDate(value: string): string {
   });
 }
 
-interface MetricCardProps {
+interface KpiItemProps {
   title: string;
   value: string;
   note: string;
   icon: ComponentType<{ className?: string }>;
 }
 
-function MetricCard({ title, value, note, icon: Icon }: MetricCardProps) {
+function KpiItem({ title, value, note, icon: Icon }: KpiItemProps) {
   return (
-    <div className="rounded-2xl border border-[var(--neutral-200)] bg-white px-4 py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--neutral-500)]">{title}</p>
-          <p className="mt-2 truncate text-2xl font-semibold text-[var(--primary-800)]">{value}</p>
-          <p className="mt-1 text-xs text-[var(--neutral-600)]">{note}</p>
-        </div>
-        <div className="rounded-xl border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-2.5">
-          <Icon className="h-4 w-4 text-[var(--neutral-600)]" />
-        </div>
+    <div className="border-b border-[var(--neutral-200)] pb-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--neutral-500)]">{title}</p>
+      <div className="mt-1 flex items-end gap-2">
+        <p className="text-2xl font-semibold text-[var(--primary-800)]">{value}</p>
+        <Icon className="mb-1 h-4 w-4 text-[var(--neutral-500)]" />
       </div>
+      <p className="mt-1 text-xs text-[var(--neutral-600)]">{note}</p>
     </div>
   );
 }
@@ -237,25 +234,17 @@ export default function AdminOverviewPage() {
     const total = Math.max(orders.length, 1);
 
     return Object.entries(counts)
-      .map(([key, count]) => {
-        const meta = statusMeta[key] ?? {
-          label: key,
-          className: 'bg-gray-100 text-gray-700',
-          icon: Clock,
-        };
-
-        return {
-          key,
-          label: meta.label,
-          count,
-          percent: Math.round((count / total) * 100),
-        };
-      })
+      .map(([key, count]) => ({
+        key,
+        label: statusMeta[key]?.label ?? key,
+        count,
+        percent: Math.round((count / total) * 100),
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 4);
   }, [orders]);
 
-  const metrics: MetricCardProps[] = useMemo(() => [
+  const kpis: KpiItemProps[] = useMemo(() => [
     {
       title: 'Bugün Sipariş',
       value: summary ? String(summary.ordersToday) : '—',
@@ -265,13 +254,13 @@ export default function AdminOverviewPage() {
     {
       title: 'Bugün Ciro',
       value: summary ? formatPrice(summary.revenueTodayCents) : '—',
-      note: 'Güncel tahsilat',
+      note: 'Tahsil edilen toplam',
       icon: CreditCard,
     },
     {
       title: 'Toplam Sipariş',
       value: summary ? String(summary.ordersTotal) : '—',
-      note: 'Tüm zamanlar',
+      note: 'Tüm dönem',
       icon: ShoppingBag,
     },
     {
@@ -280,57 +269,50 @@ export default function AdminOverviewPage() {
       note: 'Yayındaki ürün',
       icon: Package,
     },
-  ], [summary]);
+    {
+      title: 'Kayıtlı Müşteri',
+      value: String(customerTotal),
+      note: 'Toplam müşteri havuzu',
+      icon: ClipboardList,
+    },
+  ], [summary, customerTotal]);
 
   const quickLinks = useMemo(() => (isSuperAdmin ? [
-    { label: 'Kullanıcı Yönetimi', href: `${basePath}/users` },
-    { label: 'Satıcı Operasyonu', href: `${basePath}/sellers` },
-    { label: 'Plan Yönetimi', href: `${basePath}/plans` },
-    { label: 'Finans Takibi', href: `${basePath}/finance` },
-    { label: 'Risk Kontrol Merkezi', href: `${basePath}/risk-control` },
+    { label: 'Siparişler', href: `${basePath}/orders` },
+    { label: 'Ürün & Kategori', href: `${basePath}/products` },
+    { label: 'Satıcılar', href: `${basePath}/sellers` },
+    { label: 'Kullanıcılar', href: `${basePath}/users` },
+    { label: 'Finans', href: `${basePath}/finance` },
+    { label: 'Ayarlar', href: `${basePath}/settings` },
   ] : [
-    { label: 'Sipariş Yönetimi', href: `${basePath}/orders` },
-    { label: 'Ürün Yönetimi', href: `${basePath}/products` },
-    { label: 'Müşteri Listesi', href: `${basePath}/customers` },
-    { label: 'İade Yönetimi', href: `${basePath}/finance/refunds` },
+    { label: 'Siparişler', href: `${basePath}/orders` },
+    { label: 'Ürünler', href: `${basePath}/products` },
+    { label: 'Müşteriler', href: `${basePath}/customers` },
+    { label: 'Ödemeler', href: `${basePath}/payments` },
     { label: 'Raporlar', href: `${basePath}/reports` },
+    { label: 'Ayarlar', href: `${basePath}/settings` },
   ]), [basePath, isSuperAdmin]);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-[var(--neutral-200)] bg-[linear-gradient(120deg,#fcf8ef,#fff)] px-5 py-5 md:px-6 md:py-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--primary-800)] text-xl font-semibold text-white">
-              {user?.name?.charAt(0)?.toUpperCase() ?? 'N'}
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Yönetim Merkezi</p>
-              <h1 className="mt-1 text-3xl text-[var(--primary-800)]">
-                Hoş geldin, {user?.name?.split(' ')[0] ?? 'Yönetici'}
-              </h1>
-              <p className="mt-1 text-sm text-[var(--neutral-600)]">
-                Sipariş, satış ve operasyon akışını tek ekrandan anlık takip edebilirsin.
-              </p>
-            </div>
+    <div className="space-y-8">
+      <section className="border-b border-[var(--neutral-200)] pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Yönetim Paneli</p>
+            <h1 className="mt-1 text-4xl text-[var(--primary-800)]">Hoş geldin, {user?.name?.split(' ')[0] ?? 'Yönetici'}</h1>
+            <p className="mt-2 max-w-2xl text-sm text-[var(--neutral-600)]">
+              Operasyon, sipariş ve finans verilerini sade ekranda anlık takip et.
+            </p>
           </div>
-
-          <div className="flex flex-col items-start gap-2 text-xs text-[var(--neutral-600)]">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--neutral-200)] bg-white px-3 py-1.5 font-semibold text-[var(--primary-800)]">
+          <div className="flex items-center gap-4 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--neutral-200)] px-3 py-1.5 font-semibold text-[var(--primary-800)]">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Sistem Canlı
             </span>
-            <span>
-              Rapor aralığı: {reports?.range?.days ?? 30} gün
-            </span>
-            <div className="flex items-center gap-3 text-[11px]">
-              <Link href={`${basePath}/orders`} className="inline-flex items-center gap-1 font-semibold text-[var(--primary-800)] hover:underline">
-                Siparişler <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-              <Link href={`${basePath}/reports`} className="inline-flex items-center gap-1 font-semibold text-[var(--primary-800)] hover:underline">
-                Raporlar <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
+            <Link href={`${basePath}/reports`} className="inline-flex items-center gap-1 font-semibold text-[var(--primary-800)] hover:underline">
+              Raporlar
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
       </section>
@@ -338,7 +320,7 @@ export default function AdminOverviewPage() {
       {isLoading && <Spinner label="Dashboard verileri yükleniyor..." />}
 
       {isError && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           Dashboard verileri yüklenemedi. Lütfen tekrar deneyin.
         </div>
@@ -346,46 +328,34 @@ export default function AdminOverviewPage() {
 
       {!isLoading && !isError && (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map((item) => (
-              <MetricCard
-                key={item.title}
-                title={item.title}
-                value={item.value}
-                note={item.note}
-                icon={item.icon}
-              />
+          <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+            {kpis.map((item) => (
+              <KpiItem key={item.title} title={item.title} value={item.value} note={item.note} icon={item.icon} />
             ))}
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]">
-            <div className="rounded-2xl border border-[var(--neutral-200)] bg-white px-5 py-5 md:px-6 md:py-6">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl text-[var(--primary-800)]">Yeni Siparişler</h2>
-                  <p className="text-xs text-[var(--neutral-600)]">Son güncellenen sipariş hareketleri</p>
-                </div>
-                <Link
-                  href={`${basePath}/orders`}
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--neutral-200)] px-3 py-1.5 text-xs font-semibold text-[var(--primary-800)] hover:bg-[var(--neutral-50)]"
-                >
+          <section className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-3xl text-[var(--primary-800)]">Yeni Siparişler</h2>
+                <Link href={`${basePath}/orders`} className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary-800)] hover:underline">
                   Tümünü Gör
-                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </div>
 
               {orders.length === 0 ? (
-                <p className="py-10 text-center text-sm text-[var(--neutral-600)]">Henüz sipariş verisi bulunmuyor.</p>
+                <p className="py-8 text-sm text-[var(--neutral-600)]">Henüz sipariş verisi bulunmuyor.</p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto border-y border-[var(--neutral-200)]">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-[var(--neutral-200)]">
-                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Sipariş</th>
-                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Durum</th>
-                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Kaynak</th>
-                        <th className="py-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Tutar</th>
-                        <th className="py-3 text-right text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Tarih</th>
+                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Sipariş</th>
+                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Durum</th>
+                        <th className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Kaynak</th>
+                        <th className="py-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Tutar</th>
+                        <th className="py-3 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Tarih</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--neutral-100)]">
@@ -396,8 +366,12 @@ export default function AdminOverviewPage() {
                               #{order.id}
                             </Link>
                           </td>
-                          <td className="py-3 pr-4"><StatusBadge status={order.statusKey} /></td>
-                          <td className="py-3 pr-4"><SourceBadge source={order.source} /></td>
+                          <td className="py-3 pr-4">
+                            <StatusBadge status={order.statusKey} />
+                          </td>
+                          <td className="py-3 pr-4">
+                            <SourceBadge source={order.source} />
+                          </td>
                           <td className="py-3 pr-4 text-right font-semibold text-[var(--primary-800)]">{formatPrice(order.totalAmountCents)}</td>
                           <td className="py-3 text-right text-xs text-[var(--neutral-600)]">{formatOrderDate(order.createdAt)}</td>
                         </tr>
@@ -408,42 +382,31 @@ export default function AdminOverviewPage() {
               )}
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-[var(--neutral-200)] bg-white px-4 py-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-xl text-[var(--primary-800)]">Öne Çıkan Ürünler</h3>
-                  <Link href={`${basePath}/reports`} className="text-xs font-semibold text-[var(--primary-800)] hover:underline">
-                    Rapor
-                  </Link>
-                </div>
-
-                {topProducts.length === 0 ? (
-                  <p className="text-sm text-[var(--neutral-600)]">Henüz ürün performans verisi yok.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {topProducts.slice(0, 4).map((product, index) => (
-                      <div key={product.productId} className="flex items-center gap-3 rounded-xl border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-2.5">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-semibold text-[var(--neutral-600)]">
-                          {index + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[var(--primary-800)]">{product.name}</p>
+            <aside className="space-y-8 border-t border-[var(--neutral-200)] pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+              <div>
+                <h3 className="text-2xl text-[var(--primary-800)]">Öne Çıkan Ürünler</h3>
+                <div className="mt-3 divide-y divide-[var(--neutral-100)] border-y border-[var(--neutral-200)]">
+                  {topProducts.length === 0 ? (
+                    <p className="py-4 text-sm text-[var(--neutral-600)]">Henüz ürün performans verisi yok.</p>
+                  ) : (
+                    topProducts.slice(0, 4).map((product, index) => (
+                      <div key={product.productId} className="flex items-center justify-between gap-2 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[var(--primary-800)]">{index + 1}. {product.name}</p>
                           <p className="text-xs text-[var(--neutral-600)]">{product.quantity} adet</p>
                         </div>
                         <span className="text-sm font-semibold text-[var(--primary-800)]">{formatPrice(product.revenueCents)}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-[var(--neutral-200)] bg-white px-4 py-4">
-                <h3 className="text-xl text-[var(--primary-800)]">Sipariş İstatistikleri</h3>
-                <p className="mt-1 text-xs text-[var(--neutral-600)]">Son listelenen sipariş dağılımı</p>
-
+              <div>
+                <h3 className="text-2xl text-[var(--primary-800)]">Sipariş Dağılımı</h3>
                 <div className="mt-3 space-y-2.5">
                   {statusStats.length === 0 ? (
-                    <p className="text-sm text-[var(--neutral-600)]">Henüz durum verisi bulunmuyor.</p>
+                    <p className="text-sm text-[var(--neutral-600)]">Durum verisi bulunmuyor.</p>
                   ) : (
                     statusStats.map((row) => (
                       <div key={row.key}>
@@ -460,35 +423,25 @@ export default function AdminOverviewPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-[var(--neutral-200)] bg-white px-4 py-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-xl text-[var(--primary-800)]">Sistem Sağlığı</h3>
-                  <Link href={`${basePath}/risk-control`} className="text-xs font-semibold text-[var(--primary-800)] hover:underline">
-                    Risk Hub
-                  </Link>
+              <div>
+                <h3 className="text-2xl text-[var(--primary-800)]">Sistem Sağlığı</h3>
+                <div className="mt-3 divide-y divide-[var(--neutral-100)] border-y border-[var(--neutral-200)]">
+                  {[
+                    { label: 'Toplam Outbox', value: outboxQ.data?.totalCount ?? '—' },
+                    { label: 'Bekleyen', value: outboxQ.data?.pendingCount ?? '—' },
+                    { label: 'Başarısız', value: outboxQ.data?.failedCount ?? '—' },
+                    { label: 'Dead Letter', value: outboxQ.data?.deadLetterCount ?? '—' },
+                    { label: 'Bekleyen İade', value: pendingReturns },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center justify-between py-2 text-sm">
+                      <span className="text-[var(--neutral-600)]">{row.label}</span>
+                      <span className="font-semibold text-[var(--primary-800)]">{row.value}</span>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--neutral-600)]">Toplam Outbox</span>
-                    <span className="font-semibold text-[var(--primary-800)]">{outboxQ.data?.totalCount ?? '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--neutral-600)]">Bekleyen</span>
-                    <span className="font-semibold text-[var(--primary-800)]">{outboxQ.data?.pendingCount ?? '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--neutral-600)]">Başarısız</span>
-                    <span className="font-semibold text-[var(--primary-800)]">{outboxQ.data?.failedCount ?? '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[var(--neutral-600)]">Dead Letter</span>
-                    <span className="font-semibold text-[var(--primary-800)]">{outboxQ.data?.deadLetterCount ?? '—'}</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 border-t border-[var(--neutral-200)] pt-3">
-                  <div className="mb-2 flex items-center justify-between text-xs">
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between text-xs">
                     <span className="font-medium text-[var(--neutral-600)]">Risk Skoru</span>
                     <span className={`font-semibold ${riskScore > 50 ? 'text-red-600' : riskScore > 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
                       {riskScore}/100
@@ -502,36 +455,20 @@ export default function AdminOverviewPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </aside>
           </section>
 
-          <section className="rounded-2xl border border-[var(--neutral-200)] bg-white px-5 py-5 md:px-6 md:py-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-2xl text-[var(--primary-800)]">Operasyon Özeti</h2>
-              <span className="text-xs text-[var(--neutral-600)]">Gerçek zamanlı panel özeti</span>
+          <section className="border-t border-[var(--neutral-200)] pt-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-3xl text-[var(--primary-800)]">Kısa Yollar</h2>
+              <span className="text-xs text-[var(--neutral-600)]">Rapor aralığı: {reports?.range?.days ?? 30} gün</span>
             </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Müşteri Havuzu</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--primary-800)]">{customerTotal}</p>
-              </div>
-              <div className="rounded-xl border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">Bekleyen İade</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--primary-800)]">{pendingReturns}</p>
-              </div>
-              <div className="rounded-xl border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--neutral-500)]">30 Gün Ciro</p>
-                <p className="mt-1 text-xl font-semibold text-[var(--primary-800)]">{reports ? formatPrice(reports.revenueCents) : '—'}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="inline-flex items-center justify-between rounded-xl border border-[var(--neutral-200)] bg-white px-4 py-3 text-sm font-medium text-[var(--primary-800)] transition hover:bg-[var(--neutral-50)]"
+                  className="flex items-center justify-between border border-transparent px-3 py-2 text-sm font-medium text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]"
                 >
                   {link.label}
                   <ArrowUpRight className="h-4 w-4 text-[var(--neutral-500)]" />
@@ -540,11 +477,8 @@ export default function AdminOverviewPage() {
             </div>
 
             {summary && summary.lowStockProducts > 0 && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <div className="flex items-center gap-2">
-                  <RefreshCcw className="h-4 w-4" />
-                  <span className="font-semibold">{summary.lowStockProducts} ürün düşük stok seviyesinde.</span>
-                </div>
+              <div className="mt-4 border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {summary.lowStockProducts} ürün düşük stok seviyesinde.
               </div>
             )}
           </section>
