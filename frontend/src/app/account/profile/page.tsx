@@ -68,8 +68,6 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [taxNumber, setTaxNumber] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -117,16 +115,14 @@ export default function ProfilePage() {
     setLastName(parts.slice(1).join(' '));
     setPhone(user.phone ?? '');
     setEmail(user.email ?? '');
-    setCompanyName(user.businessId ? `Isletme #${user.businessId}` : '');
-    setTaxNumber('');
   }, [user]);
 
   const isLoading = isLoadingProfile || status === 'authenticating';
 
   if (isLoading && !user) {
     return (
-      <div className="rounded-[24px] border border-[#e3d9c9] bg-[#fbf7f0] p-6">
-        <p className="text-sm text-[#6f6a60]">Profil bilgileri yukleniyor...</p>
+      <div className="p-2">
+        <p className="text-sm text-[#6b7280]">Profil bilgileri yukleniyor...</p>
       </div>
     );
   }
@@ -245,20 +241,11 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="rounded-[24px] border border-[#e3d9c9] bg-[#f7f3eb] p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-4xl font-serif leading-none text-[#21443b]">Hesap Bilgileri</h1>
-        <button
-          type="button"
-          onClick={() => setActiveTab('profile')}
-          className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#ddd3c4] bg-[#f7f3eb] px-6 text-sm font-semibold text-[#21443b] shadow-[0_6px_16px_rgba(26,60,52,0.08)] transition hover:bg-[#fffdfa]"
-        >
-          Profili Duzenle
-        </button>
-      </div>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold text-[#111827]">Hesap Bilgileri</h1>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[240px_1fr]">
-        <aside className="rounded-[20px] border border-[#e7dfd2] bg-[#fbf8f2] p-2">
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        <aside className="border-b border-[#e5e7eb] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const active = item.kind === 'tab' && item.tab === activeTab;
@@ -278,8 +265,8 @@ export default function ProfilePage() {
                 }}
                 className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                   active
-                    ? 'bg-[#efebe3] text-[#21443b]'
-                    : 'text-[#756f63] hover:bg-[#f4efe7] hover:text-[#21443b]'
+                    ? 'bg-[#f3f4f6] text-[#111827]'
+                    : 'text-[#4b5563] hover:bg-[#f9fafb] hover:text-[#111827]'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -289,68 +276,67 @@ export default function ProfilePage() {
           })}
         </aside>
 
-        <section className="rounded-[20px] border border-[#e7dfd2] bg-white p-4 md:p-5">
+        <section className="min-w-0">
           {activeTab === 'profile' && (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
-                <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                <label className="space-y-1 text-sm font-medium text-[#374151]">
                   <span>Ad</span>
                   <input
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                    className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                   />
                 </label>
-                <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                <label className="space-y-1 text-sm font-medium text-[#374151]">
                   <span>Soyad</span>
                   <input
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                    className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                   />
                 </label>
-                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                <label className="space-y-1 text-sm font-medium text-[#374151] md:col-span-2">
                   <span>E-posta</span>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                    className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                   />
                 </label>
-                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                <label className="space-y-1 text-sm font-medium text-[#374151] md:col-span-2">
                   <span>Telefon</span>
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
-                  />
-                </label>
-                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
-                  <span>Sirket Adi</span>
-                  <input
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
-                  />
-                </label>
-                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
-                  <span>Vergi No</span>
-                  <input
-                    value={taxNumber}
-                    onChange={(e) => setTaxNumber(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                    className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                   />
                 </label>
               </div>
 
-              <div className="border-t border-[#ece5d9] pt-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1 text-sm">
+                  <span className="text-[#6b7280]">Rol</span>
+                  <p className="flex h-11 items-center rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-3 text-[#111827]">
+                    {user.role}
+                  </p>
+                </div>
+                <div className="space-y-1 text-sm">
+                  <span className="text-[#6b7280]">Business ID</span>
+                  <p className="flex h-11 items-center rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-3 text-[#111827]">
+                    {user.businessId ?? '-'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-[#e5e7eb] pt-4">
                 <Button
                   type="button"
                   onClick={handleSaveProfile}
                   disabled={isSavingProfile}
                   isLoading={isSavingProfile}
-                  className="mx-auto flex h-11 min-w-[180px] rounded-2xl"
+                  className="h-11 min-w-[160px]"
                 >
                   Guncelle
                 </Button>
@@ -360,31 +346,31 @@ export default function ProfilePage() {
 
           {activeTab === 'security' && (
             <div className="space-y-3">
-              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+              <label className="space-y-1 text-sm font-medium text-[#374151]">
                 <span>Mevcut Sifre</span>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                 />
               </label>
-              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+              <label className="space-y-1 text-sm font-medium text-[#374151]">
                 <span>Yeni Sifre</span>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                 />
               </label>
-              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+              <label className="space-y-1 text-sm font-medium text-[#374151]">
                 <span>Yeni Sifre (Dogrula)</span>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  className="h-11 w-full rounded-md border border-[#d1d5db] bg-white px-3 text-sm text-[#111827] outline-none transition focus:border-[#111827]"
                 />
               </label>
               <Button
@@ -392,7 +378,7 @@ export default function ProfilePage() {
                 onClick={handleChangePassword}
                 disabled={isChangingPassword}
                 isLoading={isChangingPassword}
-                className="mt-2 h-11 rounded-2xl"
+                className="mt-2 h-11 min-w-[160px]"
               >
                 Sifreyi Guncelle
               </Button>
@@ -401,13 +387,13 @@ export default function ProfilePage() {
 
           {activeTab === 'admin' && hasBackofficePanel && (
             <div className="space-y-3">
-              <p className="text-sm text-[#6b655b]">
+              <p className="text-sm text-[#6b7280]">
                 Rolunuze ait operasyon arayuzune gecis yapabilirsiniz.
               </p>
               <Button
                 type="button"
                 onClick={() => router.push(getPanelHomePathByRole(user.role))}
-                className="h-11 rounded-2xl"
+                className="h-11 min-w-[160px]"
               >
                 Panele Git
               </Button>

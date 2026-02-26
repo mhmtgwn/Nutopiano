@@ -1,13 +1,14 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   BarChart3,
-  ChevronRight,
+  Bell,
+  CircleHelp,
   ClipboardList,
   CreditCard,
   FileCheck,
@@ -19,6 +20,7 @@ import {
   MessageCircle,
   Package,
   RotateCcw,
+  Search,
   Settings,
   Shield,
   ShieldAlert,
@@ -139,38 +141,36 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
   const isActive = (href: string) =>
     href === basePath ? pathname === href : pathname.startsWith(href);
 
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
-
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     dispatch(logout());
     router.push('/login');
   };
 
-  const sidebarColor = isSuperAdmin ? '#11244e' : '#123228';
-  const accentColor = isSuperAdmin ? '#60A5FA' : '#D4B06F';
+  const handleNavClick = () => setMobileOpen(false);
 
-  const SidebarNav = () => (
-    <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-white/[0.1] px-5 py-5">
+  const sidebarHighlight = isSuperAdmin ? '#dce9ff' : '#f4efe5';
+
+  const renderSidebarNav = () => (
+    <div className="flex h-full flex-col bg-[#fbfaf7]">
+      <div className="flex items-center gap-3 border-b border-[var(--neutral-200)] px-5 py-5">
         <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
-          style={{ backgroundColor: accentColor }}
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--primary-800)] text-sm font-bold text-white"
         >
-          N
+          {user?.name?.charAt(0)?.toUpperCase() ?? 'N'}
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] leading-none text-white/40">Nutopiano</p>
-          <p className="mt-1 truncate text-[13px] font-semibold leading-none text-white">{panelLabel}</p>
+          <p className="truncate text-sm font-semibold leading-none text-[var(--primary-800)]">
+            {user?.name ?? 'Nutopiano Kullanıcı'}
+          </p>
+          <p className="mt-1 truncate text-xs text-[var(--neutral-600)]">{panelLabel}</p>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="scrollbar-thin flex-1 space-y-4 overflow-y-auto px-3 py-3">
+      <nav className="scrollbar-thin flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {navSections.map((section) => (
           <div key={section.title}>
-            <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-[0.25em] text-white/35">
+            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -181,28 +181,24 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={handleNavClick}
                     className={`
-                      flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium
-                      transition-all duration-150
+                      flex items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] font-medium
+                      transition-colors duration-150
                       ${active
-                        ? 'bg-white/14 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
-                        : 'text-white/65 hover:bg-white/[0.08] hover:text-white/90'
+                        ? 'border-[var(--neutral-200)] text-[var(--primary-800)]'
+                        : 'border-transparent text-[var(--neutral-700)] hover:border-[var(--neutral-200)] hover:bg-white hover:text-[var(--primary-800)]'
                       }
                     `}
+                    style={active ? { backgroundColor: sidebarHighlight } : undefined}
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.badge ? (
-                      <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                      <span className="rounded-full bg-[var(--neutral-100)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-600)]">
                         {item.badge}
                       </span>
                     ) : null}
-                    {active && (
-                      <div
-                        className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-                        style={{ backgroundColor: accentColor }}
-                      />
-                    )}
                   </Link>
                 );
               })}
@@ -211,11 +207,11 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         ))}
       </nav>
 
-      {/* User Footer */}
-      <div className="space-y-1 border-t border-white/[0.1] px-3 py-3">
+      <div className="space-y-1 border-t border-[var(--neutral-200)] px-3 py-3">
         <Link
           href="/"
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+          onClick={handleNavClick}
+          className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:border-[var(--neutral-200)] hover:bg-white hover:text-[var(--primary-800)]"
         >
           <Store className="h-4 w-4 flex-shrink-0" />
           Mağazaya Dön
@@ -223,7 +219,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-medium text-white/55 transition hover:bg-red-500/10 hover:text-red-200"
+          className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[12px] font-medium text-[var(--neutral-700)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           Çıkış Yap
@@ -233,88 +229,93 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
   );
 
   return (
-    <div className="min-h-screen bg-[var(--brand-cream)] text-[#16362f]">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[#d8dfd4] bg-white/90 px-4 shadow-[var(--shadow-sm)] backdrop-blur md:px-6">
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9dfd5] text-[#53746b] transition hover:bg-[#f4f7f2] lg:hidden"
-          aria-label="Menü"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-
-        {/* Mobile Logo */}
-        <div className="flex lg:hidden items-center gap-2">
-          <div
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
-            style={{ backgroundColor: sidebarColor }}
-          >
-            N
-          </div>
-          <span className="text-sm font-semibold text-[#16362f]">{panelLabel}</span>
-        </div>
-
-        {/* Breadcrumb Desktop */}
-        <div className="hidden lg:flex items-center gap-2 text-sm text-[#658076]">
-          <span className="font-semibold text-[#16362f]">{panelLabel}</span>
-          <ChevronRight className="h-4 w-4 text-[#c5cec2]" />
-          <span>Dashboard</span>
-        </div>
-
-        <div className="flex-1" />
-
-        {/* User */}
-        <div className="flex items-center gap-3">
-          {user && (
-            <div className="flex items-center gap-2.5">
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: sidebarColor }}
-              >
-                {user.name?.charAt(0)?.toUpperCase() ?? 'U'}
-              </div>
-              <div className="hidden md:block">
-                <p className="leading-none text-[13px] font-semibold text-[#16362f]">{user.name}</p>
-                <p className="mt-0.5 text-[11px] text-[#6a857b]">{user.role}</p>
-              </div>
-            </div>
-          )}
+    <div className="min-h-screen bg-white text-[var(--primary-800)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--neutral-200)] bg-white/95 backdrop-blur">
+        <div className="flex h-16 items-center gap-3 px-4 md:px-6">
           <button
             type="button"
-            onClick={handleLogout}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#d8dfd4] px-3 text-[12px] font-medium text-[#5a766c] transition hover:border-[#d9b2b2] hover:bg-[#fff4f4] hover:text-[#9a2e2e]"
+            onClick={() => setMobileOpen(true)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--neutral-200)] text-[var(--neutral-700)] transition hover:bg-[var(--neutral-100)] lg:hidden"
+            aria-label="Menü"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Çıkış</span>
+            <Menu className="h-5 w-5" />
           </button>
+
+          <Link href={basePath} className="flex items-center gap-3">
+            <span className="text-4xl font-serif font-semibold leading-none text-[var(--accent-900)]">Nutopiano</span>
+            <span className="hidden border-l border-[var(--neutral-300)] pl-3 text-sm font-semibold text-[var(--neutral-700)] sm:block">
+              {panelLabel}
+            </span>
+          </Link>
+
+          <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-[var(--neutral-500)]">
+            <span>Yönetim</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--neutral-400)]" />
+            <span>{isSuperAdmin ? 'Platform Kontrol' : 'Operasyon Kontrol'}</span>
+          </div>
+
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-2.5">
+            <Link
+              href={`${basePath}/orders`}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] text-[var(--neutral-700)] transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
+              aria-label="Siparişlerde ara"
+            >
+              <Search className="h-4 w-4" />
+            </Link>
+            <Link
+              href={`${basePath}/reports`}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] text-[var(--neutral-700)] transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
+              aria-label="Raporlar"
+            >
+              <Bell className="h-4 w-4" />
+            </Link>
+            <Link
+              href={`${basePath}/settings`}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] text-[var(--neutral-700)] transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
+              aria-label="Ayarlar"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </Link>
+
+            {user && (
+              <div className="ml-1 flex items-center gap-2.5 rounded-full border border-[var(--neutral-200)] bg-white px-2 py-1">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-800)] text-xs font-bold text-white">
+                  {user.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                </div>
+                <div className="hidden md:block">
+                  <p className="leading-none text-[13px] font-semibold text-[var(--primary-800)]">{user.name}</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--neutral-600)]">{user.role}</p>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--neutral-200)] px-3 text-[12px] font-medium text-[var(--neutral-700)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Çıkış</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Layout */}
       <div className="flex min-h-[calc(100vh-4rem)] overflow-hidden">
-        {/* Desktop Sidebar */}
         <aside
-          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[272px] flex-shrink-0 overflow-hidden lg:flex lg:flex-col"
-          style={{
-            background: `linear-gradient(180deg, ${sidebarColor} 0%, #0d251e 100%)`,
-          }}
+          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[280px] flex-shrink-0 overflow-hidden border-r border-[var(--neutral-200)] lg:flex lg:flex-col"
         >
-          <SidebarNav />
+          {renderSidebarNav()}
         </aside>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-transparent">
-          <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
-            <div className="surface-panel p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto bg-white">
+          <div className="mx-auto w-full max-w-[1480px] px-4 py-6 md:px-6 md:py-8">
             {children}
-            </div>
           </div>
         </main>
       </div>
 
-      {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
@@ -324,32 +325,24 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
           <aside
-            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden shadow-2xl"
-            style={{
-              background: `linear-gradient(180deg, ${sidebarColor} 0%, #0d251e 100%)`,
-            }}
+            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden border-r border-[var(--neutral-200)] bg-[#fbfaf7] shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-white/[0.1] px-4 py-4">
+            <div className="flex items-center justify-between border-b border-[var(--neutral-200)] px-4 py-4">
               <div className="flex items-center gap-2">
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
-                  style={{ backgroundColor: accentColor }}
-                >
-                  N
-                </div>
-                <span className="text-[13px] font-semibold text-white">{panelLabel}</span>
+                <span className="text-lg font-serif font-semibold text-[var(--accent-900)]">Nutopiano</span>
+                <span className="text-[12px] font-medium text-[var(--neutral-600)]">{panelLabel}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/10 hover:text-white"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--neutral-500)] transition hover:bg-white hover:text-[var(--primary-800)]"
                 aria-label="Kapat"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              <SidebarNav />
+              {renderSidebarNav()}
             </div>
           </aside>
         </div>
