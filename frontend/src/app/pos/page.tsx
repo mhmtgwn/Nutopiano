@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wifi, WifiOff, Briefcase, RefreshCw, Maximize, Minimize, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Wifi, WifiOff, Briefcase, RefreshCw, Maximize, Minimize, AlertCircle } from 'lucide-react';
 import Button from '@/components/common/Button';
 import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import {
@@ -2839,84 +2839,14 @@ export default function PosPage() {
             </Button>
           </div>
         </div>
-        {!isOnline ? (
-          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
-            <AlertCircle className="h-3.5 w-3.5" />
-            Offline — {queueCount} işlem kuyruğa alındı.
-          </div>
-        ) : null}
-        {isOnline && showSyncSuccessBanner && recentSyncedCount ? (
-          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {recentSyncedCount} işlem başarıyla senkronize edildi.
-          </div>
-        ) : null}
       </header>
 
-      {/* ── Tabs Navigation ── */}
-      <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white px-4 md:px-6">
-        <nav className="mx-auto flex w-full max-w-[1440px] gap-6" aria-label="Tabs">
-          {[
-            { id: 'home', label: 'Satış Ekranı' },
-            { id: 'categories', label: 'Kategoriler' },
-            { id: 'customers', label: 'Müşteriler' },
-            { id: 'finance', label: 'Finans' },
-            { id: 'orders', label: 'Siparişler' },
-            { id: 'settings', label: 'Ayarlar' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${activeTab === tab.id
-                ? 'border-[#1A3C34] text-[#1A3C34]'
-                : 'border-transparent text-[#5C6F68] hover:border-[#1A3C34]/30 hover:text-[#1A3C34]'
-                }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
       {/* ── Main POS Body ── */}
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
+      <div className={`w-full px-4 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article className="surface-panel-muted p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Baglanti</p>
-              <p className="mt-2 text-2xl font-semibold text-[#123228]">{isOnline ? 'Online' : 'Offline'}</p>
-              <p className="mt-1 text-xs text-[#5C6F68]">Terminal ag durumu</p>
-            </article>
-            <article className="surface-panel-muted p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Kuyruk</p>
-              <p className="mt-2 text-2xl font-semibold text-[#123228]">{queueCount}</p>
-              <p className="mt-1 text-xs text-[#5C6F68]">Bekleyen satis</p>
-            </article>
-            <article className="surface-panel-muted p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Vardiya</p>
-              <p className="mt-2 text-2xl font-semibold text-[#123228]">
-                {activeShift ? 'Acik' : 'Kapali'}
-              </p>
-              <p className="mt-1 text-xs text-[#5C6F68]">
-                {activeShift ? activeShift.registerCode : 'Kasa secimi bekleniyor'}
-              </p>
-            </article>
-            <article className="surface-panel-muted p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5C6F68]">Toplam</p>
-              <p className="mt-2 text-2xl font-semibold text-[#123228]">{formatMoney(estimatedPayableCents)}</p>
-              <p className="mt-1 text-xs text-[#5C6F68]">Anlik tahsilat tutari</p>
-            </article>
-          </section>
-
-          {isFocusMode ? (
-            <p className="text-xs text-[#1A3C34]/60">
-              Focus mode aktif: ikincil operasyon panelleri gizlendi.
-            </p>
-          ) : null}
-
           {isAuthed ? (
             !activeShift ? (
-              <div className="surface-panel px-4 py-5 md:px-5 md:py-6">
+              <div className="px-0 py-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
                   Vardiya Baslat
                 </p>
@@ -2970,7 +2900,7 @@ export default function PosPage() {
                 </div>
               </div>
             ) : (
-              <div className={`surface-panel px-4 py-4 md:px-5 md:py-5 ${isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''}`}>
+              <div className={`px-0 py-2 ${isFocusMode ? 'ring-2 ring-[#1A3C34]/15' : ''}`}>
                 <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
                   <div className="space-y-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
