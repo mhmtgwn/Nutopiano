@@ -3786,37 +3786,518 @@ export default function PosPage() {
 
       {/* Tab Contents */}
       <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'categories' ? 'block' : 'hidden'}`}>
-        <div className="surface-panel p-6">
-          <h2 className="text-xl font-semibold text-[#1A3C34]">Kategoriler</h2>
-          <p className="mt-2 text-[#5C6F68]">Kategori yönetimi içeriği buraya eklenecektir.</p>
+        <div className="surface-panel space-y-4 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-[#1A3C34]">Ürün Arama ve Kategori Akışı</h2>
+              <p className="mt-1 text-sm text-[#5C6F68]">
+                Ürünü arat, seç ve satış ekranına aktar.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9 px-3 text-xs"
+              onClick={() => setIsProductSearchModalOpen(true)}
+            >
+              Gelişmiş Ürün Arama
+            </Button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input
+              value={productQuery}
+              onChange={(e) => setProductQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void searchProducts();
+                }
+              }}
+              className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+              placeholder="Ürün adı / SKU ile ara"
+            />
+            <Button
+              type="button"
+              className="h-10 px-4 text-xs"
+              variant="secondary"
+              onClick={() => void searchProducts()}
+              disabled={isSearchingProduct}
+            >
+              {isSearchingProduct ? 'Aranıyor...' : 'Ara'}
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] p-3">
+            {isSearchingProduct ? (
+              <p className="text-sm text-[#5C5C5C]">Ürünler getiriliyor...</p>
+            ) : productResults.length > 0 ? (
+              <div className="space-y-2">
+                {productResults.slice(0, 8).map((row) => (
+                  <div
+                    key={`${row.type}-${row.productId}-${row.variantId ?? 0}-${row.sku ?? row.name}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                  >
+                    <div>
+                      <p className="font-semibold">{row.name}</p>
+                      <p className="text-xs text-[#5C5C5C]">
+                        SKU: {row.sku ?? '-'} • Stok: {typeof row.stock === 'number' ? row.stock : '-'} • Fiyat: {formatMoney(row.priceCents)}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3 text-[11px]"
+                      onClick={() => selectProduct(row)}
+                    >
+                      Ürünü Seç
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#5C5C5C]">Henüz ürün listesi yok. Arama yaparak başlayın.</p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
+            <p>
+              <span className="font-semibold">Seçili ürün:</span> {resolvedProductName || '-'} {variantId ? `(Varyant #${variantId})` : ''}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 px-3 text-[11px]"
+              onClick={() => setActiveTab('home')}
+            >
+              Satış Ekranına Dön
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'customers' ? 'block' : 'hidden'}`}>
-        <div className="surface-panel p-6">
-          <h2 className="text-xl font-semibold text-[#1A3C34]">Müşteriler</h2>
-          <p className="mt-2 text-[#5C6F68]">Müşteri yönetimi içeriği buraya eklenecektir.</p>
+        <div className="surface-panel space-y-4 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-[#1A3C34]">Müşteri Yönetimi</h2>
+              <p className="mt-1 text-sm text-[#5C6F68]">
+                Müşteri arama, seçme ve hızlı müşteri oluşturma işlemleri.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9 px-3 text-xs"
+              onClick={() => setIsCustomerCreateModalOpen(true)}
+            >
+              Yeni Müşteri
+            </Button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input
+              value={customerQuery}
+              onChange={(e) => setCustomerQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void searchCustomers();
+                }
+              }}
+              className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+              placeholder="Ad, telefon veya müşteri no ile ara"
+            />
+            <Button
+              type="button"
+              className="h-10 px-4 text-xs"
+              variant="secondary"
+              onClick={() => void searchCustomers()}
+              disabled={isSearchingCustomer}
+            >
+              {isSearchingCustomer ? 'Aranıyor...' : 'Ara'}
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] p-3">
+            {isSearchingCustomer ? (
+              <p className="text-sm text-[#5C5C5C]">Müşteriler getiriliyor...</p>
+            ) : customerResults.length > 0 ? (
+              <div className="space-y-2">
+                {customerResults.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                  >
+                    <div>
+                      <p className="font-semibold">#{row.id} {row.name}</p>
+                      <p className="text-xs text-[#5C5C5C]">{row.phone} • Bakiye: {formatMoney(row.balance)}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3 text-[11px]"
+                      onClick={() => selectCustomer(row)}
+                    >
+                      Seç
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#5C5C5C]">Sonuç yok. Yeni müşteri oluşturabilirsiniz.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-[#E5E5E0] bg-white px-3 py-3">
+            <p className="text-sm text-[#1A3C34]">
+              <span className="font-semibold">Seçili müşteri:</span>{' '}
+              {selectedCustomer
+                ? `#${selectedCustomer.id} ${selectedCustomer.name} • ${selectedCustomer.phone} • Bakiye: ${formatMoney(selectedCustomer.balance)}`
+                : 'Seçilmedi'}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                value={balanceApplyAmount}
+                onChange={(e) => setBalanceApplyAmount(e.target.value)}
+                className="h-9 w-44 rounded-full border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                placeholder="Bakiye (kuruş)"
+                inputMode="numeric"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => void applyCustomerBalance()}
+                disabled={!selectedCustomer || !lastOnlineOrderId || isApplyingBalance}
+              >
+                {isApplyingBalance ? 'Uygulanıyor...' : 'Bakiyeden Öde'}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'finance' ? 'block' : 'hidden'}`}>
-        <div className="surface-panel p-6">
-          <h2 className="text-xl font-semibold text-[#1A3C34]">Finans</h2>
-          <p className="mt-2 text-[#5C6F68]">Finans yönetimi içeriği buraya eklenecektir.</p>
+        <div className="surface-panel space-y-4 p-6">
+          <div>
+            <h2 className="text-xl font-semibold text-[#1A3C34]">Finans ve Analitik</h2>
+            <p className="mt-1 text-sm text-[#5C6F68]">
+              Personel satış raporu ve POS analitik verileri.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+              Başlangıç
+              <input
+                type="date"
+                value={reportDateFrom}
+                onChange={(e) => setReportDateFrom(e.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+              Bitiş
+              <input
+                type="date"
+                value={reportDateTo}
+                onChange={(e) => setReportDateTo(e.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+              Periyot
+              <select
+                value={salesPeriod}
+                onChange={(e) => setSalesPeriod(e.target.value as 'day' | 'week' | 'month')}
+                className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+              >
+                <option value="day">Günlük</option>
+                <option value="week">Haftalık</option>
+                <option value="month">Aylık</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1A3C34]/70">
+              Top Ürün Limiti
+              <input
+                value={salesTopLimit}
+                onChange={(e) => setSalesTopLimit(e.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              onClick={() => void loadStaffSalesReport()}
+              disabled={isSalesReportBusy}
+            >
+              {isSalesReportBusy ? 'Yükleniyor...' : 'Personel Raporu'}
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              onClick={() => void loadSalesReport()}
+              disabled={isSalesAnalyticsBusy}
+            >
+              {isSalesAnalyticsBusy ? 'Yükleniyor...' : 'Satış Analitiği'}
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              onClick={() => void downloadSalesCsv()}
+              disabled={isSalesAnalyticsBusy}
+            >
+              CSV İndir
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-8 px-3 text-xs"
+              onClick={printSalesReportPdf}
+              disabled={!salesReport}
+            >
+              PDF Yazdır
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Satış Özeti
+              </p>
+              {salesReport ? (
+                <div className="mt-2 space-y-1.5">
+                  <p>Sipariş: <span className="font-semibold">{salesReport.summary.orderCount}</span></p>
+                  <p>Ciro: <span className="font-semibold">{formatMoney(salesReport.summary.salesTotalCents)}</span></p>
+                  <p>Tahsilat: <span className="font-semibold">{formatMoney(salesReport.summary.paymentsTotalCents)}</span></p>
+                  <p>Ortalama Fiş: <span className="font-semibold">{formatMoney(salesReport.summary.avgTicketCents)}</span></p>
+                </div>
+              ) : (
+                <p className="mt-2 text-[#5C5C5C]">Analitik verisi yüklenmedi.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Personel Özeti
+              </p>
+              {staffSalesReport?.rows?.length ? (
+                <div className="mt-2 space-y-1.5">
+                  {staffSalesReport.rows.slice(0, 4).map((row) => (
+                    <p key={row.userId}>
+                      {row.userName}: <span className="font-semibold">{row.orderCount} sipariş</span> • {formatMoney(row.salesTotalCents)}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-[#5C5C5C]">Personel rapor verisi yok.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
-        <div className="surface-panel p-6">
-          <h2 className="text-xl font-semibold text-[#1A3C34]">Siparişler</h2>
-          <p className="mt-2 text-[#5C6F68]">Sipariş yönetimi içeriği buraya eklenecektir.</p>
+        <div className="surface-panel space-y-4 p-6">
+          <div>
+            <h2 className="text-xl font-semibold text-[#1A3C34]">Sipariş ve Kuyruk Yönetimi</h2>
+            <p className="mt-1 text-sm text-[#5C6F68]">
+              Fatura yükleme ve offline kuyruk işlemleri.
+            </p>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-[220px_auto]">
+            <input
+              value={invoiceOrderId}
+              onChange={(e) => setInvoiceOrderId(e.target.value)}
+              className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+              placeholder={lastOnlineOrderId ? String(lastOnlineOrderId) : 'Sipariş no'}
+              inputMode="numeric"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                className="h-10 px-3 text-xs"
+                onClick={() => void loadInvoicePayload()}
+                disabled={isInvoiceBusy}
+              >
+                {isInvoiceBusy ? 'Yükleniyor...' : 'Faturayı Yükle'}
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-10 px-3 text-xs"
+                onClick={printA4Invoice}
+                disabled={!invoicePayload}
+              >
+                A4 Yazdır / PDF
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#E5E5E0] bg-white px-3 py-3 text-sm text-[#1A3C34]">
+            {invoicePayload ? (
+              <div className="space-y-1.5">
+                <p className="font-semibold">
+                  {invoicePayload.business.name} - {invoicePayload.invoiceNo}
+                </p>
+                <p>Sipariş #{invoicePayload.order.id} • Müşteri: {invoicePayload.customer.name}</p>
+                <p>
+                  Toplam: {formatMoney(invoicePayload.totals.totalAmountCents)} • Ödenen: {formatMoney(invoicePayload.totals.paidAmountCents)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[#5C5C5C]">Fatura verisi yüklenmedi.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-[#E5E5E0] bg-white px-3 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Offline Kuyruk Detayı
+              </p>
+              <Button
+                size="sm"
+                className="h-7 px-2 text-[10px]"
+                onClick={() => void syncQueuedSales({ force: true })}
+                disabled={!isOnline || !hasQueue || isSyncing}
+              >
+                {isSyncing ? 'Sync...' : 'Kuyruğu Sync Et'}
+              </Button>
+            </div>
+            {queueItems.length === 0 ? (
+              <p className="text-sm text-[#5C5C5C]">Bekleyen satış yok.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E5E5E0] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5C5C5C]">
+                      <th className="py-2 pr-3">Order ID</th>
+                      <th className="py-2 pr-3">Retry</th>
+                      <th className="py-2 pr-3">Next Retry</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2">Aksiyon</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queueItems.map((item) => (
+                      <tr key={item.id} className="border-b border-[#F0F0EA]">
+                        <td className="py-2 pr-3 text-xs text-[#1A3C34]">
+                          {item.payload.idempotencyKey ?? `Q-${item.id.slice(0, 8)}`}
+                        </td>
+                        <td className="py-2 pr-3 text-xs text-[#1A3C34]">{item.attempts}</td>
+                        <td className="py-2 pr-3 text-xs text-[#5C5C5C]">{formatQueueDate(item.nextRetryAt)}</td>
+                        <td className="py-2 pr-3 text-xs font-semibold text-[#1A3C34]">
+                          {resolveQueueStatus(item)}
+                        </td>
+                        <td className="py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-[10px]"
+                              onClick={() => void retrySingleQueueItem(item)}
+                              disabled={isSyncing || queueActionItemId === item.id}
+                            >
+                              Tekrar Dene
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 px-2 text-[10px]"
+                              onClick={() => void removeSingleQueueItem(item)}
+                              disabled={isSyncing || queueActionItemId === item.id}
+                            >
+                              Kaldır
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
-        <div className="surface-panel p-6">
-          <h2 className="text-xl font-semibold text-[#1A3C34]">Ayarlar</h2>
-          <p className="mt-2 text-[#5C6F68]">Ayarlar içeriği buraya eklenecektir.</p>
+        <div className="surface-panel space-y-4 p-6">
+          <div>
+            <h2 className="text-xl font-semibold text-[#1A3C34]">POS Ayarları</h2>
+            <p className="mt-1 text-sm text-[#5C6F68]">
+              Fiş bilgileri ve yazdırma kontrolleri.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-[#E5E5E0] bg-white px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Fiş Ayarları
+              </p>
+              <div className="mt-3 grid gap-3">
+                <label className="text-sm text-[#1A3C34]">
+                  İşletme adı
+                  <input
+                    value={receiptSettings.businessName}
+                    onChange={(e) =>
+                      setReceiptSettings((prev) => ({
+                        ...prev,
+                        businessName: e.target.value,
+                      }))
+                    }
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                  />
+                </label>
+                <label className="text-sm text-[#1A3C34]">
+                  Alt not
+                  <input
+                    value={receiptSettings.footerNote}
+                    onChange={(e) =>
+                      setReceiptSettings((prev) => ({
+                        ...prev,
+                        footerNote: e.target.value,
+                      }))
+                    }
+                    className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] px-3 text-sm text-[#1A3C34]"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" className="h-9 px-3 text-xs" onClick={saveReceiptSettings}>
+                    Ayarları Kaydet
+                  </Button>
+                  <Button variant="secondary" className="h-9 px-3 text-xs" onClick={() => void printReceipt()} disabled={!lastReceipt}>
+                    Son Fişi Yazdır
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]/70">
+                Fiş Önizleme
+              </p>
+              {lastReceipt ? (
+                <div className="mt-3 space-y-2 text-sm text-[#1A3C34]">
+                  <p className="font-semibold">{receiptSettings.businessName}</p>
+                  <p>Fiş: {lastReceipt.saleId}</p>
+                  <p>Tarih: {new Date(lastReceipt.createdAt).toLocaleString('tr-TR')}</p>
+                  <p>
+                    Müşteri: {typeof lastReceipt.customerId === 'number' ? lastReceipt.customerId : 'Misafir'}
+                  </p>
+                  <p className="font-semibold">Toplam: {formatMoney(lastReceipt.totalAmountCents)}</p>
+                  <p className="text-xs text-[#5C5C5C]">
+                    {lastReceipt.isOfflineQueued ? 'Offline kayıt - senkron bekliyor' : 'Online satış'}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-[#5C5C5C]">Henüz fiş yok.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
