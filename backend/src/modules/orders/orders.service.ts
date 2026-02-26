@@ -364,6 +364,10 @@ export class OrdersService {
     return CommerceChannel.MANUAL;
   }
 
+  private isOrderSource(value: string): value is OrderSource {
+    return Object.values(OrderSource).includes(value as OrderSource);
+  }
+
   private buildOrderCreateIdempotencyHash(
     currentUser: JwtPayload,
     payload: CreateOrderDto,
@@ -1090,9 +1094,10 @@ export class OrdersService {
     const sourceRaw = (params?.source ?? '').trim().toUpperCase();
     const statusKeyRaw = (params?.statusKey ?? '').trim().toUpperCase();
 
-    const isValidSource =
-      sourceRaw.length > 0 &&
-      Object.values(OrderSource).includes(sourceRaw);
+    const sourceFilter =
+      sourceRaw.length > 0 && this.isOrderSource(sourceRaw)
+        ? sourceRaw
+        : undefined;
 
     const requestedCustomerId =
       typeof params?.customerId === 'number' &&
@@ -1149,7 +1154,7 @@ export class OrdersService {
         businessId,
         customerId,
         deletedAt: null,
-        ...(isValidSource ? { source: sourceRaw as OrderSource } : {}),
+        ...(sourceFilter ? { source: sourceFilter } : {}),
         ...(statusKeyRaw ? { status: { key: statusKeyRaw } } : {}),
         ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
       };
@@ -1194,7 +1199,7 @@ export class OrdersService {
     const baseWhere = await this.buildOrderReadScopeWhere(currentUser);
     const where: Prisma.OrderWhereInput = {
       ...baseWhere,
-      ...(isValidSource ? { source: sourceRaw as OrderSource } : {}),
+      ...(sourceFilter ? { source: sourceFilter } : {}),
       ...(statusKeyRaw ? { status: { key: statusKeyRaw } } : {}),
       ...(requestedCustomerId && requestedCustomerId > 0
         ? { customerId: requestedCustomerId }
@@ -1254,19 +1259,19 @@ export class OrdersService {
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
 
-    const source = (params?.source ?? '').trim();
-
-    const isValidSource =
-      source.length > 0 &&
-      Object.values(OrderSource).includes(source);
+    const sourceRaw = (params?.source ?? '').trim();
+    const sourceFilter =
+      sourceRaw.length > 0 && this.isOrderSource(sourceRaw)
+        ? sourceRaw
+        : undefined;
 
     const where: {
       businessId: number;
       deletedAt: null;
       source?: OrderSource;
     } = { businessId, deletedAt: null };
-    if (isValidSource) {
-      where.source = source as OrderSource;
+    if (sourceFilter) {
+      where.source = sourceFilter;
     }
 
     const total = await this.prisma.order.count({ where });
