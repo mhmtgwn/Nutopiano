@@ -2787,48 +2787,35 @@ export default function PosPage() {
   }
 
   return (
-    <div className="pos-redesign mx-auto flex w-full max-w-[1560px] flex-col gap-0 bg-transparent">
+    <div className="pos-redesign flex w-full flex-col gap-0 bg-[#F6F7F3]">
       {/* ── Sticky POS Topbar ── */}
       <header className="sticky top-0 z-40 border-b border-[#E5E5E0] bg-white px-4 py-2 text-[#1A3C34] shadow-xs md:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
-            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
-              Baglanti: {isOnline ? 'Online' : 'Offline'}
-            </span>
-            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
-              Kuyruk: {queueCount}
-            </span>
-            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
-              {activeShift ? `Kasa: ${activeShift.registerCode}` : 'Vardiya kapali'}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isOnline ? null : (
-              <Button
-                title="Kuyrugu Senkronize Et"
-                variant="secondary"
-                className="h-8 rounded-full border border-[#1A3C34]/15 bg-white px-3 text-xs font-semibold text-[#1A3C34] hover:bg-[#1A3C34]/5"
-                onClick={() => void syncQueuedSales({ force: true })}
-                disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
-              >
-                {isSyncing ? 'Sync Ediliyor...' : 'Kuyrugu Sync Et'}
-              </Button>
-            )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!isOnline ? null : (
             <Button
-              title={isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
+              title="Kuyrugu Senkronize Et"
               variant="secondary"
               className="h-8 rounded-full border border-[#1A3C34]/15 bg-white px-3 text-xs font-semibold text-[#1A3C34] hover:bg-[#1A3C34]/5"
-              onClick={() => setIsFocusMode((prev) => !prev)}
+              onClick={() => void syncQueuedSales({ force: true })}
+              disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
             >
-              {isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
+              {isSyncing ? 'Sync Ediliyor...' : 'Kuyrugu Sync Et'}
             </Button>
-          </div>
+          )}
+          <Button
+            title={isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
+            variant="secondary"
+            className="h-8 rounded-full border border-[#1A3C34]/15 bg-white px-3 text-xs font-semibold text-[#1A3C34] hover:bg-[#1A3C34]/5"
+            onClick={() => setIsFocusMode((prev) => !prev)}
+          >
+            {isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
+          </Button>
         </div>
       </header>
 
       {/* ── Tabs Navigation ── */}
       <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white px-4 md:px-6">
-        <nav className="flex w-full gap-6" aria-label="Tabs">
+        <nav className="mx-auto flex w-max gap-6" aria-label="Tabs">
           {[
             { id: 'home', label: 'Satis' },
             { id: 'categories', label: 'Kategoriler' },
@@ -2853,7 +2840,7 @@ export default function PosPage() {
       </div>
 
       {/* ── Main POS Body ── */}
-      <div className={`w-full px-4 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
           {isAuthed ? (
             !activeShift ? (
