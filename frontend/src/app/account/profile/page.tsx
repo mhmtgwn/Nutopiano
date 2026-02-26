@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import {
+  CreditCard,
+  Heart,
+  Home,
+  LayoutDashboard,
+  MapPin,
+  Shield,
+  type LucideProps,
+} from 'lucide-react';
 
 import Button from '@/components/common/Button';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
 import { getPanelHomePathByRole, getPanelLabelByRole } from '@/lib/role-routing';
 
@@ -37,19 +46,30 @@ interface ProfileResponse {
 }
 
 type TabType = 'profile' | 'security' | 'admin';
+type MenuItem = {
+  kind: 'tab' | 'link';
+  label: string;
+  icon: ComponentType<LucideProps>;
+  tab?: TabType;
+  href?: string;
+};
 
 export default function ProfilePage() {
   const { user, status } = useAppSelector((state) => state.user);
   const dispatch = useAppDispatch();
   const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [taxNumber, setTaxNumber] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,8 +99,7 @@ export default function ProfilePage() {
           }),
         );
       } catch (error: unknown) {
-        const message = resolveApiErrorMessage(error, 'Profil bilgileri alınamadı.');
-
+        const message = resolveApiErrorMessage(error, 'Profil bilgileri alinamadi.');
         dispatch(setAuthError(message));
         toast.error(message);
       } finally {
@@ -88,46 +107,26 @@ export default function ProfilePage() {
       }
     };
 
-    fetchProfile();
+    void fetchProfile();
   }, [user, dispatch]);
 
   useEffect(() => {
     if (!user) return;
-    setName(user.name ?? '');
+    const parts = (user.name ?? '').trim().split(/\s+/).filter(Boolean);
+    setFirstName(parts[0] ?? '');
+    setLastName(parts.slice(1).join(' '));
     setPhone(user.phone ?? '');
     setEmail(user.email ?? '');
+    setCompanyName(user.businessId ? `Isletme #${user.businessId}` : '');
+    setTaxNumber('');
   }, [user]);
-
-  const handleLogout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch {
-      // ignore
-    } finally {
-      dispatch(logout());
-      toast.success('Çıkış yapıldı.');
-      router.push('/');
-    }
-  };
 
   const isLoading = isLoadingProfile || status === 'authenticating';
 
   if (isLoading && !user) {
     return (
-      <div className="min-h-[calc(100vh-140px)] bg-transparent">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
-          <header className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-              Hesap
-            </p>
-            <h1 className="text-3xl font-serif leading-tight text-[var(--primary-800)] md:text-4xl">
-              Profil
-            </h1>
-            <p className="text-sm text-[var(--neutral-600)]">
-              Profil bilgileriniz yükleniyor...
-            </p>
-          </header>
-        </div>
+      <div className="rounded-[24px] border border-[#e3d9c9] bg-[#fbf7f0] p-6">
+        <p className="text-sm text-[#6f6a60]">Profil bilgileri yukleniyor...</p>
       </div>
     );
   }
@@ -139,12 +138,14 @@ export default function ProfilePage() {
   const hasBackofficePanel = user.role !== 'CUSTOMER';
 
   const handleSaveProfile = async () => {
+    const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim();
+
     try {
       setIsSavingProfile(true);
       dispatch(startAuth());
 
       const response = await api.patch<ProfileResponse>('/auth/profile', {
-        name: name.trim() || undefined,
+        name: fullName || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
       });
@@ -165,9 +166,9 @@ export default function ProfilePage() {
         }),
       );
 
-      toast.success('Profil güncellendi.');
+      toast.success('Profil guncellendi.');
     } catch (error: unknown) {
-      const message = resolveApiErrorMessage(error, 'Profil güncellenemedi.');
+      const message = resolveApiErrorMessage(error, 'Profil guncellenemedi.');
       dispatch(setAuthError(message));
       toast.error(message);
     } finally {
@@ -181,27 +182,27 @@ export default function ProfilePage() {
     const trimmedConfirm = confirmPassword.trim();
 
     if (!trimmedCurrent) {
-      toast.error('Mevcut şifrenizi girin.');
+      toast.error('Mevcut sifrenizi girin.');
       return;
     }
 
     if (!trimmedNew) {
-      toast.error('Yeni şifrenizi girin.');
+      toast.error('Yeni sifrenizi girin.');
       return;
     }
 
     if (!trimmedConfirm) {
-      toast.error('Yeni şifrenizi onaylayın.');
+      toast.error('Yeni sifrenizi dogrulayin.');
       return;
     }
 
     if (trimmedNew !== trimmedConfirm) {
-      toast.error('Yeni şifre ve doğrulama şifresi eşleşmemektedir.');
+      toast.error('Yeni sifre ve dogrulama sifresi eslesmiyor.');
       return;
     }
 
     if (trimmedNew.length < 6) {
-      toast.error('Yeni şifre en az 6 karakter olmalıdır.');
+      toast.error('Yeni sifre en az 6 karakter olmali.');
       return;
     }
 
@@ -215,9 +216,9 @@ export default function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      toast.success('Şifre güncellendi.');
+      toast.success('Sifre guncellendi.');
     } catch (error: unknown) {
-      const message = resolveApiErrorMessage(error, 'Şifre güncellenemedi.');
+      const message = resolveApiErrorMessage(error, 'Sifre guncellenemedi.');
       dispatch(setAuthError(message));
       toast.error(message);
     } finally {
@@ -225,276 +226,194 @@ export default function ProfilePage() {
     }
   };
 
-  return (
-    <div className="min-h-[calc(100vh-140px)] bg-transparent">
-      <div className="mx-auto flex max-w-6xl flex-col gap-7 px-4 py-8 md:px-6 md:py-10">
-        {/* Header */}
-        <header className="surface-panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-              Hesap
-            </p>
-            <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
-              Profilim
-            </h1>
-          </div>
-          <Button 
-            type="button" 
-            variant="secondary" 
-            onClick={handleLogout}
-          >
-            Çıkış yap
-          </Button>
-        </header>
+  const menuItems: MenuItem[] = [
+    { kind: 'tab', tab: 'profile', label: 'Hesap Bilgileri', icon: Home },
+    { kind: 'tab', tab: 'security', label: 'Guvenlik', icon: Shield },
+    ...(hasBackofficePanel
+      ? [
+          {
+            kind: 'tab' as const,
+            tab: 'admin' as const,
+            label: getPanelLabelByRole(user.role),
+            icon: LayoutDashboard,
+          },
+        ]
+      : []),
+    { kind: 'link', href: '/account/orders', label: 'Siparislerim', icon: CreditCard },
+    { kind: 'link', href: '/account/favorites', label: 'Favoriler', icon: Heart },
+    { kind: 'link', href: '/account/addresses', label: 'Adreslerim', icon: MapPin },
+  ];
 
-        {/* Tabs */}
-        <div className="surface-panel-muted p-2">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                activeTab === 'profile'
-                  ? 'bg-[var(--primary-800)] text-white'
-                  : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
-              }`}
-            >
-              Profil
-            </button>
-            <button
-              onClick={() => setActiveTab('security')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                activeTab === 'security'
-                  ? 'bg-[var(--primary-800)] text-white'
-                  : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
-              }`}
-            >
-              Güvenlik
-            </button>
-            {hasBackofficePanel && (
+  return (
+    <div className="rounded-[24px] border border-[#e3d9c9] bg-[#f7f3eb] p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-4xl font-serif leading-none text-[#21443b]">Hesap Bilgileri</h1>
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#ddd3c4] bg-[#f7f3eb] px-6 text-sm font-semibold text-[#21443b] shadow-[0_6px_16px_rgba(26,60,52,0.08)] transition hover:bg-[#fffdfa]"
+        >
+          Profili Duzenle
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[240px_1fr]">
+        <aside className="rounded-[20px] border border-[#e7dfd2] bg-[#fbf8f2] p-2">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = item.kind === 'tab' && item.tab === activeTab;
+            return (
               <button
-                onClick={() => setActiveTab('admin')}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  activeTab === 'admin'
-                    ? 'bg-[var(--primary-800)] text-white'
-                    : 'text-[var(--neutral-600)] hover:bg-white hover:text-[var(--primary-800)]'
+                key={item.kind === 'tab' ? `tab-${item.tab}` : `link-${item.href}`}
+                type="button"
+                onClick={() => {
+                  if (item.kind === 'tab' && item.tab) {
+                    setActiveTab(item.tab);
+                    return;
+                  }
+
+                  if (item.kind === 'link' && item.href) {
+                    router.push(item.href);
+                  }
+                }}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                  active
+                    ? 'bg-[#efebe3] text-[#21443b]'
+                    : 'text-[#756f63] hover:bg-[#f4efe7] hover:text-[#21443b]'
                 }`}
               >
-                Panel
+                <Icon className="h-4 w-4" />
+                {item.label}
               </button>
-            )}
-          </div>
-        </div>
+            );
+          })}
+        </aside>
 
-        {/* Tab Content */}
-        <div>
-          {/* Profile Tab */}
+        <section className="rounded-[20px] border border-[#e7dfd2] bg-white p-4 md:p-5">
           {activeTab === 'profile' && (
-            <div className="space-y-6">
-              <section className="surface-panel-muted p-5 md:p-6">
-                <div className="mb-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                    Bilgileri Görüntüle
-                  </p>
-                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
-                    Hesap Bilgilerim
-                  </p>
-                </div>
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                  <span>Ad</span>
+                  <input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                  <span>Soyad</span>
+                  <input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                  <span>E-posta</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                  <span>Telefon</span>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                  <span>Sirket Adi</span>
+                  <input
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-[#5f584d] md:col-span-2">
+                  <span>Vergi No</span>
+                  <input
+                    value={taxNumber}
+                    onChange={(e) => setTaxNumber(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                  />
+                </label>
+              </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Ad Soyad
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
-                      {user.name ?? '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Telefon
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
-                      {user.phone ?? '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Email
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
-                      {user.email ?? '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Rol
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-[var(--primary-800)]">
-                      {user.role}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              <section className="surface-panel p-5 md:p-6">
-                <div className="mb-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                    Düzenle
-                  </p>
-                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
-                    Bilgilerimi Güncelle
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <label htmlFor="profileName" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Ad Soyad
-                    </label>
-                    <input
-                      id="profileName"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                      placeholder="Ad Soyad"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="profilePhone" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Telefon
-                    </label>
-                    <input
-                      id="profilePhone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                      placeholder="5XXXXXXXXX"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="profileEmail" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                      Email
-                    </label>
-                    <input
-                      id="profileEmail"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                      placeholder="ornek@domain.com"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    onClick={handleSaveProfile}
-                    disabled={isSavingProfile}
-                    isLoading={isSavingProfile}
-                  >
-                    Kaydet
-                  </Button>
-                </div>
-              </section>
+              <div className="border-t border-[#ece5d9] pt-4">
+                <Button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  isLoading={isSavingProfile}
+                  className="mx-auto flex h-11 min-w-[180px] rounded-2xl"
+                >
+                  Guncelle
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Security Tab */}
           {activeTab === 'security' && (
-            <section className="surface-panel p-5 md:p-6">
-              <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                  Güvenlik
-                </p>
-                <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
-                  Şifre Değiştir
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 space-y-2">
-                  <label htmlFor="currentPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                    Mevcut Şifre
-                  </label>
-                  <input
-                    id="currentPassword"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                    placeholder="••••••"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="newPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                    Yeni Şifre
-                  </label>
-                  <input
-                    id="newPassword"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                    placeholder="••••••"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="confirmPassword" className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                    Yeni Şifre (Doğrula)
-                  </label>
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-11 w-full rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--primary-800)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
-                    placeholder="••••••"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  onClick={handleChangePassword}
-                  disabled={isChangingPassword}
-                  isLoading={isChangingPassword}
-                >
-                  Şifreyi Güncelle
-                </Button>
-              </div>
-            </section>
+            <div className="space-y-3">
+              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                <span>Mevcut Sifre</span>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                <span>Yeni Sifre</span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-[#5f584d]">
+                <span>Yeni Sifre (Dogrula)</span>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#e2d9ca] bg-[#fdfbf7] px-3 text-base text-[#21443b] outline-none transition focus:border-[#21443b]/40"
+                />
+              </label>
+              <Button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={isChangingPassword}
+                isLoading={isChangingPassword}
+                className="mt-2 h-11 rounded-2xl"
+              >
+                Sifreyi Guncelle
+              </Button>
+            </div>
           )}
 
-          {/* Admin Tab */}
           {activeTab === 'admin' && hasBackofficePanel && (
-            <section className="surface-panel-muted p-5 md:p-6">
-              <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
-                  Panel
-                </p>
-                <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
-                  {getPanelLabelByRole(user.role)}
-                </p>
-                <p className="mt-2 text-sm text-[var(--neutral-600)]">
-                  Rolünüze ait operasyon arayüzüne geçiş yapın.
-                </p>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button 
-                  type="button" 
-                  onClick={() => router.push(getPanelHomePathByRole(user.role))}
-                >
-                  Panele Git
-                </Button>
-              </div>
-            </section>
+            <div className="space-y-3">
+              <p className="text-sm text-[#6b655b]">
+                Rolunuze ait operasyon arayuzune gecis yapabilirsiniz.
+              </p>
+              <Button
+                type="button"
+                onClick={() => router.push(getPanelHomePathByRole(user.role))}
+                className="h-11 rounded-2xl"
+              >
+                Panele Git
+              </Button>
+            </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );
