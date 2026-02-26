@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Bolt,
   ClipboardList,
   CreditCard,
   Heart,
@@ -204,29 +203,7 @@ export default function Header() {
       </header>
 
       <header className="sticky top-0 z-40 hidden border-b border-[var(--neutral-200)] bg-white/80 backdrop-blur-xl shadow-[var(--shadow-sm)] md:block">
-        <div className="border-b border-[var(--neutral-200)]/80 bg-[var(--brand-ink)] text-[var(--brand-sand)]">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
-            <p className="flex items-center gap-2 text-[var(--brand-sand)]/90">
-              <Bolt className="h-3.5 w-3.5" />
-              Canlı stok ve hızlı POS akışı
-            </p>
-            <div className="flex items-center gap-4">
-              <Link href="/categories" className="text-[var(--brand-sand)]/80 transition hover:text-white">
-                Shop
-              </Link>
-              {isPosRoleAllowed(user?.role) && (
-                <Link href="/pos" className="text-[var(--brand-sand)]/80 transition hover:text-white">
-                  POS Terminal
-                </Link>
-              )}
-              <Link href={panelHref} className="text-[var(--brand-sand)]/80 transition hover:text-white">
-                {panelLabel}
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3.5">
           <div className="flex min-w-0 items-center gap-8">
             <Link href="/" aria-label="Nutopiano anasayfa" className="flex shrink-0 items-center gap-3 transition-opacity hover:opacity-80">
               <Image
