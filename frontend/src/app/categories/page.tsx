@@ -83,7 +83,7 @@ export default async function CategoriesLandingPage() {
 
   return (
     <div className="min-h-[calc(100vh-140px)] bg-white">
-      <div className="px-4 py-8 md:px-8 md:py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-col gap-6">
           <section className="space-y-4">
             <Breadcrumbs

@@ -2789,8 +2789,8 @@ export default function PosPage() {
   return (
     <div className="pos-redesign flex w-full flex-col gap-0 bg-[#F6F7F3]">
       {/* ── Tabs Navigation ── */}
-      <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white px-4 md:px-6">
-        <nav className="mx-auto flex w-max gap-6" aria-label="Tabs">
+      <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white">
+        <nav className="mx-auto flex w-max gap-6 px-4 md:px-6" aria-label="Tabs">
           {[
             { id: 'home', label: 'Satis' },
             { id: 'categories', label: 'Kategoriler' },
@@ -2815,7 +2815,7 @@ export default function PosPage() {
       </div>
 
       {/* ── Main POS Body ── */}
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
           {isAuthed ? (
             !activeShift ? (
@@ -4230,7 +4230,7 @@ export default function PosPage() {
       </div>
 
       {/* Tab Contents */}
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'categories' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'categories' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -4723,7 +4723,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'customers' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'customers' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -4825,7 +4825,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'finance' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'finance' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">Finans ve Analitik</h2>
@@ -4948,7 +4948,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">Sipariş ve Kuyruk Yönetimi</h2>
@@ -5071,7 +5071,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">POS Ayarları</h2>

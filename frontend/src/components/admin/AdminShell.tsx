@@ -306,7 +306,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto bg-transparent">
-          <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+          <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
             <div className="surface-panel p-4 md:p-6">
             {children}
             </div>
