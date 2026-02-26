@@ -720,6 +720,7 @@ export default function PosPage() {
     fetchProfile();
   }, [user, dispatch, router]);
 
+  const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'customers' | 'finance' | 'orders' | 'settings'>('home');
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -2311,8 +2312,33 @@ export default function PosPage() {
         ) : null}
       </header>
 
+      {/* ── Tabs Navigation ── */}
+      <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white px-4 md:px-6">
+        <nav className="mx-auto flex w-full max-w-[1440px] gap-6" aria-label="Tabs">
+          {[
+            { id: 'home', label: 'Satış Ekranı' },
+            { id: 'categories', label: 'Kategoriler' },
+            { id: 'customers', label: 'Müşteriler' },
+            { id: 'finance', label: 'Finans' },
+            { id: 'orders', label: 'Siparişler' },
+            { id: 'settings', label: 'Ayarlar' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${activeTab === tab.id
+                  ? 'border-[#1A3C34] text-[#1A3C34]'
+                  : 'border-transparent text-[#5C6F68] hover:border-[#1A3C34]/30 hover:text-[#1A3C34]'
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
       {/* ── Main POS Body ── */}
-      <div className="mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6">
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article className="surface-panel-muted p-4">
@@ -3758,6 +3784,43 @@ export default function PosPage() {
           />
         </div>
       </div>
+
+      {/* Tab Contents */}
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'categories' ? 'block' : 'hidden'}`}>
+        <div className="surface-panel p-6">
+          <h2 className="text-xl font-semibold text-[#1A3C34]">Kategoriler</h2>
+          <p className="mt-2 text-[#5C6F68]">Kategori yönetimi içeriği buraya eklenecektir.</p>
+        </div>
+      </div>
+
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'customers' ? 'block' : 'hidden'}`}>
+        <div className="surface-panel p-6">
+          <h2 className="text-xl font-semibold text-[#1A3C34]">Müşteriler</h2>
+          <p className="mt-2 text-[#5C6F68]">Müşteri yönetimi içeriği buraya eklenecektir.</p>
+        </div>
+      </div>
+
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'finance' ? 'block' : 'hidden'}`}>
+        <div className="surface-panel p-6">
+          <h2 className="text-xl font-semibold text-[#1A3C34]">Finans</h2>
+          <p className="mt-2 text-[#5C6F68]">Finans yönetimi içeriği buraya eklenecektir.</p>
+        </div>
+      </div>
+
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
+        <div className="surface-panel p-6">
+          <h2 className="text-xl font-semibold text-[#1A3C34]">Siparişler</h2>
+          <p className="mt-2 text-[#5C6F68]">Sipariş yönetimi içeriği buraya eklenecektir.</p>
+        </div>
+      </div>
+
+      <div className={`mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
+        <div className="surface-panel p-6">
+          <h2 className="text-xl font-semibold text-[#1A3C34]">Ayarlar</h2>
+          <p className="mt-2 text-[#5C6F68]">Ayarlar içeriği buraya eklenecektir.</p>
+        </div>
+      </div>
+
     </div>
   );
 }
