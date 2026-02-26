@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Wifi, WifiOff, Briefcase, RefreshCw, Maximize, Minimize, AlertCircle, CheckCircle2 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import {
@@ -1273,13 +1274,6 @@ export default function PosPage() {
       0,
     );
   }, [salesReport]);
-  const onlineBadgeClass = useMemo(
-    () =>
-      isOnline
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        : 'border-amber-200 bg-amber-50 text-amber-800',
-    [isOnline],
-  );
   const queueSeverityClass = useMemo(() => {
     if (queueCount >= 20) return 'border-red-200 bg-red-50 text-red-800';
     if (queueCount >= 8) return 'border-amber-200 bg-amber-50 text-amber-800';
@@ -2260,54 +2254,59 @@ export default function PosPage() {
   return (
     <div className="pos-redesign flex w-full flex-col gap-0 bg-transparent">
       {/* ── Sticky POS Topbar ── */}
-      <header className="sticky top-0 z-40 border-b border-[#163D34]/30 bg-gradient-to-r from-[#0F2D27] via-[#173F36] to-[#0F2D27] px-4 py-3 text-white shadow-[0_10px_30px_rgba(15,45,39,0.25)] md:px-6">
+      <header className="sticky top-0 z-40 border-b border-[#E5E5E0] bg-white px-4 py-2 text-[#1A3C34] shadow-xs md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#F2D18C]">POS</span>
-              <span className="ml-2 text-sm font-semibold text-white/90">Yonetim Modulu</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1A3C34]/10 text-[#1A3C34]">
+              <span className="text-[10px] font-bold uppercase tracking-widest">POS</span>
             </div>
             {/* Status badges */}
-            <span className="hidden h-5 w-px bg-white/20 sm:block" />
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${onlineBadgeClass}`}>
-              {isOnline ? '● Online' : '● Offline'}
-            </span>
-            <span className="rounded-full border border-white/20 px-2.5 py-0.5 text-[10px] font-semibold text-white/80">
-              {activeShift ? `■ ${activeShift.registerCode}` : '□ Vardiya kapali'}
-            </span>
+            <span className="hidden h-5 w-px bg-[#E5E5E0] sm:block" />
+            <div title={isOnline ? 'Online' : 'Offline'} className={`flex h-8 w-8 items-center justify-center rounded-full ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+              {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+            </div>
+            <div title={activeShift ? `Kasa: ${activeShift.registerCode}` : 'Vardiya kapalı'} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A3C34]/5 text-[#1A3C34]/70">
+              <Briefcase className="h-4 w-4" />
+            </div>
             {hasQueue ? (
-              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${queueSeverityClass}`}>
-                Kuyruk: {queueCount}
-              </span>
+              <div title={`Bekleyen İşlem: ${queueCount}`} className={`flex h-8 items-center justify-center gap-1.5 rounded-full px-3 ${queueSeverityClass}`}>
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-xs font-bold">{queueCount}</span>
+              </div>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!isOnline ? null : (
               <Button
-                className="h-8 rounded-full border border-white/20 bg-white/10 px-3 text-xs text-white hover:bg-white/20"
+                title="Kuyruğu Senkronize Et"
+                variant="secondary"
+                className="flex h-8 w-8 items-center justify-center rounded-full border-transparent bg-[#1A3C34]/5 p-0 text-[#1A3C34] hover:bg-[#1A3C34]/15"
                 onClick={() => void syncQueuedSales({ force: true })}
                 disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
               >
-                {isSyncing ? 'Sync...' : 'Kuyrugu zorla sync et'}
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
               </Button>
             )}
             <Button
+              title={isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Aç'}
               variant="secondary"
-              className="h-8 rounded-full border-white/25 bg-white text-[#163D34] hover:bg-[#f8f2e5]"
+              className="flex h-8 w-8 items-center justify-center rounded-full border-transparent bg-[#1A3C34]/5 p-0 text-[#1A3C34] hover:bg-[#1A3C34]/15"
               onClick={() => setIsFocusMode((prev) => !prev)}
             >
-              {isFocusMode ? 'Focus kapat' : 'Focus'}
+              {isFocusMode ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
             </Button>
           </div>
         </div>
         {!isOnline ? (
-          <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
-            Offline — {queueCount} islem kuyruga alindi.
+          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+            <AlertCircle className="h-3.5 w-3.5" />
+            Offline — {queueCount} işlem kuyruğa alındı.
           </div>
         ) : null}
         {isOnline && showSyncSuccessBanner && recentSyncedCount ? (
-          <div className="mt-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200">
-            {recentSyncedCount} islem basariyla senkronize edildi.
+          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {recentSyncedCount} işlem başarıyla senkronize edildi.
           </div>
         ) : null}
       </header>
@@ -2327,8 +2326,8 @@ export default function PosPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors ${activeTab === tab.id
-                  ? 'border-[#1A3C34] text-[#1A3C34]'
-                  : 'border-transparent text-[#5C6F68] hover:border-[#1A3C34]/30 hover:text-[#1A3C34]'
+                ? 'border-[#1A3C34] text-[#1A3C34]'
+                : 'border-transparent text-[#5C6F68] hover:border-[#1A3C34]/30 hover:text-[#1A3C34]'
                 }`}
             >
               {tab.label}
