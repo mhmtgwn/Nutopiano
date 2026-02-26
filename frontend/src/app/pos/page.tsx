@@ -101,10 +101,18 @@ type PosManageProductRow = {
   id: number;
   categoryId?: number | null;
   name: string;
+  subtitle?: string | null;
   sku?: string | null;
   type: ProductType;
   priceCents: number;
+  description?: string | null;
+  features?: string[];
+  imageUrl?: string | null;
+  images?: string[];
   stock?: number | null;
+  tags?: string[];
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   isPublished?: boolean;
 };
 type PosManageProductsPayload = {
@@ -833,6 +841,9 @@ export default function PosPage() {
   const [canManageCategoryProducts, setCanManageCategoryProducts] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [isCreatingCategoryProduct, setIsCreatingCategoryProduct] = useState(false);
+  const [editingCategoryProductId, setEditingCategoryProductId] = useState<number | null>(null);
+  const [managementBarcodeInput, setManagementBarcodeInput] = useState('');
+  const [isBarcodeProductLookupBusy, setIsBarcodeProductLookupBusy] = useState(false);
   const [categoryProductForm, setCategoryProductForm] =
     useState<PosCategoryProductFormState>(defaultCategoryProductForm);
   const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
@@ -1794,6 +1805,131 @@ export default function PosPage() {
     }
   }, [isAuthed]);
 
+  const fillCategoryProductFormFromExisting = useCallback((product: PosManageProductRow) => {
+    const priceValue =
+      Number.isFinite(product.priceCents) && product.priceCents > 0
+        ? (Math.trunc(product.priceCents) / 100).toFixed(2)
+        : '';
+
+    setEditingCategoryProductId(product.id);
+    setSelectedCategoryId(
+      typeof product.categoryId === 'number' && product.categoryId > 0
+        ? product.categoryId
+        : null,
+    );
+    setManagementBarcodeInput(String(product.sku ?? '').trim());
+    setCategoryProductForm({
+      name: product.name ?? '',
+      subtitle: String(product.subtitle ?? ''),
+      sku: String(product.sku ?? ''),
+      type: product.type ?? 'PHYSICAL',
+      price: priceValue,
+      stock:
+        typeof product.stock === 'number' && Number.isFinite(product.stock)
+          ? String(product.stock)
+          : '',
+      description: String(product.description ?? ''),
+      features: Array.isArray(product.features) ? product.features.join('\n') : '',
+      imageUrl: String(product.imageUrl ?? ''),
+      images: Array.isArray(product.images) ? product.images.join('\n') : '',
+      tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
+      seoTitle: String(product.seoTitle ?? ''),
+      seoDescription: String(product.seoDescription ?? ''),
+      isPublished: Boolean(product.isPublished),
+    });
+  }, []);
+
+  const resetCategoryProductCreateMode = useCallback(() => {
+    setEditingCategoryProductId(null);
+    setManagementBarcodeInput('');
+    setCategoryProductForm(defaultCategoryProductForm);
+  }, []);
+
+  const lookupManagedProductByBarcode = useCallback(
+    async (rawCode: string) => {
+      if (!isAuthed) return;
+      if (!canManageCategoryProducts) {
+        toast.error('Bu hesap urun yonetimi yetkisine sahip degil.');
+        return;
+      }
+
+      const normalizedCode = rawCode.trim();
+      if (!normalizedCode) {
+        toast.error('Barkod/SKU girin.');
+        return;
+      }
+
+      setIsBarcodeProductLookupBusy(true);
+      try {
+        let source = categoryProducts;
+        if (source.length === 0) {
+          const fetchedRows: PosManageProductRow[] = [];
+          let page = 1;
+          let totalPages = 1;
+          do {
+            const res = await api.get<PosManageProductsPayload>('/products/manage', {
+              params: {
+                page,
+                pageSize: 100,
+              },
+            });
+            const payload = res.data;
+            const rows = Array.isArray(payload?.data) ? payload.data : [];
+            fetchedRows.push(...rows);
+            const metaTotalPages = Number(payload?.meta?.totalPages ?? 1);
+            totalPages =
+              Number.isFinite(metaTotalPages) && metaTotalPages > 0
+                ? Math.trunc(metaTotalPages)
+                : 1;
+            page += 1;
+          } while (page <= totalPages && page <= 20);
+
+          source = fetchedRows;
+          setCategoryProducts(fetchedRows);
+        }
+
+        const normalizedLower = normalizedCode.toLowerCase();
+        const exactMatches = source.filter(
+          (row) =>
+            String(row.sku ?? '')
+              .trim()
+              .toLowerCase() === normalizedLower,
+        );
+
+        if (exactMatches.length === 0) {
+          setEditingCategoryProductId(null);
+          setManagementBarcodeInput(normalizedCode);
+          setCategoryProductForm((prev) => ({
+            ...prev,
+            sku: normalizedCode,
+          }));
+          toast('Barkod bulunamadi. Yeni urun olusturma moduna gecildi.');
+          return;
+        }
+
+        const selected = exactMatches[0];
+        fillCategoryProductFormFromExisting(selected);
+        if (exactMatches.length > 1) {
+          toast.success(
+            `Barkod eslesti. ${exactMatches.length} kayittan ilk urun duzenleme icin acildi.`,
+          );
+        } else {
+          toast.success(`Barkod eslesti: #${selected.id} ${selected.name}`);
+        }
+      } catch (error) {
+        toast.error(resolveApiErrorMessage(error, 'Barkod ile urun aranirken hata olustu.'));
+      } finally {
+        setIsBarcodeProductLookupBusy(false);
+      }
+    },
+    [
+      canManageCategoryProducts,
+      categoryProducts,
+      fillCategoryProductFormFromExisting,
+      isAuthed,
+    ],
+  );
+
   const createProductInSelectedCategory = useCallback(async () => {
     if (!isAuthed) return;
     if (!canManageCategoryProducts) {
@@ -1874,6 +2010,8 @@ export default function PosPage() {
         seoDescription: seoDescription || undefined,
         isPublished: categoryProductForm.isPublished,
       });
+      setEditingCategoryProductId(null);
+      setManagementBarcodeInput('');
       setCategoryProductForm(defaultCategoryProductForm);
       toast.success('Urun kategoriye eklendi.');
       await loadCategoryProducts();
@@ -1885,6 +2023,106 @@ export default function PosPage() {
   }, [
     canManageCategoryProducts,
     categoryProductForm,
+    isAuthed,
+    loadCategoryProducts,
+    selectedCategoryId,
+  ]);
+
+  const updateCategoryProductFromForm = useCallback(async () => {
+    if (!isAuthed) return;
+    if (!canManageCategoryProducts) {
+      toast.error('Bu hesap urun yonetimi yetkisine sahip degil.');
+      return;
+    }
+    if (!editingCategoryProductId || editingCategoryProductId <= 0) {
+      toast.error('Guncellenecek urun secili degil.');
+      return;
+    }
+    if (!selectedCategoryId) {
+      toast.error('Kategori secimi zorunlu.');
+      return;
+    }
+
+    const name = categoryProductForm.name.trim();
+    const subtitle = categoryProductForm.subtitle.trim();
+    const sku = categoryProductForm.sku.trim();
+    const priceCents = parsePriceInputToCents(categoryProductForm.price);
+    const stockRaw = categoryProductForm.stock.trim();
+    const stock = stockRaw === '' ? undefined : Number(stockRaw);
+    const description = categoryProductForm.description.trim();
+    const features = categoryProductForm.features
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const imageUrl = categoryProductForm.imageUrl.trim();
+    const images = categoryProductForm.images
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const tags = categoryProductForm.tags
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const seoTitle = categoryProductForm.seoTitle.trim();
+    const seoDescription = categoryProductForm.seoDescription.trim();
+
+    if (!name) {
+      toast.error('Urun adi zorunlu.');
+      return;
+    }
+    if (!Number.isFinite(priceCents) || (priceCents ?? 0) <= 0) {
+      toast.error('Fiyat gecerli formatta olmali (orn. 1499.90).');
+      return;
+    }
+    if (stock !== undefined && (!Number.isFinite(stock) || stock < 0)) {
+      toast.error('Stok 0 veya daha buyuk olmali.');
+      return;
+    }
+    const validateHttpUrl = (raw: string) => {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('invalid-url-protocol');
+      }
+    };
+
+    try {
+      if (imageUrl) validateHttpUrl(imageUrl);
+      for (const image of images) validateHttpUrl(image);
+    } catch {
+      toast.error('Gorsel URL alanlari gecerli olmali (http/https).');
+      return;
+    }
+
+    setIsCreatingCategoryProduct(true);
+    try {
+      await api.patch(`/products/${editingCategoryProductId}`, {
+        name,
+        subtitle: subtitle || undefined,
+        sku: sku || undefined,
+        categoryId: selectedCategoryId,
+        type: categoryProductForm.type,
+        price: String(Math.trunc(priceCents ?? 0)),
+        stock: stock === undefined ? undefined : Math.trunc(stock),
+        description: description || undefined,
+        features: features.length > 0 ? features : undefined,
+        imageUrl: imageUrl || undefined,
+        images: images.length > 0 ? images : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        seoTitle: seoTitle || undefined,
+        seoDescription: seoDescription || undefined,
+        isPublished: categoryProductForm.isPublished,
+      });
+      toast.success(`Urun guncellendi (#${editingCategoryProductId}).`);
+      await loadCategoryProducts();
+    } catch (error) {
+      toast.error(resolveApiErrorMessage(error, 'Urun guncellenemedi.'));
+    } finally {
+      setIsCreatingCategoryProduct(false);
+    }
+  }, [
+    canManageCategoryProducts,
+    categoryProductForm,
+    editingCategoryProductId,
     isAuthed,
     loadCategoryProducts,
     selectedCategoryId,
@@ -4181,6 +4419,57 @@ export default function PosPage() {
                     {selectedCategoryName ?? 'Kategori secin'}
                   </span>
                 </div>
+                <div className="mt-3 rounded-lg border border-[#E5E5E0] bg-[#FAFAF8] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/80">
+                      Barkod / SKU ile Hizli Duzenleme
+                    </p>
+                    {editingCategoryProductId ? (
+                      <span className="rounded-full border border-[#1A3C34]/20 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#1A3C34]">
+                        Guncelleme Modu • #{editingCategoryProductId}
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-[#D9D9D3] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#5C5C5C]">
+                        Yeni Urun Modu
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                    <input
+                      value={managementBarcodeInput}
+                      onChange={(e) => setManagementBarcodeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void lookupManagedProductByBarcode(managementBarcodeInput);
+                        }
+                      }}
+                      className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="Barkod okutun veya SKU yazin"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 px-3 text-xs"
+                      onClick={() => void lookupManagedProductByBarcode(managementBarcodeInput)}
+                      disabled={isBarcodeProductLookupBusy || !canManageCategoryProducts}
+                    >
+                      {isBarcodeProductLookupBusy ? 'Araniyor...' : 'Barkoddan Getir'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 px-3 text-xs"
+                      onClick={resetCategoryProductCreateMode}
+                      disabled={isCreatingCategoryProduct}
+                    >
+                      Formu Temizle
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[#5C5C5C]">
+                    Okutulan barkod kayitliysa form otomatik dolar ve urunu hizlica guncelleyebilirsiniz.
+                  </p>
+                </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
                     Kategori
@@ -4393,10 +4682,16 @@ export default function PosPage() {
                   <Button
                     type="button"
                     className="h-9 px-4 text-xs"
-                    onClick={() => void createProductInSelectedCategory()}
+                    onClick={() =>
+                      void (editingCategoryProductId
+                        ? updateCategoryProductFromForm()
+                        : createProductInSelectedCategory())
+                    }
                     disabled={isCreatingCategoryProduct || !canManageCategoryProducts}
                   >
-                    {isCreatingCategoryProduct ? 'Ekleniyor...' : 'Urun Ekle'}
+                    {isCreatingCategoryProduct
+                      ? (editingCategoryProductId ? 'Guncelleniyor...' : 'Ekleniyor...')
+                      : (editingCategoryProductId ? 'Urunu Guncelle' : 'Urun Ekle')}
                   </Button>
                 </div>
                 {!canManageCategoryProducts ? (
@@ -4443,24 +4738,34 @@ export default function PosPage() {
                             {formatMoney(row.priceCents)}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 px-3 text-[11px]"
-                          onClick={() =>
-                            selectProduct({
-                              type: 'PRODUCT',
-                              productId: row.id,
-                              variantId: null,
-                              name: row.name,
-                              sku: row.sku,
-                              priceCents: row.priceCents,
-                              stock: row.stock ?? null,
-                            })
-                          }
-                        >
-                          Sepete Ekle
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-8 px-3 text-[11px]"
+                            onClick={() => fillCategoryProductFormFromExisting(row)}
+                          >
+                            Duzenle
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-8 px-3 text-[11px]"
+                            onClick={() =>
+                              selectProduct({
+                                type: 'PRODUCT',
+                                productId: row.id,
+                                variantId: null,
+                                name: row.name,
+                                sku: row.sku,
+                                priceCents: row.priceCents,
+                                stock: row.stock ?? null,
+                              })
+                            }
+                          >
+                            Sepete Ekle
+                          </Button>
+                        </div>
                       </div>
                     ))
                   ) : (
