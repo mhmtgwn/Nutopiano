@@ -90,6 +90,32 @@ type PosProductSearchRow = {
   priceCents: number;
   stock?: number | null;
 };
+type ProductType = 'PHYSICAL' | 'SERVICE' | 'WEIGHT' | 'CUSTOM';
+type PosCategoryTreeNode = {
+  id: number;
+  name: string;
+  parentId?: number | null;
+  children?: PosCategoryTreeNode[];
+};
+type PosManageProductRow = {
+  id: number;
+  categoryId?: number | null;
+  name: string;
+  sku?: string | null;
+  type: ProductType;
+  priceCents: number;
+  stock?: number | null;
+  isPublished?: boolean;
+};
+type PosManageProductsPayload = {
+  data: PosManageProductRow[];
+  meta?: {
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    totalPages?: number;
+  };
+};
 type PosCartDraftItem = {
   key: string;
   productId: number;
@@ -304,6 +330,20 @@ const createIdempotencyKey = (prefix: string) => {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const flattenCategoryTree = (
+  tree: PosCategoryTreeNode[],
+  level = 0,
+): Array<{ id: number; name: string; level: number }> => {
+  const rows: Array<{ id: number; name: string; level: number }> = [];
+  for (const node of tree) {
+    rows.push({ id: node.id, name: node.name, level });
+    if (node.children?.length) {
+      rows.push(...flattenCategoryTree(node.children, level + 1));
+    }
+  }
+  return rows;
 };
 
 const formatMoney = (amountCents?: number) => {
@@ -741,6 +781,18 @@ export default function PosPage() {
   const [productResults, setProductResults] = useState<PosProductSearchRow[]>([]);
   const [isSearchingProduct, setIsSearchingProduct] = useState(false);
   const [isProductSearchModalOpen, setIsProductSearchModalOpen] = useState(false);
+  const [categoryTree, setCategoryTree] = useState<PosCategoryTreeNode[]>([]);
+  const [isCategoryTreeBusy, setIsCategoryTreeBusy] = useState(false);
+  const [categoryProducts, setCategoryProducts] = useState<PosManageProductRow[]>([]);
+  const [isCategoryProductsBusy, setIsCategoryProductsBusy] = useState(false);
+  const [canManageCategoryProducts, setCanManageCategoryProducts] = useState(true);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [isCreatingCategoryProduct, setIsCreatingCategoryProduct] = useState(false);
+  const [categoryProductForm, setCategoryProductForm] = useState({
+    name: '',
+    priceCents: '',
+    stock: '',
+  });
   const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
   const [quickPaymentMethod, setQuickPaymentMethod] = useState<PosQuickPaymentMethod>('NONE');
   const [customerMode, setCustomerMode] = useState<PosCustomerMode>('GUEST');
@@ -1274,6 +1326,36 @@ export default function PosPage() {
       0,
     );
   }, [salesReport]);
+  const flatCategoryRows = useMemo(
+    () => flattenCategoryTree(categoryTree),
+    [categoryTree],
+  );
+  const categoryNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const row of flatCategoryRows) {
+      map.set(row.id, row.name);
+    }
+    return map;
+  }, [flatCategoryRows]);
+  const categoryProductCountByCategory = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const product of categoryProducts) {
+      if (typeof product.categoryId !== 'number') continue;
+      map.set(product.categoryId, (map.get(product.categoryId) ?? 0) + 1);
+    }
+    return map;
+  }, [categoryProducts]);
+  const filteredCategoryProducts = useMemo(() => {
+    const scoped =
+      typeof selectedCategoryId === 'number'
+        ? categoryProducts.filter((item) => item.categoryId === selectedCategoryId)
+        : categoryProducts;
+    return [...scoped].sort((a, b) => a.name.localeCompare(b.name, 'tr-TR'));
+  }, [categoryProducts, selectedCategoryId]);
+  const selectedCategoryName =
+    typeof selectedCategoryId === 'number'
+      ? categoryNameById.get(selectedCategoryId) ?? `Kategori #${selectedCategoryId}`
+      : null;
   const queueSeverityClass = useMemo(() => {
     if (queueCount >= 20) return 'border-red-200 bg-red-50 text-red-800';
     if (queueCount >= 8) return 'border-amber-200 bg-amber-50 text-amber-800';
@@ -1593,6 +1675,143 @@ export default function PosPage() {
     }
   }, [isAuthed, productQuery]);
 
+  const loadCategoryTree = useCallback(async () => {
+    if (!isAuthed) return;
+    setIsCategoryTreeBusy(true);
+    try {
+      const res = await api.get<PosCategoryTreeNode[]>('/categories/tree');
+      const tree = Array.isArray(res.data) ? res.data : [];
+      setCategoryTree(tree);
+      const flat = flattenCategoryTree(tree);
+      setSelectedCategoryId((current) => {
+        if (current && flat.some((item) => item.id === current)) return current;
+        return flat[0]?.id ?? null;
+      });
+    } catch (error) {
+      const status = extractHttpStatus(error);
+      if (status === 401 || status === 403) {
+        try {
+          const fallback = await api.get<PosCategoryTreeNode[]>('/public/categories/tree');
+          const tree = Array.isArray(fallback.data) ? fallback.data : [];
+          setCategoryTree(tree);
+          const flat = flattenCategoryTree(tree);
+          setSelectedCategoryId((current) => {
+            if (current && flat.some((item) => item.id === current)) return current;
+            return flat[0]?.id ?? null;
+          });
+          return;
+        } catch (fallbackError) {
+          toast.error(resolveApiErrorMessage(fallbackError, 'Kategori listesi alinamadi.'));
+          return;
+        }
+      }
+      toast.error(resolveApiErrorMessage(error, 'Kategori listesi alinamadi.'));
+    } finally {
+      setIsCategoryTreeBusy(false);
+    }
+  }, [isAuthed]);
+
+  const loadCategoryProducts = useCallback(async () => {
+    if (!isAuthed) return;
+    setIsCategoryProductsBusy(true);
+    try {
+      const allRows: PosManageProductRow[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const res = await api.get<PosManageProductsPayload>('/products/manage', {
+          params: {
+            page,
+            pageSize: 100,
+          },
+        });
+        const payload = res.data;
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+        allRows.push(...rows);
+        const metaTotalPages = Number(payload?.meta?.totalPages ?? 1);
+        totalPages =
+          Number.isFinite(metaTotalPages) && metaTotalPages > 0
+            ? Math.trunc(metaTotalPages)
+            : 1;
+        page += 1;
+      } while (page <= totalPages && page <= 20);
+
+      setCanManageCategoryProducts(true);
+      setCategoryProducts(allRows);
+    } catch (error) {
+      const status = extractHttpStatus(error);
+      if (status === 401 || status === 403) {
+        setCanManageCategoryProducts(false);
+        setCategoryProducts([]);
+        return;
+      }
+      toast.error(resolveApiErrorMessage(error, 'Urun listesi alinamadi.'));
+    } finally {
+      setIsCategoryProductsBusy(false);
+    }
+  }, [isAuthed]);
+
+  const createProductInSelectedCategory = useCallback(async () => {
+    if (!isAuthed) return;
+    if (!canManageCategoryProducts) {
+      toast.error('Bu hesap urun yonetimi yetkisine sahip degil.');
+      return;
+    }
+    if (!selectedCategoryId) {
+      toast.error('Kategori secimi zorunlu.');
+      return;
+    }
+
+    const name = categoryProductForm.name.trim();
+    const priceCents = Number(categoryProductForm.priceCents.trim());
+    const stockRaw = categoryProductForm.stock.trim();
+    const stock = stockRaw === '' ? undefined : Number(stockRaw);
+
+    if (!name) {
+      toast.error('Urun adi zorunlu.');
+      return;
+    }
+    if (!Number.isFinite(priceCents) || priceCents < 0) {
+      toast.error('Fiyat (kurus) gecerli olmali.');
+      return;
+    }
+    if (stock !== undefined && (!Number.isFinite(stock) || stock < 0)) {
+      toast.error('Stok 0 veya daha buyuk olmali.');
+      return;
+    }
+
+    setIsCreatingCategoryProduct(true);
+    try {
+      await api.post('/products', {
+        name,
+        categoryId: selectedCategoryId,
+        type: 'PHYSICAL',
+        price: String(Math.trunc(priceCents)),
+        stock: stock === undefined ? undefined : Math.trunc(stock),
+      });
+      setCategoryProductForm({
+        name: '',
+        priceCents: '',
+        stock: '',
+      });
+      toast.success('Urun kategoriye eklendi.');
+      await loadCategoryProducts();
+    } catch (error) {
+      toast.error(resolveApiErrorMessage(error, 'Urun eklenemedi.'));
+    } finally {
+      setIsCreatingCategoryProduct(false);
+    }
+  }, [
+    canManageCategoryProducts,
+    categoryProductForm.name,
+    categoryProductForm.priceCents,
+    categoryProductForm.stock,
+    isAuthed,
+    loadCategoryProducts,
+    selectedCategoryId,
+  ]);
+
   const selectProduct = useCallback(
     (product: PosProductSearchRow) => {
       addProductToCart({
@@ -1675,6 +1894,13 @@ export default function PosPage() {
     if (!isAuthed || !isCustomerSearchModalOpen) return;
     void searchCustomers();
   }, [isAuthed, isCustomerSearchModalOpen, searchCustomers]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    if (activeTab !== 'categories') return;
+    void loadCategoryTree();
+    void loadCategoryProducts();
+  }, [activeTab, isAuthed, loadCategoryProducts, loadCategoryTree]);
 
   const createPosCustomer = useCallback(async () => {
     if (!isAuthed) return;
@@ -3789,89 +4015,274 @@ export default function PosPage() {
         <div className="surface-panel space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-[#1A3C34]">Ürün Arama ve Kategori Akışı</h2>
+              <h2 className="text-xl font-semibold text-[#1A3C34]">Kategori Bazli Urun Yönetimi</h2>
               <p className="mt-1 text-sm text-[#5C6F68]">
-                Ürünü arat, seç ve satış ekranına aktar.
+                Kategorilere gore urunlerini gor, yeni urun ekle ve hizli sekilde sepete aktar.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9 px-3 text-xs"
-              onClick={() => setIsProductSearchModalOpen(true)}
-            >
-              Gelişmiş Ürün Arama
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => {
+                  void loadCategoryTree();
+                  void loadCategoryProducts();
+                }}
+                disabled={isCategoryTreeBusy || isCategoryProductsBusy}
+              >
+                {isCategoryTreeBusy || isCategoryProductsBusy ? 'Yenileniyor...' : 'Kategori + Urun Yenile'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9 px-3 text-xs"
+                onClick={() => setActiveTab('home')}
+              >
+                Satis Ekranina Don
+              </Button>
+            </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <input
-              value={productQuery}
-              onChange={(e) => setProductQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void searchProducts();
-                }
-              }}
-              className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-              placeholder="Ürün adı / SKU ile ara"
-            />
-            <Button
-              type="button"
-              className="h-10 px-4 text-xs"
-              variant="secondary"
-              onClick={() => void searchProducts()}
-              disabled={isSearchingProduct}
-            >
-              {isSearchingProduct ? 'Aranıyor...' : 'Ara'}
-            </Button>
-          </div>
-
-          <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] p-3">
-            {isSearchingProduct ? (
-              <p className="text-sm text-[#5C5C5C]">Ürünler getiriliyor...</p>
-            ) : productResults.length > 0 ? (
-              <div className="space-y-2">
-                {productResults.slice(0, 8).map((row) => (
-                  <div
-                    key={`${row.type}-${row.productId}-${row.variantId ?? 0}-${row.sku ?? row.name}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
-                  >
-                    <div>
-                      <p className="font-semibold">{row.name}</p>
-                      <p className="text-xs text-[#5C5C5C]">
-                        SKU: {row.sku ?? '-'} • Stok: {typeof row.stock === 'number' ? row.stock : '-'} • Fiyat: {formatMoney(row.priceCents)}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-8 px-3 text-[11px]"
-                      onClick={() => selectProduct(row)}
-                    >
-                      Ürünü Seç
-                    </Button>
-                  </div>
-                ))}
+          <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+            <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#1A3C34]">
+                  Kategoriler
+                </p>
+                <span className="rounded-full border border-[#D9D9D3] bg-white px-2 py-0.5 text-[11px] text-[#5C5C5C]">
+                  {flatCategoryRows.length}
+                </span>
               </div>
-            ) : (
-              <p className="text-sm text-[#5C5C5C]">Henüz ürün listesi yok. Arama yaparak başlayın.</p>
-            )}
+              <div className="mt-3 max-h-[420px] space-y-1 overflow-auto pr-1">
+                {isCategoryTreeBusy ? (
+                  <p className="text-sm text-[#5C5C5C]">Kategori listesi getiriliyor...</p>
+                ) : flatCategoryRows.length > 0 ? (
+                  flatCategoryRows.map((row) => {
+                    const isActive = row.id === selectedCategoryId;
+                    const count = categoryProductCountByCategory.get(row.id) ?? 0;
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        className={`flex w-full items-center justify-between rounded-lg py-2 text-left text-sm transition ${
+                          isActive
+                            ? 'bg-[#1A3C34] text-white'
+                            : 'bg-white text-[#1A3C34] hover:bg-[#F2F4EF]'
+                        }`}
+                        style={{ paddingLeft: `${12 + row.level * 14}px`, paddingRight: '10px' }}
+                        onClick={() => setSelectedCategoryId(row.id)}
+                      >
+                        <span>{row.name}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] ${
+                            isActive ? 'bg-white/20 text-white' : 'bg-[#F3F4F2] text-[#5C5C5C]'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-[#5C5C5C]">Kategori bulunamadi.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-[#E5E5E0] bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1A3C34]">Kategoriye Yeni Urun Ekle</p>
+                    <p className="mt-1 text-xs text-[#5C5C5C]">
+                      Secili kategoriye yeni urun acarak hemen satisa ekleyebilirsiniz.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#D9D9D3] bg-[#FAFAF8] px-3 py-1 text-[11px] font-semibold text-[#1A3C34]">
+                    {selectedCategoryName ?? 'Kategori secin'}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Kategori
+                    <select
+                      value={selectedCategoryId ?? ''}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setSelectedCategoryId(Number.isFinite(next) && next > 0 ? next : null);
+                      }}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                    >
+                      <option value="">Kategori secin</option>
+                      {flatCategoryRows.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {`${'--'.repeat(row.level)} ${row.name}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Urun Adi
+                    <input
+                      value={categoryProductForm.name}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, name: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="Orn: Klasik Gitar Teli"
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Fiyat (kurus)
+                    <input
+                      value={categoryProductForm.priceCents}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, priceCents: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="100000"
+                      inputMode="numeric"
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Stok
+                    <input
+                      value={categoryProductForm.stock}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, stock: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-[#5C5C5C]">
+                    Urun tipi varsayilan olarak <span className="font-semibold">PHYSICAL</span> kaydedilir.
+                  </p>
+                  <Button
+                    type="button"
+                    className="h-9 px-4 text-xs"
+                    onClick={() => void createProductInSelectedCategory()}
+                    disabled={isCreatingCategoryProduct || !canManageCategoryProducts}
+                  >
+                    {isCreatingCategoryProduct ? 'Ekleniyor...' : 'Urun Ekle'}
+                  </Button>
+                </div>
+                {!canManageCategoryProducts ? (
+                  <p className="mt-2 text-xs text-[#9B1C1C]">
+                    Bu hesapla urun yonetimi kapali. Urun eklemek icin SELLER/ADMIN yetkisi gerekli.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-xl border border-[#E5E5E0] bg-[#FAFAF8] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-[#1A3C34]">
+                    Eldeki Urunler {selectedCategoryName ? `- ${selectedCategoryName}` : ''}
+                  </p>
+                  <span className="rounded-full border border-[#D9D9D3] bg-white px-3 py-1 text-[11px] text-[#5C5C5C]">
+                    Toplam: {filteredCategoryProducts.length}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {isCategoryProductsBusy ? (
+                    <p className="text-sm text-[#5C5C5C]">Urunler getiriliyor...</p>
+                  ) : !canManageCategoryProducts ? (
+                    <p className="text-sm text-[#5C5C5C]">
+                      Bu role ait urun listesi bu ekranda getirilemiyor.
+                    </p>
+                  ) : filteredCategoryProducts.length > 0 ? (
+                    filteredCategoryProducts.slice(0, 60).map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                      >
+                        <div>
+                          <p className="font-semibold">
+                            #{row.id} {row.name}
+                          </p>
+                          <p className="text-xs text-[#5C5C5C]">
+                            Kategori:{' '}
+                            {typeof row.categoryId === 'number'
+                              ? (categoryNameById.get(row.categoryId) ?? `#${row.categoryId}`)
+                              : '-'}{' '}
+                            • SKU: {row.sku ?? '-'} • Tip: {row.type} • Stok:{' '}
+                            {typeof row.stock === 'number' ? row.stock : '-'} • Durum:{' '}
+                            {row.isPublished ? 'Yayinda' : 'Taslak'} • Fiyat:{' '}
+                            {formatMoney(row.priceCents)}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-3 text-[11px]"
+                          onClick={() =>
+                            selectProduct({
+                              type: 'PRODUCT',
+                              productId: row.id,
+                              variantId: null,
+                              name: row.name,
+                              sku: row.sku,
+                              priceCents: row.priceCents,
+                              stock: row.stock ?? null,
+                            })
+                          }
+                        >
+                          Sepete Ekle
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[#5C5C5C]">
+                      Bu kategoride urun yok. Yukaridaki form ile ilk urunu ekleyebilirsiniz.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E5E5E0] bg-white px-3 py-2 text-sm text-[#1A3C34]">
-            <p>
-              <span className="font-semibold">Seçili ürün:</span> {resolvedProductName || '-'} {variantId ? `(Varyant #${variantId})` : ''}
+          <div className="rounded-xl border border-[#E5E5E0] bg-white p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[#1A3C34]">Hizli Urun Arama</p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-3 text-[11px]"
+                onClick={() => setIsProductSearchModalOpen(true)}
+              >
+                Gelismis Arama
+              </Button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input
+                value={productQuery}
+                onChange={(e) => setProductQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void searchProducts();
+                  }
+                }}
+                className="h-10 rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                placeholder="Urun adi / SKU ile ara"
+              />
+              <Button
+                type="button"
+                className="h-10 px-4 text-xs"
+                variant="secondary"
+                onClick={() => void searchProducts()}
+                disabled={isSearchingProduct}
+              >
+                {isSearchingProduct ? 'Araniyor...' : 'Ara'}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-[#5C5C5C]">
+              Secili urun: {resolvedProductName || '-'} {variantId ? `(Varyant #${variantId})` : ''}
             </p>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-8 px-3 text-[11px]"
-              onClick={() => setActiveTab('home')}
-            >
-              Satış Ekranına Dön
-            </Button>
           </div>
         </div>
       </div>
