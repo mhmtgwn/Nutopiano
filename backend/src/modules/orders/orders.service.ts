@@ -2626,14 +2626,14 @@ export class OrdersService {
           productId: number;
           variantId?: number | null;
           quantity: number;
-        }> = await (tx as any).orderItem.findMany({
+        }> = await tx.orderItem.findMany({
           where: { orderId: request.orderId },
           select: { productId: true, variantId: true, quantity: true },
         });
 
         const aggregated = this.aggregateStockLines(items);
         for (const [variantId, quantity] of aggregated.byVariant.entries()) {
-          await (tx as any).productVariant.updateMany({
+          await tx.productVariant.updateMany({
             where: { id: variantId, stock: { not: null } },
             data: { stock: { increment: quantity } },
           });
@@ -2646,9 +2646,7 @@ export class OrdersService {
         }
 
         if (typeof request.order?.sellerId === 'number') {
-          const debitAggregate = await (
-            tx as any
-          ).customerLedgerEntry.aggregate({
+          const debitAggregate = await tx.customerLedgerEntry.aggregate({
             where: {
               businessId,
               sellerId: request.order.sellerId,
@@ -2657,9 +2655,7 @@ export class OrdersService {
             },
             _sum: { amountCents: true },
           });
-          const creditAggregate = await (
-            tx as any
-          ).customerLedgerEntry.aggregate({
+          const creditAggregate = await tx.customerLedgerEntry.aggregate({
             where: {
               businessId,
               sellerId: request.order.sellerId,
@@ -2714,13 +2710,13 @@ export class OrdersService {
         statusMap.get(targetOrderStatusKeys[2]);
 
       if (orderStatusId) {
-        await (tx as any).order.update({
+        await tx.order.update({
           where: { id: request.orderId },
           data: { statusId: orderStatusId },
         });
       }
 
-      await (tx as any).returnRequest.update({
+      await tx.returnRequest.update({
         where: { id: request.id },
         data: {
           status: nextReturnStatus,
@@ -2730,7 +2726,7 @@ export class OrdersService {
         },
       });
 
-      return (tx as any).returnRequest.findFirst({
+      return tx.returnRequest.findFirst({
         where: { id: request.id },
         select: {
           id: true,
@@ -2936,14 +2932,14 @@ export class OrdersService {
           productId: number;
           variantId?: number | null;
           quantity: number;
-        }> = await (tx as any).orderItem.findMany({
+        }> = await tx.orderItem.findMany({
           where: { orderId: updated.id },
           select: { productId: true, variantId: true, quantity: true },
         });
 
         const aggregated = this.aggregateStockLines(items);
         for (const [variantId, quantity] of aggregated.byVariant.entries()) {
-          await (tx as any).productVariant.updateMany({
+          await tx.productVariant.updateMany({
             where: { id: variantId, stock: { not: null } },
             data: { stock: { increment: quantity } },
           });
@@ -2956,9 +2952,7 @@ export class OrdersService {
         }
 
         if (typeof updated.sellerId === 'number') {
-          const debitAggregate = await (
-            tx as any
-          ).customerLedgerEntry.aggregate({
+          const debitAggregate = await tx.customerLedgerEntry.aggregate({
             where: {
               businessId: updated.businessId,
               sellerId: updated.sellerId,
@@ -2967,9 +2961,7 @@ export class OrdersService {
             },
             _sum: { amountCents: true },
           });
-          const creditAggregate = await (
-            tx as any
-          ).customerLedgerEntry.aggregate({
+          const creditAggregate = await tx.customerLedgerEntry.aggregate({
             where: {
               businessId: updated.businessId,
               sellerId: updated.sellerId,
