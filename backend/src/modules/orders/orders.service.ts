@@ -1092,7 +1092,7 @@ export class OrdersService {
 
     const isValidSource =
       sourceRaw.length > 0 &&
-      (Object.values(OrderSource) as string[]).includes(sourceRaw);
+      Object.values(OrderSource).includes(sourceRaw);
 
     const requestedCustomerId =
       typeof params?.customerId === 'number' &&
@@ -1258,7 +1258,7 @@ export class OrdersService {
 
     const isValidSource =
       source.length > 0 &&
-      (Object.values(OrderSource) as string[]).includes(source);
+      Object.values(OrderSource).includes(source);
 
     const where: {
       businessId: number;
@@ -1756,7 +1756,7 @@ export class OrdersService {
             variant.stock !== null &&
             variant.stock !== undefined
           ) {
-            await (tx as any).productVariant.update({
+            await tx.productVariant.update({
               where: { id: variantId },
               data: { stock: { decrement: quantity } },
             });
@@ -1960,7 +1960,7 @@ export class OrdersService {
           >,
         };
 
-        const order = await (tx as any).order.create({
+        const order = await tx.order.create({
           data: {
             businessId,
             customerId: resolvedCustomerId,
@@ -2011,7 +2011,7 @@ export class OrdersService {
           },
         });
 
-        await (tx as any).orderItem.createMany({
+        await tx.orderItem.createMany({
           data: itemData.map((i) => ({
             businessId: i.businessId,
             orderId: order.id,
@@ -2029,7 +2029,7 @@ export class OrdersService {
         });
 
         if (couponToConsume) {
-          await (tx as any).coupon.update({
+          await tx.coupon.update({
             where: { id: couponToConsume.id },
             data: { usedCount: { increment: 1 } },
           });
@@ -2098,7 +2098,7 @@ export class OrdersService {
           }
         }
 
-        const items = await (tx as any).orderItem.findMany({
+        const items = await tx.orderItem.findMany({
           where: { businessId, orderId: order.id },
           select: {
             id: true,
@@ -2450,13 +2450,13 @@ export class OrdersService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await (tx as any).order.update({
+      await tx.order.update({
         where: { id: order.id },
         data: { statusId: returnRequestedStatus.id },
       });
 
       if (existing) {
-        await (tx as any).returnRequest.update({
+        await tx.returnRequest.update({
           where: { id: existing.id },
           data: {
             status: 'PENDING',
@@ -2468,7 +2468,7 @@ export class OrdersService {
           },
         });
       } else {
-        await (tx as any).returnRequest.create({
+        await tx.returnRequest.create({
           data: {
             businessId: order.businessId,
             orderId: order.id,
