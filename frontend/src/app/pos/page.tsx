@@ -124,7 +124,9 @@ type PosCategoryProductFormState = {
   price: string;
   stock: string;
   description: string;
+  features: string;
   imageUrl: string;
+  images: string;
   tags: string;
   seoTitle: string;
   seoDescription: string;
@@ -398,7 +400,9 @@ const defaultCategoryProductForm: PosCategoryProductFormState = {
   price: '',
   stock: '',
   description: '',
+  features: '',
   imageUrl: '',
+  images: '',
   tags: '',
   seoTitle: '',
   seoDescription: '',
@@ -1808,7 +1812,15 @@ export default function PosPage() {
     const stockRaw = categoryProductForm.stock.trim();
     const stock = stockRaw === '' ? undefined : Number(stockRaw);
     const description = categoryProductForm.description.trim();
+    const features = categoryProductForm.features
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
     const imageUrl = categoryProductForm.imageUrl.trim();
+    const images = categoryProductForm.images
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
     const tags = categoryProductForm.tags
       .split(',')
       .map((item) => item.trim())
@@ -1828,16 +1840,19 @@ export default function PosPage() {
       toast.error('Stok 0 veya daha buyuk olmali.');
       return;
     }
-    if (imageUrl) {
-      try {
-        const parsed = new URL(imageUrl);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          throw new Error('invalid-url-protocol');
-        }
-      } catch {
-        toast.error('Gorsel URL gecerli olmali (http/https).');
-        return;
+    const validateHttpUrl = (raw: string) => {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('invalid-url-protocol');
       }
+    };
+
+    try {
+      if (imageUrl) validateHttpUrl(imageUrl);
+      for (const image of images) validateHttpUrl(image);
+    } catch {
+      toast.error('Gorsel URL alanlari gecerli olmali (http/https).');
+      return;
     }
 
     setIsCreatingCategoryProduct(true);
@@ -1851,7 +1866,9 @@ export default function PosPage() {
         price: String(Math.trunc(priceCents ?? 0)),
         stock: stock === undefined ? undefined : Math.trunc(stock),
         description: description || undefined,
+        features: features.length > 0 ? features : undefined,
         imageUrl: imageUrl || undefined,
+        images: images.length > 0 ? images : undefined,
         tags: tags.length > 0 ? tags : undefined,
         seoTitle: seoTitle || undefined,
         seoDescription: seoDescription || undefined,
@@ -4285,6 +4302,31 @@ export default function PosPage() {
                     placeholder="Marketplace detay sayfasinda gorunecek urun aciklamasi"
                   />
                 </label>
+
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Ozellikler (satir satir)
+                    <textarea
+                      value={categoryProductForm.features}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, features: e.target.value }))
+                      }
+                      className="mt-1 min-h-[110px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                      placeholder={'Hafif govde\nUzun omur\nPremium malzeme'}
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Ek Gorseller (satir satir URL)
+                    <textarea
+                      value={categoryProductForm.images}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, images: e.target.value }))
+                      }
+                      className="mt-1 min-h-[110px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                      placeholder={'https://.../img-1.jpg\nhttps://.../img-2.jpg'}
+                    />
+                  </label>
+                </div>
 
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">

@@ -36,9 +36,26 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSellerMenuOpen, setIsSellerMenuOpen] = useState(false);
+  const [isSellerDirectoryLoading, setIsSellerDirectoryLoading] = useState(false);
+  const [isSellerDirectoryLoaded, setIsSellerDirectoryLoaded] = useState(false);
+  const [sellerDirectory, setSellerDirectory] = useState<
+    Array<{
+      id: number;
+      slug: string;
+      displayName: string;
+      productCount: number;
+      categories: Array<{
+        id: number;
+        name: string;
+        productCount: number;
+      }>;
+    }>
+  >([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const sellerMenuRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
   const panelHref = user ? '/panel' : '/login';
@@ -49,6 +66,26 @@ export default function Header() {
     href: string;
     label: string;
     icon: LucideIcon;
+  };
+
+  type PublicSellerDirectoryResponse = {
+    data: Array<{
+      id: number;
+      slug: string;
+      displayName: string;
+      productCount: number;
+      categories: Array<{
+        id: number;
+        name: string;
+        productCount: number;
+      }>;
+    }>;
+    meta?: {
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    };
   };
 
   const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(() => {
@@ -139,6 +176,45 @@ export default function Header() {
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isUserMenuOpen]);
 
+  useEffect(() => {
+    if (!isSellerMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = sellerMenuRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        setIsSellerMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [isSellerMenuOpen]);
+
+  useEffect(() => {
+    if (!isSellerMenuOpen) return;
+    if (isSellerDirectoryLoaded) return;
+
+    const loadSellerDirectory = async () => {
+      setIsSellerDirectoryLoading(true);
+      try {
+        const res = await api.get<PublicSellerDirectoryResponse>('/public/sellers', {
+          params: {
+            page: 1,
+            pageSize: 24,
+          },
+        });
+        const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+        setSellerDirectory(rows.filter((row) => Number(row.productCount ?? 0) > 0));
+        setIsSellerDirectoryLoaded(true);
+      } catch {
+        toast.error('Satici listesi yuklenemedi.');
+      } finally {
+        setIsSellerDirectoryLoading(false);
+      }
+    };
+
+    void loadSellerDirectory();
+  }, [isSellerDirectoryLoaded, isSellerMenuOpen]);
+
   const submitSearch = () => {
     const q = trimmedQuery;
     if (!q) return;
@@ -180,6 +256,13 @@ export default function Header() {
           </Link>
           <div className="flex items-center gap-2">
             <Link
+              href="/sellers"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)]"
+              aria-label="Saticilar"
+            >
+              <UserCircle2 className="h-4 w-4" />
+            </Link>
+            <Link
               href="/categories"
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--neutral-200)] bg-white text-[var(--primary-800)] shadow-[var(--shadow-xs)]"
               aria-label="Kategoriler"
@@ -216,6 +299,89 @@ export default function Header() {
               />
             </Link>
             <nav className="hidden items-center gap-2 lg:flex">
+              <div ref={sellerMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSellerMenuOpen((prev) => !prev);
+                  }}
+                  className="rounded-full px-4 py-2 text-sm font-semibold text-[var(--primary-800)]/75 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
+                >
+                  Saticilar
+                </button>
+                {isSellerMenuOpen ? (
+                  <div className="absolute left-0 top-full mt-2 w-[760px] max-w-[88vw] rounded-2xl border border-[var(--neutral-200)] bg-white p-3 shadow-[var(--shadow-2xl)]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--neutral-200)] px-2 pb-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--neutral-500)]">
+                        Satici Magazalari
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href="/sellers"
+                          className="text-xs font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                          onClick={() => setIsSellerMenuOpen(false)}
+                        >
+                          Tum saticilar
+                        </Link>
+                        <Link
+                          href="/categories"
+                          className="text-xs font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                          onClick={() => setIsSellerMenuOpen(false)}
+                        >
+                          Kargo icin kategoriler
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="max-h-[420px] overflow-auto p-2">
+                      {isSellerDirectoryLoading ? (
+                        <p className="text-sm text-[var(--neutral-600)]">Saticilar yukleniyor...</p>
+                      ) : sellerDirectory.length > 0 ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {sellerDirectory.map((seller) => (
+                            <article
+                              key={seller.id}
+                              className="rounded-xl border border-[var(--neutral-200)] bg-white px-3 py-3"
+                            >
+                              <Link
+                                href={`/magaza/${seller.slug}`}
+                                className="text-sm font-semibold text-[var(--primary-800)] underline-offset-2 hover:underline"
+                                onClick={() => setIsSellerMenuOpen(false)}
+                              >
+                                {seller.displayName}
+                              </Link>
+                              <p className="mt-1 text-[11px] text-[var(--neutral-500)]">
+                                {seller.productCount} urun
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {seller.categories.length > 0 ? (
+                                  seller.categories.slice(0, 8).map((category) => (
+                                    <Link
+                                      key={`${seller.id}-${category.id}`}
+                                      href={`/magaza/${seller.slug}?category=${category.id}`}
+                                      className="rounded-full border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--primary-800)]/85 hover:bg-[var(--neutral-100)]"
+                                      onClick={() => setIsSellerMenuOpen(false)}
+                                    >
+                                      {category.name}
+                                    </Link>
+                                  ))
+                                ) : (
+                                  <span className="text-[11px] text-[var(--neutral-500)]">
+                                    Kategori bulunmuyor.
+                                  </span>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[var(--neutral-600)]">
+                          Aktif satici listesi bulunamadi.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               {navigationLinks.map((link) => (
                 <Link
                   key={link.href}

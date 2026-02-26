@@ -43,8 +43,26 @@ export interface PublicSellerSummary {
   logoUrl?: string | null;
 }
 
+export interface PublicSellerCategorySummary {
+  id: number;
+  name: string;
+  slug: string;
+  productCount: number;
+}
+
+export interface PublicSellerDirectoryItem extends PublicSellerSummary {
+  productCount: number;
+  categories: PublicSellerCategorySummary[];
+}
+
+export interface PublicSellerDirectoryResponse {
+  data: PublicSellerDirectoryItem[];
+  meta: PaginationMeta;
+}
+
 export interface PublicSellerProfileResponse {
   seller: PublicSellerSummary;
+  categories: PublicSellerCategorySummary[];
   products: {
     data: any[];
     meta: PaginationMeta;
@@ -1629,10 +1647,7 @@ export class SellersService {
     return updated;
   }
 
-  async findOnePublicBySlug(
-    slug: string,
-    params?: { page?: number; pageSize?: number },
-  ): Promise<PublicSellerProfileResponse> {
+  private async resolvePublicBusiness() {
     const publicBusinessId = Number(process.env.PUBLIC_BUSINESS_ID);
 
     const businessCandidate =
@@ -1651,6 +1666,214 @@ export class SellersService {
     if (!business) {
       throw new NotFoundException('Business not found');
     }
+
+    return business;
+  }
+
+  async listPublicDirectory(params?: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<PublicSellerDirectoryResponse> {
+    const business = await this.resolvePublicBusiness();
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const total = await this.prisma.seller.count({
+      where: {
+        businessId: business.id,
+        isActive: true,
+      },
+    });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const sellers = await this.prisma.seller.findMany({
+      where: {
+        businessId: business.id,
+        isActive: true,
+      },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      skip,
+      take,
+      select: {
+        id: true,
+        slug: true,
+        displayName: true,
+        description: true,
+        logoUrl: true,
+        userId: true,
+      },
+    });
+
+    if (sellers.length === 0) {
+      return { data: [], meta };
+    }
+
+    const sellerById = new Map<
+      number,
+      {
+        id: number;
+        slug: string;
+        displayName: string;
+        description?: string | null;
+        logoUrl?: string | null;
+        userId: number;
+      }
+    >();
+    const sellerIdByUserId = new Map<number, number>();
+    for (const seller of sellers) {
+      sellerById.set(seller.id, seller);
+      sellerIdByUserId.set(seller.userId, seller.id);
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        businessId: business.id,
+        isActive: true,
+        isPublished: true,
+        OR: [
+          { ownerSellerId: { in: sellers.map((row) => row.id) } },
+          {
+            ownerSellerId: null,
+            createdByUserId: { in: sellers.map((row) => row.userId) },
+          },
+        ],
+      },
+      select: {
+        categoryId: true,
+        ownerSellerId: true,
+        createdByUserId: true,
+      },
+    });
+
+    const categoryIds = Array.from(
+      new Set(
+        products
+          .map((row) => row.categoryId)
+          .filter((value): value is number => Number.isFinite(value as number)),
+      ),
+    );
+    const categories =
+      categoryIds.length > 0
+        ? await this.prisma.category.findMany({
+            where: {
+              businessId: business.id,
+              id: { in: categoryIds },
+              isActive: true,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              orderIndex: true,
+            },
+          })
+        : [];
+    const categoryById = new Map<
+      number,
+      { id: number; name: string; slug: string; orderIndex: number }
+    >();
+    for (const category of categories) {
+      categoryById.set(category.id, category);
+    }
+
+    const stats = new Map<
+      number,
+      {
+        productCount: number;
+        categoryCounts: Map<number, number>;
+      }
+    >();
+    for (const seller of sellers) {
+      stats.set(seller.id, {
+        productCount: 0,
+        categoryCounts: new Map<number, number>(),
+      });
+    }
+
+    for (const row of products) {
+      const ownerSellerId =
+        typeof row.ownerSellerId === 'number' && row.ownerSellerId > 0
+          ? row.ownerSellerId
+          : null;
+      const resolvedSellerId =
+        ownerSellerId ??
+        sellerIdByUserId.get(Number(row.createdByUserId)) ??
+        null;
+      if (!resolvedSellerId || !sellerById.has(resolvedSellerId)) continue;
+
+      const sellerStats = stats.get(resolvedSellerId);
+      if (!sellerStats) continue;
+
+      sellerStats.productCount += 1;
+
+      const categoryId =
+        typeof row.categoryId === 'number' && row.categoryId > 0
+          ? row.categoryId
+          : null;
+      if (!categoryId || !categoryById.has(categoryId)) continue;
+
+      sellerStats.categoryCounts.set(
+        categoryId,
+        (sellerStats.categoryCounts.get(categoryId) ?? 0) + 1,
+      );
+    }
+
+    const data: PublicSellerDirectoryItem[] = sellers.map((seller) => {
+      const sellerStats = stats.get(seller.id) ?? {
+        productCount: 0,
+        categoryCounts: new Map<number, number>(),
+      };
+
+      const categoryRows = Array.from(sellerStats.categoryCounts.entries())
+        .map(([categoryId, productCount]) => {
+          const category = categoryById.get(categoryId);
+          if (!category) return null;
+          return {
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+            productCount,
+            orderIndex: category.orderIndex,
+          };
+        })
+        .filter(
+          (
+            row,
+          ): row is {
+            id: number;
+            name: string;
+            slug: string;
+            productCount: number;
+            orderIndex: number;
+          } => Boolean(row),
+        )
+        .sort(
+          (a, b) =>
+            a.orderIndex - b.orderIndex ||
+            a.name.localeCompare(b.name, 'tr'),
+        )
+        .map(({ orderIndex: _orderIndex, ...rest }) => rest);
+
+      return {
+        id: seller.id,
+        slug: seller.slug,
+        displayName: seller.displayName,
+        description: seller.description,
+        logoUrl: seller.logoUrl,
+        productCount: sellerStats.productCount,
+        categories: categoryRows,
+      };
+    });
+
+    return { data, meta };
+  }
+
+  async findOnePublicBySlug(
+    slug: string,
+    params?: { page?: number; pageSize?: number; categoryId?: number },
+  ): Promise<PublicSellerProfileResponse> {
+    const business = await this.resolvePublicBusiness();
 
     const seller = await this.prisma.seller.findFirst({
       where: {
@@ -1674,7 +1897,12 @@ export class SellersService {
 
     const page = clampPage(Number(params?.page ?? 1));
     const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
-    const where = {
+    const selectedCategoryId =
+      typeof params?.categoryId === 'number' && params.categoryId > 0
+        ? Math.trunc(params.categoryId)
+        : null;
+
+    const baseWhere: Prisma.ProductWhereInput = {
       businessId: business.id,
       isActive: true,
       isPublished: true,
@@ -1683,6 +1911,12 @@ export class SellersService {
         { ownerSellerId: null, createdByUserId: seller.userId },
       ],
     };
+    const where: Prisma.ProductWhereInput = selectedCategoryId
+      ? {
+          ...baseWhere,
+          categoryId: selectedCategoryId,
+        }
+      : baseWhere;
 
     const total = await this.prisma.product.count({ where });
     const meta = buildPaginationMeta(total, page, pageSize);
@@ -1713,6 +1947,70 @@ export class SellersService {
       },
     });
 
+    const availableCategoryRows = await this.prisma.product.groupBy({
+      by: ['categoryId'],
+      where: baseWhere,
+      _count: {
+        categoryId: true,
+      },
+    });
+    const availableCategoryIds = availableCategoryRows
+      .map((row) => row.categoryId)
+      .filter((value): value is number => Number.isFinite(value as number));
+    const availableCategories =
+      availableCategoryIds.length > 0
+        ? await this.prisma.category.findMany({
+            where: {
+              businessId: business.id,
+              id: { in: availableCategoryIds },
+              isActive: true,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              orderIndex: true,
+            },
+          })
+        : [];
+    const availableCategoryById = new Map<
+      number,
+      { id: number; name: string; slug: string; orderIndex: number }
+    >();
+    for (const row of availableCategories) {
+      availableCategoryById.set(row.id, row);
+    }
+    const categories: PublicSellerCategorySummary[] = availableCategoryRows
+      .map((row) => {
+        const categoryId = row.categoryId;
+        if (typeof categoryId !== 'number' || categoryId <= 0) return null;
+        const category = availableCategoryById.get(categoryId);
+        if (!category) return null;
+        return {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          productCount: row._count.categoryId ?? 0,
+          orderIndex: category.orderIndex,
+        };
+      })
+      .filter(
+        (
+          row,
+        ): row is {
+          id: number;
+          name: string;
+          slug: string;
+          productCount: number;
+          orderIndex: number;
+        } => Boolean(row),
+      )
+      .sort(
+        (a, b) =>
+          a.orderIndex - b.orderIndex || a.name.localeCompare(b.name, 'tr'),
+      )
+      .map(({ orderIndex: _orderIndex, ...rest }) => rest);
+
     return {
       seller: {
         id: seller.id,
@@ -1721,6 +2019,7 @@ export class SellersService {
         description: seller.description,
         logoUrl: seller.logoUrl,
       },
+      categories,
       products: {
         data: products,
         meta,

@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function MagazaPage() {
-  redirect('/categories');
+  redirect('/sellers');
 }

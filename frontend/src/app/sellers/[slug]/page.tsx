@@ -24,6 +24,7 @@ type SellerSummary = {
 
 type SellerProduct = {
   id: number;
+  categoryId?: number | null;
   name: string;
   subtitle?: string | null;
   priceCents: number;
@@ -31,8 +32,16 @@ type SellerProduct = {
   stock?: number | null;
 };
 
+type SellerCategorySummary = {
+  id: number;
+  name: string;
+  slug: string;
+  productCount: number;
+};
+
 type SellerProfileResponse = {
   seller: SellerSummary;
+  categories: SellerCategorySummary[];
   products: {
     data: SellerProduct[];
     meta: PaginationMeta;
@@ -74,13 +83,23 @@ export default async function SellerProfilePage({
   const page = pageRaw && /^[0-9]+$/.test(pageRaw) ? Number(pageRaw) : 1;
   const pageSizeRaw = typeof resolvedSearchParams.pageSize === 'string' ? resolvedSearchParams.pageSize : undefined;
   const pageSize = pageSizeRaw && /^[0-9]+$/.test(pageSizeRaw) ? Number(pageSizeRaw) : 20;
+  const categoryRaw =
+    typeof resolvedSearchParams.category === 'string'
+      ? resolvedSearchParams.category
+      : undefined;
+  const selectedCategoryId =
+    categoryRaw && /^[0-9]+$/.test(categoryRaw) ? Number(categoryRaw) : undefined;
 
   let payload: SellerProfileResponse | null = null;
   let errorMessage: string | null = null;
 
   try {
     const res = await api.get<SellerProfileResponse>(`/public/sellers/${encodeURIComponent(slug)}`, {
-      params: { page, pageSize },
+      params: {
+        page,
+        pageSize,
+        categoryId: selectedCategoryId,
+      },
     });
     payload = res.data;
   } catch {
@@ -103,7 +122,7 @@ export default async function SellerProfilePage({
     );
   }
 
-  const { seller, products } = payload;
+  const { seller, products, categories } = payload;
   const list = products?.data ?? [];
   const meta = products?.meta;
 
@@ -138,6 +157,32 @@ export default async function SellerProfilePage({
               Toplam {meta.total} ürün
             </p>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/magaza/${seller.slug}`}
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+              typeof selectedCategoryId === 'number'
+                ? 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]'
+                : 'border-[var(--primary-800)] bg-[var(--primary-800)] text-white'
+            }`}
+          >
+            Tum kategoriler
+          </Link>
+          {categories?.map((category) => (
+            <Link
+              key={category.id}
+              href={`/magaza/${seller.slug}?category=${category.id}`}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                selectedCategoryId === category.id
+                  ? 'border-[var(--primary-800)] bg-[var(--primary-800)] text-white'
+                  : 'border-[var(--neutral-200)] bg-white text-[var(--primary-800)]'
+              }`}
+            >
+              {category.name} ({category.productCount})
+            </Link>
+          ))}
         </div>
 
         {list.length === 0 ? (
@@ -179,6 +224,9 @@ export default async function SellerProfilePage({
               const sp = new URLSearchParams();
               sp.set('page', String(nextPage));
               sp.set('pageSize', String(meta.pageSize));
+              if (typeof selectedCategoryId === 'number') {
+                sp.set('category', String(selectedCategoryId));
+              }
               return `/magaza/${seller.slug}?${sp.toString()}`;
             }}
           />
