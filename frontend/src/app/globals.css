@@ -377,6 +377,17 @@ a:focus-visible {
   z-index: 1;
 }
 
+.app-content-frame {
+  width: min(100%, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .app-content-frame {
+    width: min(100%, calc(100% - 3rem));
+  }
+}
+
 .surface-panel {
   border: 1px solid rgba(36, 82, 68, 0.14);
   border-radius: var(--radius-2xl);

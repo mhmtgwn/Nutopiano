@@ -36,7 +36,9 @@ export default function RootLayout({
         <Providers>
           <div className="app-shell flex min-h-screen flex-col text-foreground">
             <Header />
-            <main className="app-main flex-1 pb-20 md:pb-0">{children}</main>
+            <main className="app-main flex-1 pb-20 md:pb-0">
+              <div className="app-content-frame">{children}</div>
+            </main>
             <FooterBar />
             <MobileBottomNav />
           </div>
