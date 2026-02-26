@@ -526,7 +526,7 @@ export class ProductsService {
           ? (rawType as ProductType)
           : null;
 
-        if (productType && !(Object.values(ProductType) as string[]).includes(productType)) {
+        if (productType && !Object.values(ProductType).includes(productType)) {
           throw new BadRequestException(`Gecersiz type degeri: ${rawType}`);
         }
 

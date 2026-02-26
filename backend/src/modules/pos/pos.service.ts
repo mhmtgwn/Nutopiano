@@ -133,14 +133,16 @@ export class PosService {
     );
   }
 
-  private normalizePermissionsJson(value: Prisma.JsonValue | null | undefined) {
+  private normalizePermissionsJson(
+    value: Prisma.JsonValue | null | undefined,
+  ): string[] {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return [] as string[];
+      return [];
     }
 
     const maybePermissions = (value as { permissions?: unknown }).permissions;
     if (!Array.isArray(maybePermissions)) {
-      return [] as string[];
+      return [];
     }
 
     const normalized = maybePermissions
@@ -280,7 +282,7 @@ export class PosService {
     customerId: number;
   }) {
     const [debitAggregate, creditAggregate] = await Promise.all([
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId: params.sellerId,
@@ -289,7 +291,7 @@ export class PosService {
         },
         _sum: { amountCents: true },
       }),
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId: params.sellerId,
@@ -341,7 +343,7 @@ export class PosService {
         ? currentBalance + normalizedAmount
         : Math.max(currentBalance - normalizedAmount, 0);
 
-    return (params.tx as any).customerLedgerEntry.create({
+    return params.tx.customerLedgerEntry.create({
       data: {
         businessId: params.businessId,
         sellerId: params.sellerId,
@@ -380,7 +382,7 @@ export class PosService {
     }
 
     const [debitAggregate, creditAggregate] = await Promise.all([
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId,
@@ -389,7 +391,7 @@ export class PosService {
         },
         _sum: { amountCents: true },
       }),
-      (params.tx as any).customerLedgerEntry.aggregate({
+      params.tx.customerLedgerEntry.aggregate({
         where: {
           businessId: params.businessId,
           sellerId,
@@ -1560,14 +1562,14 @@ export class PosService {
         productId: number;
         variantId?: number | null;
         quantity: number;
-      }> = await (tx as any).orderItem.findMany({
+      }> = await tx.orderItem.findMany({
         where: { businessId, orderId: order.id },
         select: { productId: true, variantId: true, quantity: true },
       });
 
       const aggregated = this.aggregateStockLines(items);
       for (const [variantId, quantity] of aggregated.byVariant.entries()) {
-        await (tx as any).productVariant.updateMany({
+        await tx.productVariant.updateMany({
           where: { id: variantId, stock: { not: null } },
           data: { stock: { increment: quantity } },
         });
@@ -1617,12 +1619,12 @@ export class PosService {
         sourceType: 'RETURN_REVERSAL',
       });
 
-      const existingRequest = await (tx as any).returnRequest.findFirst({
+      const existingRequest = await tx.returnRequest.findFirst({
         where: { businessId, orderId: order.id },
         select: { id: true },
       });
       if (existingRequest) {
-        await (tx as any).returnRequest.update({
+        await tx.returnRequest.update({
           where: { id: existingRequest.id },
           data: {
             status: 'APPROVED',
@@ -1633,7 +1635,7 @@ export class PosService {
           },
         });
       } else {
-        await (tx as any).returnRequest.create({
+        await tx.returnRequest.create({
           data: {
             businessId,
             orderId: order.id,
