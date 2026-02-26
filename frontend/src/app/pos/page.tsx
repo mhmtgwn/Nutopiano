@@ -2841,6 +2841,32 @@ export default function PosPage() {
         </div>
       </header>
 
+      {/* ── Tabs Navigation ── */}
+      <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white px-4 md:px-6">
+        <nav className="flex w-full gap-6" aria-label="Tabs">
+          {[
+            { id: 'home', label: 'Satis' },
+            { id: 'categories', label: 'Kategoriler' },
+            { id: 'customers', label: 'Musteriler' },
+            { id: 'finance', label: 'Finans' },
+            { id: 'orders', label: 'Siparisler' },
+            { id: 'settings', label: 'Ayarlar' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-[#1A3C34] text-[#1A3C34]'
+                  : 'border-transparent text-[#5C6F68] hover:border-[#1A3C34]/30 hover:text-[#1A3C34]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
       {/* ── Main POS Body ── */}
       <div className={`w-full px-4 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
