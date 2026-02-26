@@ -116,6 +116,20 @@ type PosManageProductsPayload = {
     totalPages?: number;
   };
 };
+type PosCategoryProductFormState = {
+  name: string;
+  subtitle: string;
+  sku: string;
+  type: ProductType;
+  price: string;
+  stock: string;
+  description: string;
+  imageUrl: string;
+  tags: string;
+  seoTitle: string;
+  seoDescription: string;
+  isPublished: boolean;
+};
 type PosCartDraftItem = {
   key: string;
   productId: number;
@@ -346,6 +360,19 @@ const flattenCategoryTree = (
   return rows;
 };
 
+const parsePriceInputToCents = (raw: string) => {
+  const normalized = raw.trim().replace(/\s+/g, '').replace(',', '.');
+  if (!normalized) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+
+  const [wholePart, fractionPart = ''] = normalized.split('.');
+  const whole = Number(wholePart);
+  const fraction = Number((fractionPart + '00').slice(0, 2));
+  if (!Number.isFinite(whole) || !Number.isFinite(fraction)) return null;
+
+  return whole * 100 + fraction;
+};
+
 const formatMoney = (amountCents?: number) => {
   if (typeof amountCents !== 'number') return '-';
   return new Intl.NumberFormat('tr-TR', {
@@ -363,6 +390,20 @@ const defaultSplitPaymentRows: PosSplitPaymentDraft[] = [
   { method: 'CASH', amountCents: '', reference: '' },
   { method: 'CARD', amountCents: '', reference: '' },
 ];
+const defaultCategoryProductForm: PosCategoryProductFormState = {
+  name: '',
+  subtitle: '',
+  sku: '',
+  type: 'PHYSICAL',
+  price: '',
+  stock: '',
+  description: '',
+  imageUrl: '',
+  tags: '',
+  seoTitle: '',
+  seoDescription: '',
+  isPublished: false,
+};
 
 const buildReceiptHtml = (
   settings: ReceiptSettings,
@@ -788,11 +829,8 @@ export default function PosPage() {
   const [canManageCategoryProducts, setCanManageCategoryProducts] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [isCreatingCategoryProduct, setIsCreatingCategoryProduct] = useState(false);
-  const [categoryProductForm, setCategoryProductForm] = useState({
-    name: '',
-    priceCents: '',
-    stock: '',
-  });
+  const [categoryProductForm, setCategoryProductForm] =
+    useState<PosCategoryProductFormState>(defaultCategoryProductForm);
   const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
   const [quickPaymentMethod, setQuickPaymentMethod] = useState<PosQuickPaymentMethod>('NONE');
   const [customerMode, setCustomerMode] = useState<PosCustomerMode>('GUEST');
@@ -1764,37 +1802,62 @@ export default function PosPage() {
     }
 
     const name = categoryProductForm.name.trim();
-    const priceCents = Number(categoryProductForm.priceCents.trim());
+    const subtitle = categoryProductForm.subtitle.trim();
+    const sku = categoryProductForm.sku.trim();
+    const priceCents = parsePriceInputToCents(categoryProductForm.price);
     const stockRaw = categoryProductForm.stock.trim();
     const stock = stockRaw === '' ? undefined : Number(stockRaw);
+    const description = categoryProductForm.description.trim();
+    const imageUrl = categoryProductForm.imageUrl.trim();
+    const tags = categoryProductForm.tags
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const seoTitle = categoryProductForm.seoTitle.trim();
+    const seoDescription = categoryProductForm.seoDescription.trim();
 
     if (!name) {
       toast.error('Urun adi zorunlu.');
       return;
     }
-    if (!Number.isFinite(priceCents) || priceCents < 0) {
-      toast.error('Fiyat (kurus) gecerli olmali.');
+    if (!Number.isFinite(priceCents) || (priceCents ?? 0) <= 0) {
+      toast.error('Fiyat gecerli formatta olmali (orn. 1499.90).');
       return;
     }
     if (stock !== undefined && (!Number.isFinite(stock) || stock < 0)) {
       toast.error('Stok 0 veya daha buyuk olmali.');
       return;
     }
+    if (imageUrl) {
+      try {
+        const parsed = new URL(imageUrl);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new Error('invalid-url-protocol');
+        }
+      } catch {
+        toast.error('Gorsel URL gecerli olmali (http/https).');
+        return;
+      }
+    }
 
     setIsCreatingCategoryProduct(true);
     try {
       await api.post('/products', {
         name,
+        subtitle: subtitle || undefined,
+        sku: sku || undefined,
         categoryId: selectedCategoryId,
-        type: 'PHYSICAL',
-        price: String(Math.trunc(priceCents)),
+        type: categoryProductForm.type,
+        price: String(Math.trunc(priceCents ?? 0)),
         stock: stock === undefined ? undefined : Math.trunc(stock),
+        description: description || undefined,
+        imageUrl: imageUrl || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        seoTitle: seoTitle || undefined,
+        seoDescription: seoDescription || undefined,
+        isPublished: categoryProductForm.isPublished,
       });
-      setCategoryProductForm({
-        name: '',
-        priceCents: '',
-        stock: '',
-      });
+      setCategoryProductForm(defaultCategoryProductForm);
       toast.success('Urun kategoriye eklendi.');
       await loadCategoryProducts();
     } catch (error) {
@@ -1804,9 +1867,7 @@ export default function PosPage() {
     }
   }, [
     canManageCategoryProducts,
-    categoryProductForm.name,
-    categoryProductForm.priceCents,
-    categoryProductForm.stock,
+    categoryProductForm,
     isAuthed,
     loadCategoryProducts,
     selectedCategoryId,
@@ -4134,15 +4195,58 @@ export default function PosPage() {
                     />
                   </label>
                   <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Fiyat (kurus)
+                    Alt Baslik
                     <input
-                      value={categoryProductForm.priceCents}
+                      value={categoryProductForm.subtitle}
                       onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, priceCents: e.target.value }))
+                        setCategoryProductForm((prev) => ({ ...prev, subtitle: e.target.value }))
                       }
                       className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="100000"
-                      inputMode="numeric"
+                      placeholder="Orn: Profesyonel seri"
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    SKU
+                    <input
+                      value={categoryProductForm.sku}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, sku: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="NP-STR-001"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Urun Tipi
+                    <select
+                      value={categoryProductForm.type}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({
+                          ...prev,
+                          type: e.target.value as ProductType,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
+                    >
+                      <option value="PHYSICAL">PHYSICAL</option>
+                      <option value="SERVICE">SERVICE</option>
+                      <option value="WEIGHT">WEIGHT</option>
+                      <option value="CUSTOM">CUSTOM</option>
+                    </select>
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Fiyat (TL)
+                    <input
+                      value={categoryProductForm.price}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, price: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="1499.90"
+                      inputMode="decimal"
                     />
                   </label>
                   <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
@@ -4157,11 +4261,93 @@ export default function PosPage() {
                       inputMode="numeric"
                     />
                   </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Gorsel URL
+                    <input
+                      value={categoryProductForm.imageUrl}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, imageUrl: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="https://..."
+                    />
+                  </label>
                 </div>
+
+                <label className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                  Aciklama
+                  <textarea
+                    value={categoryProductForm.description}
+                    onChange={(e) =>
+                      setCategoryProductForm((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    className="mt-1 min-h-[88px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
+                    placeholder="Marketplace detay sayfasinda gorunecek urun aciklamasi"
+                  />
+                </label>
+
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    Etiketler
+                    <input
+                      value={categoryProductForm.tags}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, tags: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="gitar, aksesuar, premium"
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    SEO Baslik
+                    <input
+                      value={categoryProductForm.seoTitle}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({ ...prev, seoTitle: e.target.value }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="Google basligi"
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
+                    SEO Aciklama
+                    <input
+                      value={categoryProductForm.seoDescription}
+                      onChange={(e) =>
+                        setCategoryProductForm((prev) => ({
+                          ...prev,
+                          seoDescription: e.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
+                      placeholder="Arama sonucunda gorunen aciklama"
+                    />
+                  </label>
+                </div>
+
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-[#5C5C5C]">
-                    Urun tipi varsayilan olarak <span className="font-semibold">PHYSICAL</span> kaydedilir.
-                  </p>
+                  <div className="space-y-1">
+                    <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
+                      <input
+                        type="checkbox"
+                        checked={categoryProductForm.isPublished}
+                        onChange={(e) =>
+                          setCategoryProductForm((prev) => ({
+                            ...prev,
+                            isPublished: e.target.checked,
+                          }))
+                        }
+                        className="h-4 w-4 rounded border border-[#D9D9D3]"
+                      />
+                      Marketplace icin urunu hemen yayinla
+                    </label>
+                    <p className="text-xs text-[#5C5C5C]">
+                      Fiyat onizleme:{' '}
+                      <span className="font-semibold">
+                        {formatMoney(parsePriceInputToCents(categoryProductForm.price) ?? undefined)}
+                      </span>
+                    </p>
+                  </div>
                   <Button
                     type="button"
                     className="h-9 px-4 text-xs"
