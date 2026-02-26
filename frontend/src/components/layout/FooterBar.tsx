@@ -1,105 +1,70 @@
 import Link from 'next/link';
 import {
-  ArrowUpRight,
   Facebook,
   Instagram,
   Mail,
-  MapPin,
   Phone,
-  ShieldCheck,
 } from 'lucide-react';
 
 export default function FooterBar() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative border-t border-[#ddd2bf] bg-gradient-to-b from-[#f6efdf] via-[#f2e7d3] to-[#ebdec7] text-[#3b2f21]">
-      <section className="px-4 py-8 md:px-6 md:py-10">
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="space-y-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#836d4d]">
+    <footer className="relative border-t border-[var(--neutral-200)] bg-white/90 text-[var(--primary-800)] backdrop-blur-md">
+      <section className="px-4 py-6 md:px-6 md:py-7">
+        <div className="flex flex-wrap items-center justify-between gap-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--neutral-500)]">
               Nutopiano
             </p>
-            <h2 className="text-2xl font-serif text-[#2b2116] md:text-3xl">
-              Sade alışveriş deneyimi
-            </h2>
-            <p className="max-w-2xl text-sm leading-7 text-[#574632]">
-              Seller, POS ve checkout akışlarını tek bir çizgide buluşturuyoruz.
-              Daha net ekranlar, daha hızlı operasyon.
+            <p className="mt-1 text-sm text-[var(--neutral-600)]">
+              Sade alışveriş ve operasyon deneyimi.
             </p>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#d4c4a8] bg-[#fff8ea] px-3 py-1 font-semibold text-[#684f34]">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Üretim garantisi
-              </span>
-            </div>
           </div>
 
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#836d4d]">
-              Hızlı Linkler
-            </p>
-            <div className="mt-4 space-y-2 text-sm">
-              <Link href="/categories" className="group flex items-center justify-between rounded-lg px-1 py-1.5 transition hover:text-[#2e2217]">
-                Kategoriler
-                <ArrowUpRight className="h-4 w-4 text-[#9c7b4e] group-hover:text-[#2e2217]" />
-              </Link>
-              <Link href="/products" className="group flex items-center justify-between rounded-lg px-1 py-1.5 transition hover:text-[#2e2217]">
-                Ürünler
-                <ArrowUpRight className="h-4 w-4 text-[#9c7b4e] group-hover:text-[#2e2217]" />
-              </Link>
-              <Link href="/checkout" className="group flex items-center justify-between rounded-lg px-1 py-1.5 transition hover:text-[#2e2217]">
-                Checkout
-                <ArrowUpRight className="h-4 w-4 text-[#9c7b4e] group-hover:text-[#2e2217]" />
-              </Link>
-              <Link href="/account/orders" className="group flex items-center justify-between rounded-lg px-1 py-1.5 transition hover:text-[#2e2217]">
-                Sipariş Takibi
-                <ArrowUpRight className="h-4 w-4 text-[#9c7b4e] group-hover:text-[#2e2217]" />
-              </Link>
-            </div>
-          </div>
+          <nav className="flex flex-wrap items-center gap-3 text-sm font-medium text-[var(--neutral-700)]">
+            <Link href="/categories" className="rounded-full px-3 py-1.5 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]">
+              Kategoriler
+            </Link>
+            <Link href="/products" className="rounded-full px-3 py-1.5 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]">
+              Ürünler
+            </Link>
+            <Link href="/checkout" className="rounded-full px-3 py-1.5 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]">
+              Checkout
+            </Link>
+            <Link href="/account/orders" className="rounded-full px-3 py-1.5 transition hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]">
+              Sipariş Takibi
+            </Link>
+          </nav>
 
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#836d4d]">
-              İletişim
-            </p>
-            <div className="mt-4 space-y-2 text-sm text-[#574632]">
-              <p className="inline-flex items-center gap-2">
-                <Phone className="h-4 w-4 text-[#8f734d]" />
-                +90 212 000 00 00
-              </p>
-              <p className="inline-flex items-center gap-2">
-                <Mail className="h-4 w-4 text-[#8f734d]" />
-                info@nutopiano.com
-              </p>
-              <Link href="https://maps.app.goo.gl/" target="_blank" className="inline-flex items-center gap-2 transition hover:text-[#2e2217]">
-                <MapPin className="h-4 w-4 text-[#8f734d]" />
-                İstanbul / Türkiye
-              </Link>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <Link href="https://instagram.com" target="_blank" aria-label="Instagram" className="rounded-full border border-[#d7c9b1] bg-[#fff9ec] p-2 transition hover:bg-[#f1e4ca]">
-                <Instagram className="h-4 w-4 text-[#6a5236]" />
-              </Link>
-              <Link href="https://facebook.com" target="_blank" aria-label="Facebook" className="rounded-full border border-[#d7c9b1] bg-[#fff9ec] p-2 transition hover:bg-[#f1e4ca]">
-                <Facebook className="h-4 w-4 text-[#6a5236]" />
-              </Link>
-            </div>
+          <div className="flex items-center gap-2 text-[var(--neutral-600)]">
+            <Link href="tel:+902120000000" aria-label="Telefon" className="rounded-full border border-[var(--neutral-200)] p-2 transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-800)]">
+              <Phone className="h-4 w-4" />
+            </Link>
+            <Link href="mailto:info@nutopiano.com" aria-label="E-posta" className="rounded-full border border-[var(--neutral-200)] p-2 transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-800)]">
+              <Mail className="h-4 w-4" />
+            </Link>
+            <Link href="https://instagram.com" target="_blank" aria-label="Instagram" className="rounded-full border border-[var(--neutral-200)] p-2 transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-800)]">
+              <Instagram className="h-4 w-4" />
+            </Link>
+            <Link href="https://facebook.com" target="_blank" aria-label="Facebook" className="rounded-full border border-[var(--neutral-200)] p-2 transition hover:border-[var(--neutral-300)] hover:text-[var(--primary-800)]">
+              <Facebook className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="border-t border-[#d7c9af] px-4 py-4 text-xs text-[#7a6446] md:px-6">
+      <section className="border-t border-[var(--neutral-200)] px-4 py-4 text-xs text-[var(--neutral-500)] md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p>© {year} Nutopiano. Tüm hakları saklıdır.</p>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/legal/privacy" className="transition hover:text-[#302317]">
+            <Link href="/legal/privacy" className="transition hover:text-[var(--primary-800)]">
               KVKK & Gizlilik
             </Link>
-            <Link href="/legal/distance-sales" className="transition hover:text-[#302317]">
+            <Link href="/legal/distance-sales" className="transition hover:text-[var(--primary-800)]">
               Mesafeli satış sözleşmesi
             </Link>
-            <Link href="/legal/kvkk" className="transition hover:text-[#302317]">
+            <Link href="/legal/kvkk" className="transition hover:text-[var(--primary-800)]">
               Kullanım koşulları
             </Link>
           </div>
