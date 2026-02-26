@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Wifi, WifiOff, Briefcase, RefreshCw, Maximize, Minimize, AlertCircle } from 'lucide-react';
 import Button from '@/components/common/Button';
 import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
 import {
@@ -1409,12 +1408,6 @@ export default function PosPage() {
     typeof selectedCategoryId === 'number'
       ? categoryNameById.get(selectedCategoryId) ?? `Kategori #${selectedCategoryId}`
       : null;
-  const queueSeverityClass = useMemo(() => {
-    if (queueCount >= 20) return 'border-red-200 bg-red-50 text-red-800';
-    if (queueCount >= 8) return 'border-amber-200 bg-amber-50 text-amber-800';
-    return 'border-[#D8DED8] bg-white text-[#1A3C34]';
-  }, [queueCount]);
-
   const isCheckingAccessView = isCheckingAccess && !user;
   const isUnauthorizedView = !isCheckingAccessView && (!user || !isPosRoleAllowed(user.role));
   const parsedQuantityInput = Number(quantity);
@@ -2794,48 +2787,40 @@ export default function PosPage() {
   }
 
   return (
-    <div className="pos-redesign flex w-full flex-col gap-0 bg-transparent">
+    <div className="pos-redesign mx-auto flex w-full max-w-[1560px] flex-col gap-0 bg-transparent">
       {/* ── Sticky POS Topbar ── */}
       <header className="sticky top-0 z-40 border-b border-[#E5E5E0] bg-white px-4 py-2 text-[#1A3C34] shadow-xs md:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1A3C34]/10 text-[#1A3C34]">
-              <span className="text-[10px] font-bold uppercase tracking-widest">POS</span>
-            </div>
-            {/* Status badges */}
-            <span className="hidden h-5 w-px bg-[#E5E5E0] sm:block" />
-            <div title={isOnline ? 'Online' : 'Offline'} className={`flex h-8 w-8 items-center justify-center rounded-full ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-              {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-            </div>
-            <div title={activeShift ? `Kasa: ${activeShift.registerCode}` : 'Vardiya kapalı'} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A3C34]/5 text-[#1A3C34]/70">
-              <Briefcase className="h-4 w-4" />
-            </div>
-            {hasQueue ? (
-              <div title={`Bekleyen İşlem: ${queueCount}`} className={`flex h-8 items-center justify-center gap-1.5 rounded-full px-3 ${queueSeverityClass}`}>
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-xs font-bold">{queueCount}</span>
-              </div>
-            ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
+            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
+              Baglanti: {isOnline ? 'Online' : 'Offline'}
+            </span>
+            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
+              Kuyruk: {queueCount}
+            </span>
+            <span className="rounded-full bg-[#1A3C34]/8 px-3 py-1.5 text-[#1A3C34]">
+              {activeShift ? `Kasa: ${activeShift.registerCode}` : 'Vardiya kapali'}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!isOnline ? null : (
               <Button
-                title="Kuyruğu Senkronize Et"
+                title="Kuyrugu Senkronize Et"
                 variant="secondary"
-                className="flex h-8 w-8 items-center justify-center rounded-full border-transparent bg-[#1A3C34]/5 p-0 text-[#1A3C34] hover:bg-[#1A3C34]/15"
+                className="h-8 rounded-full border border-[#1A3C34]/15 bg-white px-3 text-xs font-semibold text-[#1A3C34] hover:bg-[#1A3C34]/5"
                 onClick={() => void syncQueuedSales({ force: true })}
                 disabled={!isAuthed || !hasQueue || !isOnline || isSyncing}
               >
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Sync Ediliyor...' : 'Kuyrugu Sync Et'}
               </Button>
             )}
             <Button
-              title={isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Aç'}
+              title={isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
               variant="secondary"
-              className="flex h-8 w-8 items-center justify-center rounded-full border-transparent bg-[#1A3C34]/5 p-0 text-[#1A3C34] hover:bg-[#1A3C34]/15"
+              className="h-8 rounded-full border border-[#1A3C34]/15 bg-white px-3 text-xs font-semibold text-[#1A3C34] hover:bg-[#1A3C34]/5"
               onClick={() => setIsFocusMode((prev) => !prev)}
             >
-              {isFocusMode ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              {isFocusMode ? 'Odak Modunu Kapat' : 'Odak Modunu Ac'}
             </Button>
           </div>
         </div>
