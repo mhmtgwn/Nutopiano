@@ -51,6 +51,9 @@ jobs:
       - name: Backend Prisma Migrate Status
         run: npm run prisma:migrate:status -w backend
 
+      - name: Backend Prisma Generate
+        run: npm exec -w backend prisma generate --schema prisma/schema.prisma
+
       - name: Backend Lint
         run: npm run lint -w backend
 
