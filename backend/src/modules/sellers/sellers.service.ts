@@ -1750,7 +1750,7 @@ export class SellersService {
       new Set(
         products
           .map((row) => row.categoryId)
-          .filter((value): value is number => Number.isFinite(value as number)),
+          .filter((value): value is number => Number.isFinite(value)),
       ),
     );
     const categories =
@@ -1956,7 +1956,7 @@ export class SellersService {
     });
     const availableCategoryIds = availableCategoryRows
       .map((row) => row.categoryId)
-      .filter((value): value is number => Number.isFinite(value as number));
+      .filter((value): value is number => Number.isFinite(value));
     const availableCategories =
       availableCategoryIds.length > 0
         ? await this.prisma.category.findMany({
