@@ -221,6 +221,19 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('me/permissions')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get effective POS permissions for current user',
+    description:
+      'Returns canonical POS permissions (pos.sales / pos.orders / pos.reports) and effective role.',
+  })
+  @ApiOkResponse({ description: 'Current user effective permissions.' })
+  mePermissions(@Req() req: { user: JwtPayload }) {
+    return this.authService.mePermissions(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('profile')
   @ApiBearerAuth()
   @ApiOperation({

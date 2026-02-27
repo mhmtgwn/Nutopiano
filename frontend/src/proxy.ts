@@ -7,6 +7,12 @@ const ACCESS_COOKIE = 'nutopiano_access';
 const isAdminOnlyPath = (pathname: string) => pathname.startsWith('/admin');
 const isPlatformOnlyPath = (pathname: string) => pathname.startsWith('/platform');
 
+const redirectPlatformPath = (req: NextRequest) => {
+  const redirectUrl = req.nextUrl.clone();
+  redirectUrl.pathname = req.nextUrl.pathname.replace(/^\/platform\b/, '/admin');
+  return NextResponse.redirect(redirectUrl, 308);
+};
+
 const decodeJwtRole = (token: string): string | null => {
   try {
     const segments = token.split('.');
@@ -43,17 +49,14 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
+  if (isPlatformOnlyPath(pathname)) {
+    return redirectPlatformPath(req);
+  }
+
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   if (token && token.trim().length > 0) {
-    if (isAdminOnlyPath(pathname) || isPlatformOnlyPath(pathname)) {
+    if (isAdminOnlyPath(pathname)) {
       const role = decodeJwtRole(token);
-
-      if (isPlatformOnlyPath(pathname) && role !== 'SUPER_ADMIN') {
-        const redirectUrl = req.nextUrl.clone();
-        redirectUrl.pathname = '/';
-        redirectUrl.search = '';
-        return NextResponse.redirect(redirectUrl);
-      }
 
       if (!isAdminRole(role)) {
         const redirectUrl = req.nextUrl.clone();

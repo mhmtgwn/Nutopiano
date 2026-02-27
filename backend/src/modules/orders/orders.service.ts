@@ -33,6 +33,10 @@ import {
   type PaginationMeta,
 } from '../../common/utils/pagination';
 import { parseBusinessId } from '../../common/utils';
+import {
+  hasPosPermission,
+  normalizePosPermissionsJson,
+} from '@common/authz';
 
 export interface OrderSummary {
   id: number;
@@ -811,23 +815,6 @@ export class OrdersService {
     return Array.from(new Set(rows.map((row) => row.sellerId)));
   }
 
-  private normalizePermissionsJson(value: unknown): string[] {
-    if (!value || typeof value !== 'object') {
-      return [];
-    }
-    const maybePermissions = (value as { permissions?: unknown }).permissions;
-    if (!Array.isArray(maybePermissions)) {
-      return [];
-    }
-    return Array.from(
-      new Set(
-        maybePermissions
-          .map((item) => String(item ?? '').trim())
-          .filter((item) => item.length > 0),
-      ),
-    );
-  }
-
   private async resolveUserTeamPermissionRows(
     businessId: number,
     userId: number,
@@ -850,7 +837,7 @@ export class OrdersService {
     return rows
       .map((row) => ({
         sellerId: Number(row.sellerId),
-        permissions: this.normalizePermissionsJson(row.permissionsJson),
+        permissions: normalizePosPermissionsJson(row.permissionsJson),
       }))
       .filter((row) => Number.isFinite(row.sellerId) && row.sellerId > 0);
   }
@@ -887,7 +874,7 @@ export class OrdersService {
     }
 
     const hasPermission = scopedRows.some((row) =>
-      row.permissions.includes(permissionKey),
+      hasPosPermission(row.permissions, permissionKey),
     );
     if (!hasPermission) {
       throw new ForbiddenException('Bu islem icin yetkiniz yok');
@@ -951,7 +938,7 @@ export class OrdersService {
       if (!sellerIds.length) {
         throw new ForbiddenException('Aktif seller team uyeligi bulunamadi');
       }
-      await this.assertUserPermission(currentUser, 'orders.read');
+      await this.assertUserPermission(currentUser, 'pos.orders');
       return {
         businessId,
         sellerId: { in: sellerIds },
@@ -1367,7 +1354,7 @@ export class OrdersService {
       if (source !== OrderSource.POS) {
         throw new ForbiddenException('USER sadece POS siparisi olusturabilir');
       }
-      await this.assertUserPermission(currentUser, 'pos.sale.create', sellerId);
+      await this.assertUserPermission(currentUser, 'pos.sales', sellerId);
     }
 
     const defaultStatusKey =
@@ -2320,7 +2307,7 @@ export class OrdersService {
       }
       await this.assertUserPermission(
         currentUser,
-        'orders.read',
+        'pos.orders',
         Number(order.sellerId ?? 0),
       );
     }
@@ -2509,7 +2496,7 @@ export class OrdersService {
 
     const businessId = this.requireBusinessId(currentUser);
     if (currentUser.role === 'USER') {
-      await this.assertUserPermission(currentUser, 'orders.read');
+      await this.assertUserPermission(currentUser, 'pos.orders');
     }
     const status = (params?.status ?? '').trim().toUpperCase();
 
@@ -2589,7 +2576,7 @@ export class OrdersService {
     if (currentUser.role === 'USER') {
       await this.assertUserPermission(
         currentUser,
-        'orders.updateStatus',
+        'pos.orders',
         Number(request.order?.sellerId ?? 0),
       );
     }
@@ -2868,7 +2855,7 @@ export class OrdersService {
     if (currentUser.role === 'USER') {
       await this.assertUserPermission(
         currentUser,
-        'orders.updateStatus',
+        'pos.orders',
         Number(order.sellerId ?? 0),
       );
     }
@@ -3058,7 +3045,7 @@ export class OrdersService {
     if (currentUser.role === 'USER') {
       await this.assertUserPermission(
         currentUser,
-        'pos.sale.create',
+        'pos.sales',
         Number(order.sellerId ?? 0),
       );
     }
@@ -3191,3 +3178,4 @@ export class OrdersService {
     return paymentSummary;
   }
 }
+

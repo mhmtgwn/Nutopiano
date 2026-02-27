@@ -16,6 +16,11 @@ import api from '@/services/api';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import { isPosRoleAllowed } from '@/lib/role-routing';
 import {
+  filterAllowedPosTabs,
+  hasPosPermission,
+  type PosTabId,
+} from '@/lib/pos-permissions';
+import {
   enqueuePosOrder,
   findCachedPosCustomers,
   findCachedPosProductByBarcode,
@@ -43,6 +48,13 @@ type ProfileResponse = {
   email?: string;
   role: string;
   businessId?: string | null;
+};
+
+type PosPermissionsResponse = {
+  userId: string;
+  role: string;
+  effectiveRole?: string;
+  permissions: string[];
 };
 
 type ReceiptSettings = {
@@ -414,6 +426,30 @@ const defaultCategoryProductForm: PosCategoryProductFormState = {
   seoTitle: '',
   seoDescription: '',
   isPublished: false,
+};
+
+const allPosTabs: Array<{ id: PosTabId; label: string }> = [
+  { id: 'home', label: 'Satis' },
+  { id: 'categories', label: 'Kategoriler' },
+  { id: 'customers', label: 'Musteriler' },
+  { id: 'finance', label: 'Finans' },
+  { id: 'orders', label: 'Siparisler' },
+  { id: 'settings', label: 'Ayarlar' },
+];
+
+const fallbackPosPermissionsByRole = (role?: string | null): string[] => {
+  const normalized = String(role ?? '').trim().toUpperCase();
+  if (
+    normalized === 'ADMIN' ||
+    normalized === 'SUPER_ADMIN' ||
+    normalized === 'SELLER'
+  ) {
+    return ['pos.sales', 'pos.orders', 'pos.reports'];
+  }
+  if (normalized === 'USER') {
+    return ['pos.sales'];
+  }
+  return [];
 };
 
 const buildReceiptHtml = (
@@ -814,6 +850,40 @@ export default function PosPage() {
   }, [user, dispatch, router]);
 
   const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'customers' | 'finance' | 'orders' | 'settings'>('home');
+  const [posPermissions, setPosPermissions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user || !isPosRoleAllowed(user.role)) {
+      setPosPermissions([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fallback = fallbackPosPermissionsByRole(user.role);
+    setPosPermissions((current) => (current.length > 0 ? current : fallback));
+
+    const loadPermissions = async () => {
+      try {
+        const response = await api.get<PosPermissionsResponse>('/auth/me/permissions');
+        const permissions = Array.isArray(response.data?.permissions)
+          ? response.data.permissions.map((item) => String(item ?? ''))
+          : [];
+        if (isMounted) {
+          setPosPermissions(permissions);
+        }
+      } catch {
+        if (isMounted) {
+          setPosPermissions(fallback);
+        }
+      }
+    };
+
+    void loadPermissions();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.role]);
+
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -1349,15 +1419,15 @@ export default function PosPage() {
 
   useEffect(() => {
     if (!isAuthed) return;
-    if (user?.role === 'USER') return;
+    if (!hasPosPermission(posPermissions, 'pos.reports')) return;
     void loadStaffSalesReport();
-  }, [isAuthed, loadStaffSalesReport, user?.role]);
+  }, [isAuthed, loadStaffSalesReport, posPermissions]);
 
   useEffect(() => {
     if (!isAuthed) return;
-    if (user?.role === 'USER') return;
+    if (!hasPosPermission(posPermissions, 'pos.reports')) return;
     void loadSalesReport();
-  }, [isAuthed, loadSalesReport, user?.role]);
+  }, [isAuthed, loadSalesReport, posPermissions]);
 
 
   const queueCount = queueItems.length;
@@ -1408,6 +1478,22 @@ export default function PosPage() {
     typeof selectedCategoryId === 'number'
       ? categoryNameById.get(selectedCategoryId) ?? `Kategori #${selectedCategoryId}`
       : null;
+  const allowedTabIds = useMemo(
+    () => filterAllowedPosTabs(posPermissions, allPosTabs.map((tab) => tab.id)),
+    [posPermissions],
+  );
+  const visibleTabItems = useMemo(
+    () => allPosTabs.filter((tab) => allowedTabIds.includes(tab.id)),
+    [allowedTabIds],
+  );
+
+  useEffect(() => {
+    if (allowedTabIds.length === 0) return;
+    if (!allowedTabIds.includes(activeTab)) {
+      setActiveTab(allowedTabIds[0]);
+    }
+  }, [activeTab, allowedTabIds]);
+
   const isCheckingAccessView = isCheckingAccess && !user;
   const isUnauthorizedView = !isCheckingAccessView && (!user || !isPosRoleAllowed(user.role));
   const parsedQuantityInput = Number(quantity);
@@ -2791,17 +2877,10 @@ export default function PosPage() {
       {/* ── Tabs Navigation ── */}
       <div className="w-full overflow-x-auto border-b border-[#163D34]/10 bg-white">
         <nav className="mx-auto flex w-max gap-6 px-4 md:px-6" aria-label="Tabs">
-          {[
-            { id: 'home', label: 'Satis' },
-            { id: 'categories', label: 'Kategoriler' },
-            { id: 'customers', label: 'Musteriler' },
-            { id: 'finance', label: 'Finans' },
-            { id: 'orders', label: 'Siparisler' },
-            { id: 'settings', label: 'Ayarlar' },
-          ].map((tab) => (
+          {visibleTabItems.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => setActiveTab(tab.id)}
               className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'border-[#1A3C34] text-[#1A3C34]'
@@ -2814,8 +2893,14 @@ export default function PosPage() {
         </nav>
       </div>
 
+      {visibleTabItems.length === 0 ? (
+        <div className="mx-auto mt-6 w-full max-w-6xl rounded-2xl border border-[#D9D9D3] bg-white p-6 text-sm text-[#1A3C34]/80">
+          POS yetkisi tanimli degil. Lutfen magaza yoneticinizden POS izinlerini guncellemesini isteyin.
+        </div>
+      ) : null}
+
       {/* ── Main POS Body ── */}
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'home' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'home' ? 'block' : 'hidden'}`}>
         <div className="space-y-4">
           {isAuthed ? (
             !activeShift ? (
@@ -4230,7 +4315,7 @@ export default function PosPage() {
       </div>
 
       {/* Tab Contents */}
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'categories' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'categories' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -4723,7 +4808,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'customers' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'customers' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -4825,7 +4910,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'finance' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'finance' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">Finans ve Analitik</h2>
@@ -4948,7 +5033,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'orders' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'orders' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">Sipariş ve Kuyruk Yönetimi</h2>
@@ -5071,7 +5156,7 @@ export default function PosPage() {
         </div>
       </div>
 
-      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-4 md:px-6 md:py-6 ${visibleTabItems.length > 0 && activeTab === 'settings' ? 'block' : 'hidden'}`}>
         <div className="surface-panel space-y-4 p-6">
           <div>
             <h2 className="text-xl font-semibold text-[#1A3C34]">POS Ayarları</h2>

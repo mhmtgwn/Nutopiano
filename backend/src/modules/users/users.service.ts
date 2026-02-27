@@ -159,12 +159,6 @@ export class UsersService {
       );
     }
 
-    if (!options.isOverride && currentUser.role === 'ADMIN') {
-      throw new ForbiddenException(
-        'ADMIN varsayilan read-only. role-change icin override endpointini kullanin.',
-      );
-    }
-
     const target = await this.prisma.user.findFirst({
       where: {
         id,
@@ -189,6 +183,26 @@ export class UsersService {
       );
     }
 
+    const isCurrentAdminRole =
+      target.role === Role.ADMIN || target.role === Role.SUPER_ADMIN;
+    const isNextAdminRole = role === Role.ADMIN || role === Role.SUPER_ADMIN;
+    if (target.isActive && isCurrentAdminRole && !isNextAdminRole) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          businessId,
+          isActive: true,
+          role: {
+            in: [Role.ADMIN, Role.SUPER_ADMIN],
+          },
+        },
+      });
+      if (activeAdminCount <= 1) {
+        throw new ForbiddenException(
+          'Son aktif admin rolunu dusuremezsiniz.',
+        );
+      }
+    }
+
     const updated =
       target.role === role
         ? {
@@ -210,7 +224,7 @@ export class UsersService {
             },
           });
 
-    if (options.isOverride || currentUser.role === 'SUPER_ADMIN') {
+    if (target.role !== updated.role || options.isOverride) {
       await this.auditService.logFromActor(currentUser, {
         actionType: AUDIT_ACTION_TYPES.ROLE_CHANGE,
         targetType: 'USER',
@@ -255,11 +269,32 @@ export class UsersService {
       },
       select: {
         id: true,
+        role: true,
+        isActive: true,
       },
     });
 
     if (!existing) {
       throw new NotFoundException('User not found');
+    }
+
+    if (
+      isActive === false &&
+      existing.isActive &&
+      (existing.role === Role.ADMIN || existing.role === Role.SUPER_ADMIN)
+    ) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          businessId,
+          isActive: true,
+          role: {
+            in: [Role.ADMIN, Role.SUPER_ADMIN],
+          },
+        },
+      });
+      if (activeAdminCount <= 1) {
+        throw new ForbiddenException('Son aktif admin pasife alinamaz.');
+      }
     }
 
     const updated = await this.prisma.user.update({

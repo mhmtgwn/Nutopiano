@@ -4,4 +4,4 @@
 
 export * from './string.utils';
 export * from './validation.utils';
-export * from './pagination.utils';
+export * from './pagination';

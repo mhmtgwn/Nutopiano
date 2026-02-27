@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   return (
-    <AdminGuard requireSuperAdmin>
-      <AdminShell basePath="/platform">{children}</AdminShell>
+    <AdminGuard>
+      <AdminShell basePath="/admin">{children}</AdminShell>
     </AdminGuard>
   );
 }

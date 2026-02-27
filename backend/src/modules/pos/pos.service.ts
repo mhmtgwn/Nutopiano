@@ -18,6 +18,10 @@ import { ApplySplitPaymentsDto } from './dto/apply-split-payments.dto';
 import { CreatePosCustomerDto } from './dto/create-pos-customer.dto';
 import { AuditService } from '../audit/audit.service';
 import { AUDIT_ACTION_TYPES } from '../audit/audit.constants';
+import {
+  hasPosPermission,
+  normalizePosPermissionsJson,
+} from '@common/authz';
 
 type SalesBucketPeriod = 'day' | 'week' | 'month';
 
@@ -133,25 +137,6 @@ export class PosService {
     );
   }
 
-  private normalizePermissionsJson(
-    value: Prisma.JsonValue | null | undefined,
-  ): string[] {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return [];
-    }
-
-    const maybePermissions = (value as { permissions?: unknown }).permissions;
-    if (!Array.isArray(maybePermissions)) {
-      return [];
-    }
-
-    const normalized = maybePermissions
-      .map((item) => String(item ?? '').trim())
-      .filter((item) => item.length > 0);
-
-    return Array.from(new Set(normalized));
-  }
-
   private async resolveUserTeamPermissionRows(
     businessId: number,
     userId: number,
@@ -174,7 +159,7 @@ export class PosService {
     return rows
       .map((row) => ({
         sellerId: Number(row.sellerId),
-        permissions: this.normalizePermissionsJson(row.permissionsJson),
+        permissions: normalizePosPermissionsJson(row.permissionsJson),
       }))
       .filter((row) => row.sellerId > 0);
   }
@@ -212,7 +197,7 @@ export class PosService {
     }
 
     const hasPermission = targetRows.some((row) =>
-      row.permissions.includes(permissionKey),
+      hasPosPermission(row.permissions, permissionKey),
     );
     if (!hasPermission) {
       throw new ForbiddenException(`Missing permission: ${permissionKey}`);
@@ -498,7 +483,7 @@ export class PosService {
 
   async getCurrentSession(currentUser: JwtPayload) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
 
     const session = await this.prisma.cashRegisterSession.findFirst({
@@ -533,7 +518,7 @@ export class PosService {
 
   async listSessions(currentUser: JwtPayload, limit = 20) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
@@ -566,7 +551,7 @@ export class PosService {
 
   async openSession(currentUser: JwtPayload, payload: OpenRegisterSessionDto) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const registerCode = (payload.registerCode ?? 'MAIN').trim().toUpperCase();
@@ -607,7 +592,7 @@ export class PosService {
     payload: CloseRegisterSessionDto,
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const registerCode = payload.registerCode?.trim().toUpperCase();
@@ -742,6 +727,7 @@ export class PosService {
     },
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const limit = Math.min(Math.max(Number(params?.limit ?? 50), 1), 200);
 
@@ -833,6 +819,7 @@ export class PosService {
     params?: { userId?: number; dateFrom?: string; dateTo?: string },
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'pos.reports');
     const businessId = Number(currentUser.businessId);
 
     const now = new Date();
@@ -997,6 +984,7 @@ export class PosService {
     },
   ) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'pos.reports');
     const businessId = Number(currentUser.businessId);
     const period = this.normalizeSalesPeriod(params?.period);
     const topLimit = Math.min(Math.max(Number(params?.topLimit ?? 10), 1), 50);
@@ -1225,7 +1213,7 @@ export class PosService {
 
   async getOrderInvoice(currentUser: JwtPayload, orderId: number) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
 
     const order = await this.prisma.order.findFirst({
@@ -1290,7 +1278,7 @@ export class PosService {
       sellerId: order.sellerId,
       createdByUserId: order.createdByUserId,
     });
-    await this.assertUserPermission(currentUser, 'orders.read', order.sellerId);
+    await this.assertUserPermission(currentUser, 'pos.orders', order.sellerId);
 
     const [business, settingsRows, billingAddress] = await Promise.all([
       this.prisma.business.findUnique({
@@ -1475,7 +1463,7 @@ export class PosService {
     payload: PosReturnOrderDto,
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -1502,7 +1490,7 @@ export class PosService {
     });
     await this.assertUserPermission(
       currentUser,
-      'orders.updateStatus',
+      'pos.orders',
       order.sellerId,
     );
 
@@ -1663,6 +1651,7 @@ export class PosService {
 
   async getEndOfDayReport(currentUser: JwtPayload, date?: string) {
     this.assertAllowedRole(currentUser);
+    await this.assertUserPermission(currentUser, 'pos.reports');
     const businessId = Number(currentUser.businessId);
 
     const day = (date ?? '').trim();
@@ -1771,7 +1760,7 @@ export class PosService {
 
   async findProductByBarcode(currentUser: JwtPayload, barcode: string) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
@@ -1883,7 +1872,7 @@ export class PosService {
     params?: { q?: string; limit?: number },
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
@@ -2048,7 +2037,7 @@ export class PosService {
     params?: { q?: string; limit?: number },
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
@@ -2107,7 +2096,7 @@ export class PosService {
 
   async findCustomerById(currentUser: JwtPayload, customerId: number) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
     const sellerIds = await this.resolveAllowedSellerIdsForActor(currentUser);
@@ -2163,7 +2152,7 @@ export class PosService {
 
   async createCustomer(currentUser: JwtPayload, payload: CreatePosCustomerDto) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const createdByUserId = Number(currentUser.userId);
     const name = payload.name.trim();
@@ -2276,7 +2265,7 @@ export class PosService {
     payload: ApplySplitPaymentsDto,
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -2327,7 +2316,7 @@ export class PosService {
       });
       await this.assertUserPermission(
         currentUser,
-        'pos.sale.create',
+        'pos.sales',
         order.sellerId,
       );
 
@@ -2409,7 +2398,7 @@ export class PosService {
     payload: ApplyCustomerBalanceDto,
   ) {
     this.assertAllowedRole(currentUser);
-    await this.assertUserPermission(currentUser, 'tab.sales');
+    await this.assertUserPermission(currentUser, 'pos.sales');
     const businessId = Number(currentUser.businessId);
     const userId = Number(currentUser.userId);
 
@@ -2437,7 +2426,7 @@ export class PosService {
     });
     await this.assertUserPermission(
       currentUser,
-      'pos.sale.create',
+      'pos.sales',
       order.sellerId,
     );
 
@@ -2533,3 +2522,4 @@ export class PosService {
     };
   }
 }
+

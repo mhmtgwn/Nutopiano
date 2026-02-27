@@ -13,12 +13,10 @@ import {
   Home,
   LogOut,
   Menu,
-  Package,
   Search,
   Settings,
   Store,
   UserCheck,
-  UserCog,
   X,
 } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store';
@@ -46,32 +44,37 @@ type NavSection = {
   items: NavItem[];
 };
 
-const createNavSections = (basePath: string): NavSection[] => [
-  {
-    title: 'Panel',
-    items: [
-      { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
-    ],
-  },
-  {
-    title: 'Operasyon',
-    items: [
-      { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
-      { label: 'Ürün & Kategori', href: `${basePath}/products`, icon: Package },
-      { label: 'Müşteriler', href: `${basePath}/customers`, icon: UserCheck },
-      { label: 'Ödemeler', href: `${basePath}/payments`, icon: CreditCard },
-    ],
-  },
-  {
-    title: 'Yönetim',
-    items: [
-      { label: 'Satıcı & Kullanıcı', href: `${basePath}/sellers`, icon: UserCog, requiredCapabilities: ['MANAGE_SELLERS'] },
-      { label: 'Finans Merkezi', href: `${basePath}/finance`, icon: CreditCard, requiredCapabilities: ['VIEW_FINANCE'] },
-      { label: 'Raporlar', href: `${basePath}/reports`, icon: BarChart3, requiredCapabilities: ['VIEW_REPORTS'] },
-      { label: 'Ayarlar', href: `${basePath}/settings`, icon: Settings },
-    ],
-  },
-];
+const createNavSections = (basePath: string): NavSection[] => {
+  return [
+    {
+      title: 'Operasyon',
+      items: [
+        { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
+        { label: 'Kullanıcılar', href: `${basePath}/users`, icon: UserCheck },
+        { label: 'Satıcılar', href: `${basePath}/sellers`, icon: Store, requiredCapabilities: ['MANAGE_SELLERS'] },
+        { label: 'Ürünler', href: `${basePath}/products`, icon: ClipboardList },
+        { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
+        { label: 'Müşteriler', href: `${basePath}/customers`, icon: UserCheck },
+        { label: 'Raporlar', href: `${basePath}/reports`, icon: BarChart3, requiredCapabilities: ['VIEW_REPORTS'] },
+      ],
+    },
+    {
+      title: 'Finans',
+      items: [
+        { label: 'Finans Özeti', href: `${basePath}/finance`, icon: CreditCard, requiredCapabilities: ['VIEW_FINANCE'] },
+        { label: 'Payout', href: `${basePath}/finance/payouts`, icon: CreditCard, requiredCapabilities: ['MANAGE_PAYOUT'] },
+      ],
+    },
+    {
+      title: 'Sistem',
+      items: [
+        { label: 'Planlar', href: `${basePath}/plans`, icon: BarChart3 },
+        { label: 'Risk Kontrol', href: `${basePath}/risk-control`, icon: Settings, requiredCapabilities: ['VIEW_AUDIT'] },
+        { label: 'Ayarlar', href: `${basePath}/settings`, icon: Settings },
+      ],
+    },
+  ];
+};
 
 export default function AdminShell({ children, basePath = '/admin' }: AdminShellProps) {
   const pathname = usePathname();

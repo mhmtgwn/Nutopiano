@@ -1,8 +1,8 @@
-import type { UserRole } from '../../core/decorators/roles.decorator';
+import type { RoleType } from '../../common/constants/roles';
 
 export interface JwtPayload {
   userId: string;
   phone?: string;
-  role: UserRole;
+  role: RoleType;
   businessId?: string | null;
 }

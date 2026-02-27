@@ -1,17 +1,12 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, type UserRole } from '../decorators/roles.decorator';
-import { ROLES, type RoleType } from '../constants/roles';
+import { toEffectiveRole } from '../authz';
+import { type RoleType } from '../constants/roles';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
-
-  private normalize(role?: string | null): RoleType | null {
-    if (!role) return null;
-    const normalized = role === 'STAFF' ? ROLES.USER : role;
-    return normalized in ROLES ? (normalized as RoleType) : null;
-  }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
@@ -26,14 +21,11 @@ export class RolesGuard implements CanActivate {
     const { user } = context
       .switchToHttp()
       .getRequest<{ user?: { role?: string } }>();
-    const actual = this.normalize(user?.role);
+    const actual = toEffectiveRole(user?.role);
     if (!actual) return false;
-    if (actual === ROLES.SUPER_ADMIN) {
-      return true;
-    }
 
     const normalizedRequired = requiredRoles
-      .map((r) => this.normalize(r))
+      .map((r) => toEffectiveRole(r))
       .filter((r): r is RoleType => r !== null);
 
     if (normalizedRequired.length === 0) {

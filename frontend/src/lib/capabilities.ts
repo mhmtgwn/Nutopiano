@@ -1,4 +1,4 @@
-import type { AppRole } from './role-routing';
+import { getEffectiveRole, type EffectiveAppRole } from './role-routing';
 
 export const CAPABILITIES = [
   'VIEW_FINANCE',
@@ -21,8 +21,7 @@ export type AppCapability = (typeof CAPABILITIES)[number];
 
 const ALL_CAPABILITIES = [...CAPABILITIES] as AppCapability[];
 
-const ROLE_CAPABILITY_MAP: Record<AppRole, AppCapability[]> = {
-  SUPER_ADMIN: ALL_CAPABILITIES,
+const ROLE_CAPABILITY_MAP: Record<EffectiveAppRole, AppCapability[]> = {
   ADMIN: [
     'VIEW_FINANCE',
     'EXECUTE_OVERRIDE',
@@ -39,6 +38,7 @@ const ROLE_CAPABILITY_MAP: Record<AppRole, AppCapability[]> = {
     'VIEW_SUPPORT_MODE',
     'EXECUTE_BULK_ACTIONS',
   ],
+  VIEWER: ['USE_POS'],
   SELLER: [
     'VIEW_FINANCE',
     'PROCESS_RETURN',
@@ -46,12 +46,14 @@ const ROLE_CAPABILITY_MAP: Record<AppRole, AppCapability[]> = {
     'VIEW_REPORTS',
     'USE_POS',
   ],
-  USER: ['VIEW_REPORTS', 'USE_POS'],
   CUSTOMER: [],
 };
 
 const toCapabilitySet = (role?: string | null) => {
-  const normalized = String(role ?? '').trim().toUpperCase() as AppRole;
+  const normalized = getEffectiveRole(role);
+  if (!normalized) {
+    return new Set<AppCapability>();
+  }
   const capabilities = ROLE_CAPABILITY_MAP[normalized] ?? [];
   return new Set<AppCapability>(capabilities);
 };

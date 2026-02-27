@@ -19,6 +19,11 @@ import {
   paginationToSkipTake,
   type PaginationMeta,
 } from '@common/utils/pagination';
+import {
+  createPosPermissionsJson,
+  normalizePosPermissionsJson,
+  type PosPermissionPreset,
+} from '@common/authz';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { CreateProductDto } from '../products/dto/create-product.dto';
@@ -32,7 +37,9 @@ import { SellerInviteDeliveryService } from './invite-delivery.service';
 import { AdminProductPublishForceDto } from './dto/admin-product-publish-force.dto';
 import { AdminProductStockForceDto } from './dto/admin-product-stock-force.dto';
 import { CreateSellerApplicationDto } from './dto/create-seller-application.dto';
+import { CreateSellerPosUserDto } from './dto/create-seller-pos-user.dto';
 import { CreateSellerTeamInviteDto } from './dto/create-seller-team-invite.dto';
+import { UpdateSellerPosUserDto } from './dto/update-seller-pos-user.dto';
 import { UpdateSellerTeamMemberDto } from './dto/update-seller-team-member.dto';
 
 export interface PublicSellerSummary {
@@ -79,14 +86,6 @@ export class SellersService {
     private readonly outboxService: OutboxService,
   ) {}
 
-  private readonly defaultTeamPermissions = [
-    'tab.sales',
-    'tab.orders',
-    'pos.sale.create',
-    'orders.read',
-    'orders.updateStatus',
-  ] as const;
-
   private slugifySeller(value: string): string {
     const normalized = String(value ?? '')
       .trim()
@@ -127,18 +126,23 @@ export class SellersService {
     throw new ConflictException('Unique seller slug üretilemedi');
   }
 
-  private normalizePermissions(permissions?: string[]) {
-    const base = Array.isArray(permissions)
-      ? permissions
-      : [...this.defaultTeamPermissions];
+  private normalizePermissions(
+    permissions?: string[],
+    preset: PosPermissionPreset = 'full_pos',
+  ) {
+    return createPosPermissionsJson(permissions, preset);
+  }
+
+  private normalizePermissionsFromRow(value: Prisma.JsonValue | null) {
+    return normalizePosPermissionsJson(value);
+  }
+
+  private mapSellerTeamMemberRow<T extends { permissionsJson?: Prisma.JsonValue | null }>(
+    row: T,
+  ): T & { permissions: string[] } {
     return {
-      permissions: Array.from(
-        new Set(
-          base
-            .map((item) => String(item ?? '').trim())
-            .filter((item) => item.length > 0),
-        ),
-      ),
+      ...row,
+      permissions: this.normalizePermissionsFromRow(row.permissionsJson ?? null),
     };
   }
 
@@ -165,6 +169,45 @@ export class SellersService {
       throw new ForbiddenException('Aktif seller profili bulunamadi');
     }
     return seller;
+  }
+
+  private async resolveSellerScopeForPosUsers(
+    currentUser: JwtPayload,
+    sellerId: number,
+  ) {
+    const businessId = Number(currentUser.businessId);
+    const normalizedSellerId = Number(sellerId);
+    if (
+      !Number.isFinite(businessId) ||
+      !Number.isFinite(normalizedSellerId) ||
+      normalizedSellerId <= 0
+    ) {
+      throw new BadRequestException('sellerId gecersiz');
+    }
+
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN') {
+      const seller = await this.prisma.seller.findFirst({
+        where: {
+          id: normalizedSellerId,
+          businessId,
+        },
+        select: { id: true, businessId: true },
+      });
+      if (!seller) {
+        throw new NotFoundException('Seller bulunamadi');
+      }
+      return seller;
+    }
+
+    if (currentUser.role === 'SELLER') {
+      const ownSeller = await this.resolveSellerForActor(currentUser);
+      if (ownSeller.id !== normalizedSellerId) {
+        throw new ForbiddenException('Access denied');
+      }
+      return ownSeller;
+    }
+
+    throw new ForbiddenException('Access denied');
   }
 
   private async resolveUserTeamSellerIds(businessId: number, userId: number) {
@@ -542,7 +585,7 @@ export class SellersService {
     const seller = await this.resolveSellerForActor(currentUser);
     const businessId = Number(currentUser.businessId);
 
-    return this.prisma.sellerTeamMember.findMany({
+    const rows = await this.prisma.sellerTeamMember.findMany({
       where: {
         businessId,
         sellerId: seller.id,
@@ -567,6 +610,284 @@ export class SellersService {
         },
       },
     });
+
+    return rows.map((row) => this.mapSellerTeamMemberRow(row));
+  }
+
+  async listSellerPosUsers(currentUser: JwtPayload, sellerId: number) {
+    const seller = await this.resolveSellerScopeForPosUsers(currentUser, sellerId);
+    const businessId = Number(currentUser.businessId);
+
+    const rows = await this.prisma.sellerTeamMember.findMany({
+      where: {
+        businessId,
+        sellerId: seller.id,
+      },
+      orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        sellerId: true,
+        userId: true,
+        isActive: true,
+        permissionsJson: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            role: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    return rows.map((row) => this.mapSellerTeamMemberRow(row));
+  }
+
+  async createSellerPosUser(
+    currentUser: JwtPayload,
+    sellerId: number,
+    payload: CreateSellerPosUserDto,
+  ) {
+    const seller = await this.resolveSellerScopeForPosUsers(currentUser, sellerId);
+    const businessId = Number(currentUser.businessId);
+    const targetUserId = Number(payload.userId);
+    const invitedByUserId = Number(currentUser.userId);
+
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      throw new BadRequestException('userId gecersiz');
+    }
+
+    const targetUser = await this.prisma.user.findFirst({
+      where: {
+        id: targetUserId,
+        businessId,
+      },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+      },
+    });
+    if (!targetUser) {
+      throw new NotFoundException('Kullanici bulunamadi');
+    }
+    if (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN') {
+      throw new ForbiddenException('Admin rolleri POS kullanicisi olamaz');
+    }
+
+    const permissionsJson = this.normalizePermissions(
+      payload.permissions,
+      payload.preset ?? 'full_pos',
+    );
+
+    const member = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.sellerTeamMember.upsert({
+        where: {
+          sellerId_userId: {
+            sellerId: seller.id,
+            userId: targetUserId,
+          },
+        },
+        update: {
+          isActive: payload.isActive ?? true,
+          invitedByUserId:
+            Number.isFinite(invitedByUserId) && invitedByUserId > 0
+              ? invitedByUserId
+              : null,
+          permissionsJson,
+        },
+        create: {
+          businessId,
+          sellerId: seller.id,
+          userId: targetUserId,
+          invitedByUserId:
+            Number.isFinite(invitedByUserId) && invitedByUserId > 0
+              ? invitedByUserId
+              : null,
+          isActive: payload.isActive ?? true,
+          permissionsJson,
+        },
+        select: {
+          id: true,
+          sellerId: true,
+          userId: true,
+          isActive: true,
+          permissionsJson: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              role: true,
+              isActive: true,
+            },
+          },
+        },
+      });
+
+      if (
+        (payload.isActive ?? true) &&
+        targetUser.role !== 'USER' &&
+        targetUser.role !== 'SELLER'
+      ) {
+        await tx.user.update({
+          where: { id: targetUserId },
+          data: { role: 'USER', isActive: true },
+        });
+      }
+
+      return row;
+    });
+
+    return this.mapSellerTeamMemberRow(member);
+  }
+
+  async updateSellerPosUser(
+    currentUser: JwtPayload,
+    sellerId: number,
+    memberId: number,
+    payload: UpdateSellerPosUserDto,
+  ) {
+    const seller = await this.resolveSellerScopeForPosUsers(currentUser, sellerId);
+    const businessId = Number(currentUser.businessId);
+
+    const existing = await this.prisma.sellerTeamMember.findFirst({
+      where: {
+        id: memberId,
+        businessId,
+        sellerId: seller.id,
+      },
+      select: { id: true, userId: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('POS kullanicisi bulunamadi');
+    }
+
+    const data: Prisma.SellerTeamMemberUncheckedUpdateInput = {};
+    if (payload.isActive !== undefined) {
+      data.isActive = payload.isActive;
+    }
+    if (payload.permissions !== undefined || payload.preset !== undefined) {
+      data.permissionsJson = this.normalizePermissions(
+        payload.permissions,
+        payload.preset ?? 'full_pos',
+      );
+    }
+
+    const updated = await this.prisma.sellerTeamMember.update({
+      where: { id: existing.id },
+      data,
+      select: {
+        id: true,
+        sellerId: true,
+        userId: true,
+        isActive: true,
+        permissionsJson: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            role: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (payload.isActive === false) {
+      const [hasAnyActiveMembership, targetUser] = await Promise.all([
+        this.prisma.sellerTeamMember.findFirst({
+          where: {
+            businessId,
+            userId: existing.userId,
+            isActive: true,
+          },
+          select: { id: true },
+        }),
+        this.prisma.user.findFirst({
+          where: {
+            id: existing.userId,
+            businessId,
+          },
+          select: {
+            role: true,
+          },
+        }),
+      ]);
+
+      if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
+        await this.prisma.user.update({
+          where: { id: existing.userId },
+          data: { role: 'CUSTOMER' },
+        });
+      }
+    }
+
+    return updated;
+  }
+
+  async deleteSellerPosUser(
+    currentUser: JwtPayload,
+    sellerId: number,
+    memberId: number,
+  ) {
+    const seller = await this.resolveSellerScopeForPosUsers(currentUser, sellerId);
+    const businessId = Number(currentUser.businessId);
+
+    const existing = await this.prisma.sellerTeamMember.findFirst({
+      where: {
+        id: memberId,
+        businessId,
+        sellerId: seller.id,
+      },
+      select: { id: true, userId: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('POS kullanicisi bulunamadi');
+    }
+
+    await this.prisma.sellerTeamMember.delete({
+      where: { id: existing.id },
+    });
+
+    const [hasAnyActiveMembership, targetUser] = await Promise.all([
+      this.prisma.sellerTeamMember.findFirst({
+        where: {
+          businessId,
+          userId: existing.userId,
+          isActive: true,
+        },
+        select: { id: true },
+      }),
+      this.prisma.user.findFirst({
+        where: {
+          id: existing.userId,
+          businessId,
+        },
+        select: { role: true },
+      }),
+    ]);
+
+    if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
+      await this.prisma.user.update({
+        where: { id: existing.userId },
+        data: { role: 'CUSTOMER' },
+      });
+    }
+
+    return { ok: true };
   }
 
   async listSellerTeamInvites(
@@ -681,8 +1002,11 @@ export class SellersService {
     if (payload.isActive !== undefined) {
       data.isActive = payload.isActive;
     }
-    if (payload.permissions !== undefined) {
-      data.permissionsJson = this.normalizePermissions(payload.permissions);
+    if (payload.permissions !== undefined || payload.preset !== undefined) {
+      data.permissionsJson = this.normalizePermissions(
+        payload.permissions,
+        payload.preset ?? 'full_pos',
+      );
     }
 
     const updated = await this.prisma.sellerTeamMember.update({
@@ -700,15 +1024,24 @@ export class SellersService {
     });
 
     if (payload.isActive === false) {
-      const hasAnyActiveMembership = await this.prisma.sellerTeamMember.findFirst({
-        where: {
-          businessId,
-          userId: existing.userId,
-          isActive: true,
-        },
-        select: { id: true },
-      });
-      if (!hasAnyActiveMembership) {
+      const [hasAnyActiveMembership, targetUser] = await Promise.all([
+        this.prisma.sellerTeamMember.findFirst({
+          where: {
+            businessId,
+            userId: existing.userId,
+            isActive: true,
+          },
+          select: { id: true },
+        }),
+        this.prisma.user.findFirst({
+          where: {
+            id: existing.userId,
+            businessId,
+          },
+          select: { role: true },
+        }),
+      ]);
+      if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
         await this.prisma.user.update({
           where: { id: existing.userId },
           data: { role: 'CUSTOMER' },
@@ -2027,3 +2360,4 @@ export class SellersService {
     };
   }
 }
+

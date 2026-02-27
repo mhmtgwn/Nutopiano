@@ -91,17 +91,11 @@ export default function Header() {
   const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(() => {
     switch (user?.role) {
       case 'SUPER_ADMIN':
-        return [
-          { href: '/platform/users', label: 'Kullanıcılar', icon: User },
-          { href: '/platform/sellers', label: 'Satıcılar', icon: Store },
-          { href: '/platform/plans', label: 'Planlar', icon: CreditCard },
-          { href: '/platform/orders', label: 'Siparişler', icon: ClipboardList },
-          ...(isPosRoleAllowed(user?.role)
-            ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }]
-            : []),
-        ];
       case 'ADMIN':
         return [
+          { href: '/admin/users', label: 'Kullanıcılar', icon: User },
+          { href: '/admin/sellers', label: 'Satıcılar', icon: Store },
+          { href: '/admin/plans', label: 'Planlar', icon: CreditCard },
           { href: '/admin/orders', label: 'Siparişler', icon: ClipboardList },
           { href: '/admin/products', label: 'Ürünler', icon: Package },
           { href: '/admin/customers', label: 'Müşteriler', icon: User },

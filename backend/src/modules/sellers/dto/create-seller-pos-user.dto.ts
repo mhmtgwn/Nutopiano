@@ -1,32 +1,29 @@
 import {
   IsArray,
-  IsIn,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
-  Max,
   Min,
 } from 'class-validator';
+import { IsIn } from 'class-validator';
 import type { PosPermissionPreset } from '@common/authz';
 
-export class CreateSellerTeamInviteDto {
+export class CreateSellerPosUserDto {
   @IsInt()
   @Min(1)
-  targetUserId: number;
+  userId: number;
 
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(720)
-  expiresInHours?: number;
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['sales', 'orders', 'reports', 'full_pos'])
+  preset?: PosPermissionPreset;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   permissions?: string[];
-
-  @IsOptional()
-  @IsIn(['sales', 'orders', 'reports', 'full_pos'])
-  preset?: PosPermissionPreset;
 }
-

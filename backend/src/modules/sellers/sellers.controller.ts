@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -25,9 +26,11 @@ import { UpdateProductDto } from '../products/dto/update-product.dto';
 import { AdminProductPublishForceDto } from './dto/admin-product-publish-force.dto';
 import { AdminProductStockForceDto } from './dto/admin-product-stock-force.dto';
 import { CreateSellerApplicationDto } from './dto/create-seller-application.dto';
+import { CreateSellerPosUserDto } from './dto/create-seller-pos-user.dto';
 import { CreateSellerTeamInviteDto } from './dto/create-seller-team-invite.dto';
 import { SellerProductPublishDto } from './dto/seller-product-publish.dto';
 import { SellerProductStockDto } from './dto/seller-product-stock.dto';
+import { UpdateSellerPosUserDto } from './dto/update-seller-pos-user.dto';
 import { UpdateSellerCustomerCreditDto } from './dto/update-seller-customer-credit.dto';
 import { UpdateSellerTeamMemberDto } from './dto/update-seller-team-member.dto';
 import { SellersService } from './sellers.service';
@@ -142,6 +145,73 @@ export class SellersController {
       req.user,
       Number(id),
       payload,
+    );
+  }
+
+  @Get('sellers/:sellerId/pos-users')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'List POS users for a seller',
+    description:
+      'SELLER can list own store POS users. ADMIN can list any seller in same business.',
+  })
+  listSellerPosUsers(
+    @Req() req: { user: JwtPayload },
+    @Param('sellerId') sellerId: string,
+  ) {
+    return this.sellersService.listSellerPosUsers(req.user, Number(sellerId));
+  }
+
+  @Post('sellers/:sellerId/pos-users')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Create or activate seller POS user',
+  })
+  createSellerPosUser(
+    @Req() req: { user: JwtPayload },
+    @Param('sellerId') sellerId: string,
+    @Body() payload: CreateSellerPosUserDto,
+  ) {
+    return this.sellersService.createSellerPosUser(
+      req.user,
+      Number(sellerId),
+      payload,
+    );
+  }
+
+  @Patch('sellers/:sellerId/pos-users/:memberId')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Update seller POS user',
+  })
+  updateSellerPosUser(
+    @Req() req: { user: JwtPayload },
+    @Param('sellerId') sellerId: string,
+    @Param('memberId') memberId: string,
+    @Body() payload: UpdateSellerPosUserDto,
+  ) {
+    return this.sellersService.updateSellerPosUser(
+      req.user,
+      Number(sellerId),
+      Number(memberId),
+      payload,
+    );
+  }
+
+  @Delete('sellers/:sellerId/pos-users/:memberId')
+  @Roles('SELLER', 'ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Delete seller POS user',
+  })
+  deleteSellerPosUser(
+    @Req() req: { user: JwtPayload },
+    @Param('sellerId') sellerId: string,
+    @Param('memberId') memberId: string,
+  ) {
+    return this.sellersService.deleteSellerPosUser(
+      req.user,
+      Number(sellerId),
+      Number(memberId),
     );
   }
 

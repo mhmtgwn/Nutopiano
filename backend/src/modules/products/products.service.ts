@@ -1298,17 +1298,6 @@ export class ProductsService {
     payload: UpdateProductDto,
   ): Promise<ProductSummary> {
     const existing = await this.findByIdScoped(currentUser, id);
-    const isCriticalPublishChange = payload.isPublished !== undefined;
-    const isCriticalStockChange = payload.stock !== undefined;
-
-    if (
-      currentUser.role === 'ADMIN' &&
-      (isCriticalPublishChange || isCriticalStockChange)
-    ) {
-      throw new ForbiddenException(
-        'ADMIN varsayilan read-only. publish-force veya stock-adjust-force override endpointini kullanin.',
-      );
-    }
 
     const data: Prisma.ProductUncheckedUpdateInput = {};
     const nextOwnerSellerId =
@@ -1439,7 +1428,7 @@ export class ProductsService {
       primaryUrl: normalizedImages.primary,
     });
 
-    if (isCriticalPublishChange && updated.isPublished !== existing.isPublished) {
+    if (updated.isPublished !== existing.isPublished) {
       await this.outboxService.enqueueEvent({
         businessId: Number(currentUser.businessId),
         aggregateType: 'PRODUCT',
@@ -1456,7 +1445,7 @@ export class ProductsService {
     }
 
     if (currentUser.role === 'SUPER_ADMIN') {
-      if (isCriticalPublishChange && updated.isPublished !== existing.isPublished) {
+      if (updated.isPublished !== existing.isPublished) {
         await this.auditService.logFromActor(currentUser, {
           actionType: AUDIT_ACTION_TYPES.PUBLISH_FORCE,
           targetType: 'PRODUCT',
@@ -1476,7 +1465,7 @@ export class ProductsService {
         });
       }
 
-      if (isCriticalStockChange && updated.stock !== existing.stock) {
+      if (updated.stock !== existing.stock) {
         await this.auditService.logFromActor(currentUser, {
           actionType: AUDIT_ACTION_TYPES.STOCK_ADJUST_FORCE,
           targetType: 'PRODUCT',
@@ -1665,3 +1654,4 @@ export class ProductsService {
     };
   }
 }
+

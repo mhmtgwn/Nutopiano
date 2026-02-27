@@ -11,6 +11,12 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { EmailService } from '../email/email.service';
+import {
+  isAdminRole,
+  normalizePosPermissionsJson,
+  permissionsFromPreset,
+  toEffectiveRole,
+} from '@common/authz';
 
 type RefreshJwtPayload = {
   userId: string;
@@ -507,6 +513,82 @@ export class AuthService {
       email: user.email ?? undefined,
       role: user.role,
       businessId: String(user.businessId),
+    };
+  }
+
+  async mePermissions(payload: JwtPayload) {
+    const userId = Number(payload.userId);
+    const businessId = Number(payload.businessId);
+    if (!Number.isFinite(userId) || !Number.isFinite(businessId)) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        businessId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const role = user.role;
+    const effectiveRole = toEffectiveRole(role) ?? role;
+
+    if (isAdminRole(role) || role === 'SELLER') {
+      const permissions = permissionsFromPreset('full_pos');
+      return {
+        userId: String(user.id),
+        role,
+        effectiveRole,
+        permissions,
+      };
+    }
+
+    if (role === 'USER') {
+      const memberships = await this.prisma.sellerTeamMember.findMany({
+        where: {
+          businessId,
+          userId,
+          isActive: true,
+          seller: {
+            isActive: true,
+          },
+        },
+        select: {
+          sellerId: true,
+          permissionsJson: true,
+        },
+      });
+
+      const permissions = Array.from(
+        new Set(
+          memberships.flatMap((membership) =>
+            normalizePosPermissionsJson(membership.permissionsJson),
+          ),
+        ),
+      );
+
+      return {
+        userId: String(user.id),
+        role,
+        effectiveRole: 'VIEWER',
+        permissions,
+      };
+    }
+
+    return {
+      userId: String(user.id),
+      role,
+      effectiveRole,
+      permissions: [] as string[],
     };
   }
 }

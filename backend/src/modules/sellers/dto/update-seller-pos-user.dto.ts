@@ -2,7 +2,7 @@ import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
 import { IsIn } from 'class-validator';
 import type { PosPermissionPreset } from '@common/authz';
 
-export class UpdateSellerTeamMemberDto {
+export class UpdateSellerPosUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
@@ -16,4 +16,3 @@ export class UpdateSellerTeamMemberDto {
   @IsString({ each: true })
   permissions?: string[];
 }
-

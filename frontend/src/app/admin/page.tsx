@@ -2,7 +2,6 @@
 
 import type { ComponentType } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,15 +12,14 @@ import {
   ClipboardList,
   Clock,
   CreditCard,
-  Package,
   ShoppingBag,
+  Users,
   XCircle,
 } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
 import { formatPrice } from '@/lib/format';
 import api from '@/services/api';
-import { useAppSelector } from '@/store';
 
 interface DashboardSummary {
   activeProducts: number;
@@ -44,7 +42,7 @@ interface DashboardReportsSummary {
   }>;
 }
 
-interface CustomerListResponse {
+interface SellerCustomersResponse {
   data: Array<{ id: number; name: string; phone: string }>;
   meta: { total: number };
 }
@@ -52,33 +50,12 @@ interface CustomerListResponse {
 interface OrderListResponse {
   data: Array<{
     id: number;
-    customerId: number;
     totalAmountCents: number;
     statusKey: string;
     source: string;
     createdAt: string;
   }>;
   meta: { total: number };
-}
-
-interface ReturnRequest {
-  id: number;
-  orderId: number;
-  status: string;
-  requestedAt: string;
-}
-
-interface OutboxMetrics {
-  totalCount: number;
-  failedCount: number;
-  deadLetterCount: number;
-  retryCount: number;
-  pendingCount: number;
-}
-
-interface AuditLogRow {
-  id: number;
-  actionType: string;
 }
 
 type StatusMeta = {
@@ -102,7 +79,6 @@ function StatusBadge({ status }: { status: string }) {
     className: 'bg-gray-100 text-gray-700',
     icon: Clock,
   };
-
   const Icon = meta.icon;
 
   return (
@@ -114,12 +90,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  const labels: Record<string, string> = {
-    POS: 'POS',
-    ONLINE: 'Online',
-    MANUAL: 'Manuel',
-  };
-
+  const labels: Record<string, string> = { POS: 'POS', ONLINE: 'Online', MANUAL: 'Manuel' };
   return (
     <span className="inline-flex items-center rounded-md border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-2 py-1 text-[11px] font-medium text-[var(--neutral-700)]">
       {labels[source] ?? source}
@@ -138,65 +109,41 @@ function formatOrderDate(value: string): string {
   });
 }
 
-interface KpiItemProps {
+interface KpiRowProps {
   title: string;
   value: string;
   note: string;
-  icon: ComponentType<{ className?: string }>;
 }
 
-function KpiItem({ title, value, note, icon: Icon }: KpiItemProps) {
+function KpiRow({ title, value, note }: KpiRowProps) {
   return (
     <div className="border-b border-[var(--neutral-200)] pb-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--neutral-500)]">{title}</p>
-      <div className="mt-1 flex items-end gap-2">
-        <p className="text-2xl font-semibold text-[var(--primary-800)]">{value}</p>
-        <Icon className="mb-1 h-4 w-4 text-[var(--neutral-500)]" />
-      </div>
+      <p className="mt-1 text-2xl font-semibold text-[var(--primary-800)]">{value}</p>
       <p className="mt-1 text-xs text-[var(--neutral-600)]">{note}</p>
     </div>
   );
 }
 
 export default function AdminOverviewPage() {
-  const pathname = usePathname();
-  const user = useAppSelector((s) => s.user.user);
-  const basePath = pathname.startsWith('/platform') ? '/platform' : '/admin';
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-
   const summaryQ = useQuery<DashboardSummary>({
-    queryKey: ['admin-dash-summary'],
+    queryKey: ['seller-panel-summary'],
     queryFn: async () => (await api.get<DashboardSummary>('/dashboard/summary')).data,
   });
 
   const reportsQ = useQuery<DashboardReportsSummary>({
-    queryKey: ['admin-dash-reports'],
+    queryKey: ['seller-panel-reports'],
     queryFn: async () => (await api.get<DashboardReportsSummary>('/dashboard/reports/summary')).data,
   });
 
-  const customersQ = useQuery<CustomerListResponse>({
-    queryKey: ['admin-dash-customers'],
-    queryFn: async () => (await api.get<CustomerListResponse>('/customers?page=1&pageSize=1')).data,
-  });
-
-  const returnsQ = useQuery<ReturnRequest[]>({
-    queryKey: ['admin-dash-returns'],
-    queryFn: async () => (await api.get<ReturnRequest[]>('/platform/return-requests?status=PENDING')).data,
+  const customersQ = useQuery<SellerCustomersResponse>({
+    queryKey: ['seller-panel-customers'],
+    queryFn: async () => (await api.get<SellerCustomersResponse>('/seller/customers?page=1&pageSize=1')).data,
   });
 
   const ordersQ = useQuery<OrderListResponse>({
-    queryKey: ['admin-dash-orders'],
-    queryFn: async () => (await api.get<OrderListResponse>('/platform/orders?page=1&pageSize=8')).data,
-  });
-
-  const outboxQ = useQuery<OutboxMetrics>({
-    queryKey: ['admin-dash-outbox'],
-    queryFn: async () => (await api.get<OutboxMetrics>('/platform/outbox/metrics')).data,
-  });
-
-  const auditQ = useQuery<{ data: AuditLogRow[] }>({
-    queryKey: ['admin-dash-audit'],
-    queryFn: async () => (await api.get<{ data: AuditLogRow[] }>('/platform/audit/logs?page=1&pageSize=20')).data,
+    queryKey: ['seller-panel-orders'],
+    queryFn: async () => (await api.get<OrderListResponse>('/orders?page=1&pageSize=8')).data,
   });
 
   const isLoading = summaryQ.isLoading || reportsQ.isLoading || ordersQ.isLoading || customersQ.isLoading;
@@ -207,22 +154,6 @@ export default function AdminOverviewPage() {
   const orders = useMemo(() => ordersQ.data?.data ?? [], [ordersQ.data?.data]);
   const topProducts = reports?.topProducts ?? [];
   const customerTotal = customersQ.data?.meta?.total ?? 0;
-  const pendingReturns = returnsQ.data?.length ?? 0;
-
-  const riskScore = useMemo(() => {
-    const metrics = outboxQ.data;
-    if (!metrics) return 0;
-
-    const total = Math.max(metrics.totalCount, 1);
-    const failedRate = ((metrics.failedCount + metrics.deadLetterCount) / total) * 100;
-    const retryRate = (metrics.retryCount / total) * 100;
-    const overrideActions = (auditQ.data?.data ?? []).filter((log) => {
-      const action = String(log.actionType ?? '').toUpperCase();
-      return action.includes('FORCE') || action.includes('OVERRIDE');
-    }).length;
-
-    return Math.min(100, Math.round(failedRate * 0.6 + retryRate * 0.2 + overrideActions * 2));
-  }, [outboxQ.data, auditQ.data]);
 
   const statusStats = useMemo(() => {
     const counts = orders.reduce<Record<string, number>>((acc, order) => {
@@ -232,7 +163,6 @@ export default function AdminOverviewPage() {
     }, {});
 
     const total = Math.max(orders.length, 1);
-
     return Object.entries(counts)
       .map(([key, count]) => ({
         key,
@@ -244,85 +174,42 @@ export default function AdminOverviewPage() {
       .slice(0, 4);
   }, [orders]);
 
-  const kpis: KpiItemProps[] = useMemo(() => [
+  const kpis: KpiRowProps[] = useMemo(() => [
     {
       title: 'Bugün Sipariş',
       value: summary ? String(summary.ordersToday) : '—',
-      note: 'Son 24 saat',
-      icon: ClipboardList,
+      note: 'Kendi mağaza siparişleri',
     },
     {
       title: 'Bugün Ciro',
       value: summary ? formatPrice(summary.revenueTodayCents) : '—',
-      note: 'Tahsil edilen toplam',
-      icon: CreditCard,
+      note: 'Kendi mağaza tahsilatı',
     },
     {
       title: 'Toplam Sipariş',
       value: summary ? String(summary.ordersTotal) : '—',
-      note: 'Tüm dönem',
-      icon: ShoppingBag,
+      note: 'Tüm dönem satış',
     },
     {
-      title: 'Aktif Ürün',
-      value: summary ? String(summary.activeProducts) : '—',
-      note: 'Yayındaki ürün',
-      icon: Package,
-    },
-    {
-      title: 'Kayıtlı Müşteri',
+      title: 'Toplam Müşteri',
       value: String(customerTotal),
-      note: 'Toplam müşteri havuzu',
-      icon: ClipboardList,
+      note: 'Sadece kendi müşteri havuzun',
     },
-  ], [summary, customerTotal]);
-
-  const quickLinks = useMemo(() => (isSuperAdmin ? [
-    { label: 'Siparişler', href: `${basePath}/orders` },
-    { label: 'Ürün & Kategori', href: `${basePath}/products` },
-    { label: 'Satıcılar', href: `${basePath}/sellers` },
-    { label: 'Kullanıcılar', href: `${basePath}/users` },
-    { label: 'Finans', href: `${basePath}/finance` },
-    { label: 'Ayarlar', href: `${basePath}/settings` },
-  ] : [
-    { label: 'Siparişler', href: `${basePath}/orders` },
-    { label: 'Ürünler', href: `${basePath}/products` },
-    { label: 'Müşteriler', href: `${basePath}/customers` },
-    { label: 'Ödemeler', href: `${basePath}/payments` },
-    { label: 'Raporlar', href: `${basePath}/reports` },
-    { label: 'Ayarlar', href: `${basePath}/settings` },
-  ]), [basePath, isSuperAdmin]);
+    {
+      title: '30 Gün Ciro',
+      value: reports ? formatPrice(reports.revenueCents) : '—',
+      note: `${reports?.ordersCount ?? 0} sipariş`,
+    },
+  ], [summary, customerTotal, reports]);
 
   return (
     <div className="space-y-8">
-      <section className="border-b border-[var(--neutral-200)] pb-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">Yönetim Paneli</p>
-            <h1 className="mt-1 text-4xl text-[var(--primary-800)]">Hoş geldin, {user?.name?.split(' ')[0] ?? 'Yönetici'}</h1>
-            <p className="mt-2 max-w-2xl text-sm text-[var(--neutral-600)]">
-              Operasyon, sipariş ve finans verilerini sade ekranda anlık takip et.
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--neutral-200)] px-3 py-1.5 font-semibold text-[var(--primary-800)]">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Sistem Canlı
-            </span>
-            <Link href={`${basePath}/reports`} className="inline-flex items-center gap-1 font-semibold text-[var(--primary-800)] hover:underline">
-              Raporlar
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {isLoading && <Spinner label="Dashboard verileri yükleniyor..." />}
+      {isLoading && <Spinner label="Panel verileri yükleniyor..." />}
 
       {isError && (
         <div className="flex items-center gap-2 border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          Dashboard verileri yüklenemedi. Lütfen tekrar deneyin.
+          Panel verileri yüklenemedi. Lütfen tekrar deneyin.
         </div>
       )}
 
@@ -330,22 +217,22 @@ export default function AdminOverviewPage() {
         <>
           <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
             {kpis.map((item) => (
-              <KpiItem key={item.title} title={item.title} value={item.value} note={item.note} icon={item.icon} />
+              <KpiRow key={item.title} title={item.title} value={item.value} note={item.note} />
             ))}
           </section>
 
           <section className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-3xl text-[var(--primary-800)]">Yeni Siparişler</h2>
-                <Link href={`${basePath}/orders`} className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary-800)] hover:underline">
+                <h2 className="text-3xl text-[var(--primary-800)]">Son Satışlar</h2>
+                <Link href="/admin/orders" className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary-800)] hover:underline">
                   Tümünü Gör
                   <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </div>
 
               {orders.length === 0 ? (
-                <p className="py-8 text-sm text-[var(--neutral-600)]">Henüz sipariş verisi bulunmuyor.</p>
+                <p className="py-8 text-sm text-[var(--neutral-600)]">Henüz satış verisi bulunmuyor.</p>
               ) : (
                 <div className="overflow-x-auto border-y border-[var(--neutral-200)]">
                   <table className="min-w-full text-sm">
@@ -362,16 +249,12 @@ export default function AdminOverviewPage() {
                       {orders.map((order) => (
                         <tr key={order.id} className="hover:bg-[var(--neutral-50)]">
                           <td className="py-3 pr-4">
-                            <Link href={`${basePath}/orders/${order.id}`} className="font-semibold text-[var(--primary-800)] hover:underline">
+                            <Link href={`/admin/orders`} className="font-semibold text-[var(--primary-800)] hover:underline">
                               #{order.id}
                             </Link>
                           </td>
-                          <td className="py-3 pr-4">
-                            <StatusBadge status={order.statusKey} />
-                          </td>
-                          <td className="py-3 pr-4">
-                            <SourceBadge source={order.source} />
-                          </td>
+                          <td className="py-3 pr-4"><StatusBadge status={order.statusKey} /></td>
+                          <td className="py-3 pr-4"><SourceBadge source={order.source} /></td>
                           <td className="py-3 pr-4 text-right font-semibold text-[var(--primary-800)]">{formatPrice(order.totalAmountCents)}</td>
                           <td className="py-3 text-right text-xs text-[var(--neutral-600)]">{formatOrderDate(order.createdAt)}</td>
                         </tr>
@@ -424,63 +307,29 @@ export default function AdminOverviewPage() {
               </div>
 
               <div>
-                <h3 className="text-2xl text-[var(--primary-800)]">Sistem Sağlığı</h3>
-                <div className="mt-3 divide-y divide-[var(--neutral-100)] border-y border-[var(--neutral-200)]">
+                <h3 className="text-2xl text-[var(--primary-800)]">Kısa Yollar</h3>
+                <div className="mt-3 grid gap-2">
                   {[
-                    { label: 'Toplam Outbox', value: outboxQ.data?.totalCount ?? '—' },
-                    { label: 'Bekleyen', value: outboxQ.data?.pendingCount ?? '—' },
-                    { label: 'Başarısız', value: outboxQ.data?.failedCount ?? '—' },
-                    { label: 'Dead Letter', value: outboxQ.data?.deadLetterCount ?? '—' },
-                    { label: 'Bekleyen İade', value: pendingReturns },
-                  ].map((row) => (
-                    <div key={row.label} className="flex items-center justify-between py-2 text-sm">
-                      <span className="text-[var(--neutral-600)]">{row.label}</span>
-                      <span className="font-semibold text-[var(--primary-800)]">{row.value}</span>
-                    </div>
+                    { label: 'Satışlar', href: '/admin/orders', icon: ShoppingBag },
+                    { label: 'Müşteriler', href: '/admin/customers', icon: Users },
+                    { label: 'Raporlar', href: '/admin/reports', icon: ClipboardList },
+                    { label: 'Satıcı Ayarları', href: '/admin/settings', icon: CreditCard },
+                  ].map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="flex items-center justify-between border border-transparent px-3 py-2 text-sm font-medium text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <link.icon className="h-4 w-4 text-[var(--neutral-500)]" />
+                        {link.label}
+                      </span>
+                      <ArrowUpRight className="h-4 w-4 text-[var(--neutral-500)]" />
+                    </Link>
                   ))}
-                </div>
-
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-[var(--neutral-600)]">Risk Skoru</span>
-                    <span className={`font-semibold ${riskScore > 50 ? 'text-red-600' : riskScore > 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {riskScore}/100
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[var(--neutral-100)]">
-                    <div
-                      className={`h-full rounded-full ${riskScore > 50 ? 'bg-red-500' : riskScore > 20 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${riskScore}%` }}
-                    />
-                  </div>
                 </div>
               </div>
             </aside>
-          </section>
-
-          <section className="border-t border-[var(--neutral-200)] pt-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-3xl text-[var(--primary-800)]">Kısa Yollar</h2>
-              <span className="text-xs text-[var(--neutral-600)]">Rapor aralığı: {reports?.range?.days ?? 30} gün</span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {quickLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center justify-between border border-transparent px-3 py-2 text-sm font-medium text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)]"
-                >
-                  {link.label}
-                  <ArrowUpRight className="h-4 w-4 text-[var(--neutral-500)]" />
-                </Link>
-              ))}
-            </div>
-
-            {summary && summary.lowStockProducts > 0 && (
-              <div className="mt-4 border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {summary.lowStockProducts} ürün düşük stok seviyesinde.
-              </div>
-            )}
           </section>
         </>
       )}

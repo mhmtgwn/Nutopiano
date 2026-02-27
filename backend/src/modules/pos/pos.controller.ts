@@ -172,7 +172,7 @@ export class PosController {
   }
 
   @Get('reports/end-of-day')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'End-of-day POS report',
     description:
@@ -189,7 +189,7 @@ export class PosController {
   }
 
   @Get('reports/shifts')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Shift list report',
     description:
@@ -222,7 +222,7 @@ export class PosController {
   }
 
   @Get('reports/staff-sales')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Staff sales report',
     description:
@@ -249,7 +249,7 @@ export class PosController {
   }
 
   @Get('reports/sales')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'POS sales analytics report',
     description:
@@ -278,7 +278,7 @@ export class PosController {
   }
 
   @Get('reports/sales/export')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'SELLER', 'USER')
   @ApiOperation({
     summary: 'Export POS sales analytics (CSV)',
     description:
