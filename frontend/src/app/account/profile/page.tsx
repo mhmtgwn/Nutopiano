@@ -4,11 +4,8 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
-  CreditCard,
-  Heart,
   Home,
   LayoutDashboard,
-  MapPin,
   Shield,
   type LucideProps,
 } from 'lucide-react';
@@ -47,11 +44,9 @@ interface ProfileResponse {
 
 type TabType = 'profile' | 'security' | 'admin';
 type MenuItem = {
-  kind: 'tab' | 'link';
+  tab: TabType;
   label: string;
   icon: ComponentType<LucideProps>;
-  tab?: TabType;
-  href?: string;
 };
 
 export default function ProfilePage() {
@@ -223,58 +218,45 @@ export default function ProfilePage() {
   };
 
   const menuItems: MenuItem[] = [
-    { kind: 'tab', tab: 'profile', label: 'Hesap Bilgileri', icon: Home },
-    { kind: 'tab', tab: 'security', label: 'Guvenlik', icon: Shield },
+    { tab: 'profile', label: 'Hesap Bilgileri', icon: Home },
+    { tab: 'security', label: 'Guvenlik', icon: Shield },
     ...(hasBackofficePanel
       ? [
           {
-            kind: 'tab' as const,
             tab: 'admin' as const,
             label: getPanelLabelByRole(user.role),
             icon: LayoutDashboard,
           },
         ]
       : []),
-    { kind: 'link', href: '/account/orders', label: 'Siparislerim', icon: CreditCard },
-    { kind: 'link', href: '/account/favorites', label: 'Favoriler', icon: Heart },
-    { kind: 'link', href: '/account/addresses', label: 'Adreslerim', icon: MapPin },
   ];
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-[#111827]">Hesap Bilgileri</h1>
 
-      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-        <aside className="border-b border-[#e5e7eb] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+      <div className="space-y-5">
+        <div className="flex flex-wrap gap-2 border-b border-[#e5e7eb] pb-3">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const active = item.kind === 'tab' && item.tab === activeTab;
+            const active = item.tab === activeTab;
             return (
               <button
-                key={item.kind === 'tab' ? `tab-${item.tab}` : `link-${item.href}`}
+                key={`tab-${item.tab}`}
                 type="button"
-                onClick={() => {
-                  if (item.kind === 'tab' && item.tab) {
-                    setActiveTab(item.tab);
-                    return;
-                  }
-
-                  if (item.kind === 'link' && item.href) {
-                    router.push(item.href);
-                  }
-                }}
+                onClick={() => setActiveTab(item.tab)}
                 className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                   active
                     ? 'bg-[#f3f4f6] text-[#111827]'
                     : 'text-[#4b5563] hover:bg-[#f9fafb] hover:text-[#111827]'
-                }`}
+                } sm:w-auto`}
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
               </button>
             );
           })}
-        </aside>
+        </div>
 
         <section className="min-w-0">
           {activeTab === 'profile' && (

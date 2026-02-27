@@ -11,6 +11,7 @@ import {
   ClipboardList,
   CreditCard,
   Home,
+  LayoutDashboard,
   LogOut,
   Menu,
   Search,
@@ -46,6 +47,16 @@ type NavSection = {
 
 const createNavSections = (basePath: string): NavSection[] => {
   return [
+    {
+      title: 'Paneller',
+      items: [
+        { label: 'Admin Panel', href: '/admin', icon: LayoutDashboard },
+        { label: 'Platform Panel', href: '/platform', icon: LayoutDashboard },
+        { label: 'Satici Panel', href: '/dashboard', icon: Store },
+        { label: 'POS Panel', href: '/pos', icon: CreditCard },
+        { label: 'Hesabim', href: '/account/profile', icon: UserCheck },
+      ],
+    },
     {
       title: 'Operasyon',
       items: [
