@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { LoginDto } from './dto/login.dto';
@@ -110,6 +111,98 @@ export class AuthService {
     return `${siteUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
   }
 
+  private normalizePhoneDigits(value: string) {
+    return String(value ?? '').replace(/\D+/g, '');
+  }
+
+  private buildPhoneLoginCandidates(identifier: string) {
+    const trimmed = identifier.trim();
+    const digits = this.normalizePhoneDigits(trimmed);
+    const candidates = new Set<string>();
+
+    const push = (value?: string | null) => {
+      if (!value) return;
+      const normalized = value.trim();
+      if (!normalized) return;
+      candidates.add(normalized);
+    };
+
+    push(trimmed);
+    push(digits);
+
+    let national10 = digits;
+    if (digits.startsWith('0090') && digits.length >= 14) {
+      national10 = digits.slice(4, 14);
+    } else if (digits.startsWith('90') && digits.length >= 12) {
+      national10 = digits.slice(2, 12);
+    } else if (digits.startsWith('0') && digits.length >= 11) {
+      national10 = digits.slice(1, 11);
+    }
+
+    if (national10.length === 10) {
+      push(national10);
+      push(`0${national10}`);
+      push(`90${national10}`);
+      push(`+90${national10}`);
+      push(`+90 ${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`);
+      push(`0${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`);
+    }
+
+    return Array.from(candidates);
+  }
+
+  private async findUserByLoginIdentifier(
+    identifier: string,
+    isEmailLogin: boolean,
+  ) {
+    if (isEmailLogin) {
+      return this.prisma.user.findUnique({
+        where: { email: identifier.toLowerCase() },
+      });
+    }
+
+    const phoneCandidates = this.buildPhoneLoginCandidates(identifier);
+    const directMatch = await this.prisma.user.findFirst({
+      where: {
+        phone: {
+          in: phoneCandidates,
+        },
+      },
+    });
+
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const normalizedCandidates = Array.from(
+      new Set(
+        phoneCandidates
+          .map((candidate) => this.normalizePhoneDigits(candidate))
+          .filter((candidate) => candidate.length > 0),
+      ),
+    );
+
+    if (!normalizedCandidates.length) {
+      return null;
+    }
+
+    const matchedRows = await this.prisma.$queryRaw<Array<{ id: number }>>(
+      Prisma.sql`
+        SELECT "id"
+        FROM "User"
+        WHERE regexp_replace(COALESCE("phone", ''), '[^0-9]+', '', 'g') IN (${Prisma.join(normalizedCandidates)})
+        LIMIT 1
+      `,
+    );
+
+    const matchedId = matchedRows[0]?.id;
+    if (!matchedId) {
+      return null;
+    }
+
+    return this.prisma.user.findUnique({ where: { id: matchedId } });
+  }
+
   private async getOrCreateDefaultBusiness() {
     const first = await this.prisma.business.findFirst({ orderBy: { id: 'asc' } });
     if (first) return first;
@@ -122,11 +215,7 @@ export class AuthService {
     const identifier = credentials.phone.trim();
     const isEmailLogin = identifier.includes('@');
 
-    const user = await this.prisma.user.findUnique({
-      where: isEmailLogin
-        ? { email: identifier.toLowerCase() }
-        : { phone: identifier },
-    });
+    const user = await this.findUserByLoginIdentifier(identifier, isEmailLogin);
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -141,15 +230,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload: JwtPayload = {
-      userId: user.id.toString(),
-      phone: user.phone ?? undefined,
-      role: user.role,
-      businessId: user.businessId.toString(),
-    };
-
     return this.createAuthTokensForUser({
-      id: Number(payload.userId),
+      id: user.id,
       phone: user.phone,
       role: user.role,
       businessId: user.businessId,

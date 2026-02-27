@@ -144,6 +144,7 @@ export default function SellerProductsPage() {
       const res = await api.get<SellerApplicationResponse | null>('/sellers/applications/me');
       return res.data;
     },
+    enabled: isSeller,
     retry: false,
   });
 
@@ -355,7 +356,12 @@ export default function SellerProductsPage() {
         <p className="mt-3 text-xs text-[var(--neutral-600)]">
           Magazada gorunmek icin urun yayinda olmali ve stok degeri aktif olmalidir.
         </p>
-        {sellerApplicationError ? (
+        {!isSeller ? (
+          <p className="mt-2 text-xs text-amber-700">
+            Admin gorunumunde magaza linki ve yazma aksiyonlari pasiftir.
+          </p>
+        ) : null}
+        {isSeller && sellerApplicationError ? (
           <p className="mt-2 text-xs text-red-600">/sellers/applications/me endpointi kontrol edilmeli.</p>
         ) : null}
       </div>
@@ -452,6 +458,7 @@ export default function SellerProductsPage() {
                         <input
                           value={draft.name}
                           onChange={(e) => patchRowDraft(product, { name: e.target.value })}
+                          disabled={!isSeller}
                           className="h-9 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm"
                         />
                         <div className="mt-1 text-xs text-[var(--neutral-500)]">
@@ -462,6 +469,7 @@ export default function SellerProductsPage() {
                         <select
                           value={draft.categoryId}
                           onChange={(e) => patchRowDraft(product, { categoryId: e.target.value })}
+                          disabled={!isSeller}
                           className="h-9 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm"
                         >
                           <option value="">Kategori sec</option>
@@ -483,12 +491,13 @@ export default function SellerProductsPage() {
                             value={draft.stock}
                             onChange={(e) => patchRowDraft(product, { stock: e.target.value })}
                             inputMode="numeric"
+                            disabled={!isSeller}
                             className="h-9 w-20 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm"
                           />
                           <button
                             type="button"
                             onClick={() => stockMutation.mutate(product)}
-                            disabled={stockMutation.isPending}
+                            disabled={!isSeller || stockMutation.isPending}
                             className="inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary-800)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Kaydet
@@ -500,6 +509,7 @@ export default function SellerProductsPage() {
                           value={draft.priceCents}
                           onChange={(e) => patchRowDraft(product, { priceCents: e.target.value })}
                           inputMode="numeric"
+                          disabled={!isSeller}
                           className="h-9 w-28 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm"
                         />
                         <div className="mt-1 text-xs text-[var(--neutral-500)]">
@@ -510,7 +520,7 @@ export default function SellerProductsPage() {
                         <button
                           type="button"
                           onClick={() => publishMutation.mutate(product)}
-                          disabled={publishMutation.isPending}
+                          disabled={!isSeller || publishMutation.isPending}
                           className={`inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] border px-3 text-[10px] font-semibold uppercase tracking-[0.15em] ${
                             product.isPublished
                               ? 'border-[#0F5132]/25 bg-[#E6FBF2] text-[#0F5132]'
@@ -524,7 +534,7 @@ export default function SellerProductsPage() {
                         <button
                           type="button"
                           onClick={() => updateMutation.mutate(product)}
-                          disabled={updateMutation.isPending}
+                          disabled={!isSeller || updateMutation.isPending}
                           className="inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Guncelle
