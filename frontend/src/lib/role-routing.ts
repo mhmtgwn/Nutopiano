@@ -42,12 +42,7 @@ export const isSuperAdminRole = (role?: string | null): boolean =>
 
 export const isSellerPanelRole = (role?: string | null): boolean => {
   const normalized = normalizeRole(role);
-  return (
-    normalized === 'SUPER_ADMIN' ||
-    normalized === 'ADMIN' ||
-    normalized === 'SELLER' ||
-    normalized === 'USER'
-  );
+  return normalized === 'SELLER' || normalized === 'USER';
 };
 
 export const isPosRoleAllowed = (role?: string | null): boolean => {

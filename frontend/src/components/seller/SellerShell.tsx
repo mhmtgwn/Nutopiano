@@ -56,15 +56,6 @@ const staffNavItems: SellerNavItem[] = [
   { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
 ];
 
-const adminNavItems: SellerNavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: Home },
-  { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'Ürünler & Yayın', href: '/dashboard/products', icon: Package },
-  { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
-  { label: 'Müşteriler', href: '/dashboard/customers', icon: Users },
-  { label: 'Raporlar', href: '/dashboard/reports', icon: BarChart3 },
-];
-
 function SidebarContent({
   navItems,
   isActive,
@@ -138,12 +129,7 @@ export default function SellerShell({ children }: SellerShellProps) {
 
   const navItems = useMemo(() => {
     const role = user?.role;
-    const base =
-      role === 'USER'
-        ? staffNavItems
-        : role === 'ADMIN' || role === 'SUPER_ADMIN'
-          ? adminNavItems
-          : sellerNavItems;
+    const base = role === 'USER' ? staffNavItems : sellerNavItems;
     return base.filter(
       (item) =>
         !item.requiredCapabilities ||
@@ -153,11 +139,8 @@ export default function SellerShell({ children }: SellerShellProps) {
 
   const panelLabel = getPanelLabelByRole(user?.role);
   const isStaff = user?.role === 'USER';
-  const isAdminView = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const panelDescription = isStaff
     ? 'Dashboard, sipariş ve POS akışına erişiminiz var.'
-    : isAdminView
-      ? 'Satici operasyon ekranlarini admin gorunumuyle yonetin.'
     : 'Sipariş, ürün, POS, müşteri, rapor ve ödeme akışlarını yönetin.';
 
   // Staff: amber/kahve sidebar; Seller: koyu yeşil sidebar
@@ -219,11 +202,7 @@ export default function SellerShell({ children }: SellerShellProps) {
               Nutopiano
             </p>
             <p className="text-[12px] font-semibold text-gray-700 leading-none mt-0.5">
-              {isStaff
-                ? 'Personel Paneli'
-                : isAdminView
-                  ? 'Admin Operasyon'
-                  : 'Satıcı Paneli'}
+              {isStaff ? 'Personel Paneli' : 'Satıcı Paneli'}
             </p>
           </div>
         </div>
@@ -297,11 +276,7 @@ export default function SellerShell({ children }: SellerShellProps) {
                   N
                 </div>
                 <p className="text-[12px] font-semibold text-white">
-                  {isStaff
-                    ? 'Personel Paneli'
-                    : isAdminView
-                      ? 'Admin Operasyon'
-                      : 'Satıcı Paneli'}
+                  {isStaff ? 'Personel Paneli' : 'Satıcı Paneli'}
                 </p>
               </div>
               <button

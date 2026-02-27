@@ -52,7 +52,6 @@ const createNavSections = (basePath: string): NavSection[] => {
       items: [
         { label: 'Admin Panel', href: '/admin', icon: LayoutDashboard },
         { label: 'Platform Panel', href: '/platform', icon: LayoutDashboard },
-        { label: 'Satici Panel', href: '/dashboard', icon: Store },
         { label: 'POS Panel', href: '/pos', icon: CreditCard },
         { label: 'Hesabim', href: '/account/profile', icon: UserCheck },
       ],
