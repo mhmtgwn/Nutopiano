@@ -3,14 +3,33 @@ import type { NextRequest } from 'next/server';
 import { isAdminRole } from '@/lib/role-routing';
 
 const ACCESS_COOKIE = 'nutopiano_access';
+const NO_STORE_CACHE_CONTROL = 'no-store, must-revalidate, no-cache, max-age=0, private';
 
 const isAdminOnlyPath = (pathname: string) => pathname.startsWith('/admin');
 const isPlatformOnlyPath = (pathname: string) => pathname.startsWith('/platform');
+const STATIC_PATH_PREFIXES = ['/_next/', '/api/'];
+const STATIC_EXACT_PATHS = ['/favicon.ico', '/manifest.webmanifest', '/robots.txt', '/sitemap.xml'];
 
 const redirectPlatformPath = (req: NextRequest) => {
   const redirectUrl = req.nextUrl.clone();
   redirectUrl.pathname = req.nextUrl.pathname.replace(/^\/platform\b/, '/admin');
   return NextResponse.redirect(redirectUrl, 308);
+};
+
+const hasFileExtension = (pathname: string) => /\.[A-Za-z0-9]+$/.test(pathname);
+
+const isStaticRequestPath = (pathname: string) => {
+  if (STATIC_EXACT_PATHS.includes(pathname)) return true;
+  if (STATIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
+  return hasFileExtension(pathname);
+};
+
+const isDocumentRequest = (request: NextRequest) => {
+  const destination = request.headers.get('sec-fetch-dest');
+  if (destination === 'document') return true;
+
+  const accept = request.headers.get('accept') ?? '';
+  return accept.includes('text/html');
 };
 
 const decodeJwtRole = (token: string): string | null => {
@@ -44,38 +63,48 @@ const isProtectedPath = (pathname: string) => {
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (isStaticRequestPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  let response: NextResponse;
 
   if (!isProtectedPath(pathname)) {
-    return NextResponse.next();
-  }
+    response = NextResponse.next();
+  } else if (isPlatformOnlyPath(pathname)) {
+    response = redirectPlatformPath(req);
+  } else {
+    const token = req.cookies.get(ACCESS_COOKIE)?.value;
+    if (token && token.trim().length > 0) {
+      if (isAdminOnlyPath(pathname)) {
+        const role = decodeJwtRole(token);
 
-  if (isPlatformOnlyPath(pathname)) {
-    return redirectPlatformPath(req);
-  }
-
-  const token = req.cookies.get(ACCESS_COOKIE)?.value;
-  if (token && token.trim().length > 0) {
-    if (isAdminOnlyPath(pathname)) {
-      const role = decodeJwtRole(token);
-
-      if (!isAdminRole(role)) {
-        const redirectUrl = req.nextUrl.clone();
-        redirectUrl.pathname = '/';
-        redirectUrl.search = '';
-        return NextResponse.redirect(redirectUrl);
+        if (!isAdminRole(role)) {
+          const redirectUrl = req.nextUrl.clone();
+          redirectUrl.pathname = '/';
+          redirectUrl.search = '';
+          response = NextResponse.redirect(redirectUrl);
+        } else {
+          response = NextResponse.next();
+        }
+      } else {
+        response = NextResponse.next();
       }
+    } else {
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('next', pathname);
+      response = NextResponse.redirect(loginUrl);
     }
-
-    return NextResponse.next();
   }
 
-  const loginUrl = req.nextUrl.clone();
-  loginUrl.pathname = '/login';
-  loginUrl.searchParams.set('next', pathname);
+  if (isDocumentRequest(req)) {
+    response.headers.set('Cache-Control', NO_STORE_CACHE_CONTROL);
+  }
 
-  return NextResponse.redirect(loginUrl);
+  return response;
 }
 
 export const config = {
-  matcher: ['/account/:path*', '/admin/:path*', '/platform/:path*', '/seller/:path*', '/dashboard/:path*', '/pos/:path*', '/panel/:path*'],
+  matcher: '/:path*',
 };
