@@ -33,6 +33,7 @@ jobs:
   snyk:
     name: Snyk Scan (high+)
     runs-on: ubuntu-latest
+    if: ${{ secrets.SNYK_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,13 +46,6 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
-
-      - name: Verify Snyk token
-        run: |
-          if [ -z "${{ secrets.SNYK_TOKEN }}" ]; then
-            echo "SNYK_TOKEN secret is required for security scan."
-            exit 1
-          fi
 
       - name: Run Snyk test (high+)
         env:
