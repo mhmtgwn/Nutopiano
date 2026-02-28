@@ -578,7 +578,9 @@ export default function ProductDetailClient({
               <div
                 className="relative aspect-square w-full"
                 onWheel={(e) => {
-                  e.preventDefault();
+                  if (e.cancelable) {
+                    e.preventDefault();
+                  }
                   const next = Math.min(3, Math.max(1, zoomScale + (e.deltaY > 0 ? -0.12 : 0.12)));
                   setZoomScale(next);
                   if (next === 1) setZoomOffset({ x: 0, y: 0 });

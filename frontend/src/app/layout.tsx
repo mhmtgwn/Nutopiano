@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import Header from "@/components/Header";
 import FooterBar from "@/components/layout/FooterBar";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
+import ChunkErrorRecovery from "@/components/common/ChunkErrorRecovery";
 
 const playfairDisplay = Playfair_Display({
   variable: "--font-playfair",
@@ -34,6 +35,7 @@ export default function RootLayout({
         className={`${playfairDisplay.variable} ${sourceSans.variable} antialiased`}
       >
         <Providers>
+          <ChunkErrorRecovery />
           <div className="app-shell flex min-h-screen flex-col text-foreground">
             <Header />
             <main className="app-main flex-1 pb-20 md:pb-0">
