@@ -47,6 +47,29 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    const noStoreHeaders = [
+      {
+        key: 'Cache-Control',
+        value: 'no-store, must-revalidate, no-cache, max-age=0, private',
+      },
+    ];
+
+    return [
+      { source: '/', headers: noStoreHeaders },
+      { source: '/login', headers: noStoreHeaders },
+      { source: '/admin', headers: noStoreHeaders },
+      { source: '/admin/:path*', headers: noStoreHeaders },
+      { source: '/account/:path*', headers: noStoreHeaders },
+      { source: '/dashboard/:path*', headers: noStoreHeaders },
+      { source: '/platform/:path*', headers: noStoreHeaders },
+      { source: '/seller/:path*', headers: noStoreHeaders },
+      { source: '/pos', headers: noStoreHeaders },
+      { source: '/pos/:path*', headers: noStoreHeaders },
+      { source: '/panel', headers: noStoreHeaders },
+      { source: '/panel/:path*', headers: noStoreHeaders },
+    ];
+  },
 };
 
 const sentryConfig = withSentryConfig(nextConfig, {
