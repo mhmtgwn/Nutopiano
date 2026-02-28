@@ -298,7 +298,7 @@ export default function AdminUserDetailPage() {
                             <span className="text-[11px] text-[var(--neutral-400)]">(Audit Log Preview)</span>
                         </div>
                         <p className="text-sm text-[var(--neutral-500)]">
-                            Bu bölüm Faz 10'da audit log entegrasyonuyla aktifleşecek.
+                            Bu bölüm Faz 10&apos;da audit log entegrasyonuyla aktifleşecek.
                         </p>
                     </div>
                 </div>
@@ -313,7 +313,7 @@ export default function AdminUserDetailPage() {
                         </div>
                         <StatusBadge variant="neutral">Pasif</StatusBadge>
                         <p className="mt-2 text-xs text-[var(--neutral-500)]">
-                            2FA kurulumu Faz 3'te aktif olacak.
+                            2FA kurulumu Faz 3&apos;te aktif olacak.
                         </p>
                         <button
                             type="button"

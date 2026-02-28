@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Download, ShoppingCart, TrendingUp, Users, Wallet } from 'lucide-react';
@@ -164,7 +165,7 @@ export default function AdminReportsPage() {
                 <div className="rounded-xl border border-[var(--neutral-200)] bg-white p-6">
                     <h3 className="text-base font-semibold text-[var(--primary-800)] mb-4">Finans Raporları</h3>
                     <p className="text-sm text-[var(--neutral-600)]">
-                        Komisyon, payout ve gelir/gider raporları. Detaylı finans verilerini <a href="/admin/finance" className="text-[var(--primary-700)] underline">Finans Kontrol</a> sayfasından inceleyin.
+                        Komisyon, payout ve gelir/gider raporları. Detaylı finans verilerini <Link href="/admin/finance" className="text-[var(--primary-700)] underline">Finans Kontrol</Link> sayfasından inceleyin.
                     </p>
                     <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                         {[
@@ -172,10 +173,10 @@ export default function AdminReportsPage() {
                             { label: 'Cüzdanlar', href: '/admin/finance/wallets', desc: 'Satıcı bakiyeleri' },
                             { label: 'Payout Talepleri', href: '/admin/finance/payouts', desc: 'Ödeme talepleri' },
                         ].map(({ label, href, desc }) => (
-                            <a key={href} href={href} className="rounded-lg border border-[var(--neutral-200)] p-4 hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)] transition">
+                            <Link key={href} href={href} className="rounded-lg border border-[var(--neutral-200)] p-4 hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)] transition">
                                 <p className="text-sm font-semibold text-[var(--primary-800)]">{label}</p>
                                 <p className="text-[11px] text-[var(--neutral-500)]">{desc}</p>
-                            </a>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -212,10 +213,10 @@ export default function AdminReportsPage() {
                     <h3 className="text-base font-semibold text-[var(--primary-800)] mb-4">Müşteri Analizleri</h3>
                     <p className="text-sm text-[var(--neutral-600)] mb-4">Yeni müşteri kazanımı ve segmentasyon verileri.</p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <a href="/admin/customers" className="rounded-lg border border-[var(--neutral-200)] p-4 hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)] transition">
+                        <Link href="/admin/customers" className="rounded-lg border border-[var(--neutral-200)] p-4 hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)] transition">
                             <p className="text-sm font-semibold text-[var(--primary-800)]">Tüm Müşteriler</p>
                             <p className="text-[11px] text-[var(--neutral-500)]">Müşteri listesi ve yönetimi</p>
-                        </a>
+                        </Link>
                         <div className="rounded-lg border border-[var(--neutral-200)] p-4">
                             <p className="text-sm font-semibold text-[var(--primary-800)]">Segmentasyon</p>
                             <p className="text-[11px] text-[var(--neutral-500)]">Yakında — müşteri segmentleri ve analiz</p>
