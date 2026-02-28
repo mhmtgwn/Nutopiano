@@ -33,7 +33,6 @@ jobs:
   snyk:
     name: Snyk Scan (high+)
     runs-on: ubuntu-latest
-    if: ${{ secrets.SNYK_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,13 +46,18 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Skip Snyk (token not configured)
+        if: ${{ secrets.SNYK_TOKEN == '' }}
+        run: echo "SNYK_TOKEN is not configured. Skipping Snyk scan."
+
       - name: Run Snyk test (high+)
+        if: ${{ secrets.SNYK_TOKEN != '' }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: npx snyk test --all-projects --severity-threshold=high
 
       - name: Publish Snyk monitor snapshot
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && secrets.SNYK_TOKEN != ''
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: npx snyk monitor --all-projects
