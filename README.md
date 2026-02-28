@@ -23,6 +23,7 @@ open http://localhost:3000
 ```
 
 Staging deployment notes: `STAGING.md`
+Deploy secrets checklist: `DEPLOY-SECRETS.md`
 Backup/restore notes: `BACKUP.md`
 Dependency security gate: `.github/workflows/security-audit.yml` (`npm run security:audit`)
 CI workflow: `.github/workflows/ci.yml`
