@@ -7,6 +7,11 @@ import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { formatPrice } from '@/lib/format';
 import { useAppSelector } from '@/store';
+import ProductEditorForm, {
+  defaultProductEditorFormValue,
+  parsePriceInputToCents,
+  type ProductEditorFormValue,
+} from '@/components/products/ProductEditorForm';
 
 type ProductType = 'PHYSICAL' | 'SERVICE' | 'WEIGHT' | 'CUSTOM';
 
@@ -91,12 +96,10 @@ export default function SellerProductsPage() {
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    categoryId: '',
-    priceCents: '',
-    stock: '',
-  });
+  const [createCategoryId, setCreateCategoryId] = useState<number | null>(null);
+  const [createForm, setCreateForm] = useState<ProductEditorFormValue>(
+    defaultProductEditorFormValue,
+  );
 
   const [rowDrafts, setRowDrafts] = useState<
     Record<number, { name: string; categoryId: string; priceCents: string; stock: string }>
@@ -200,33 +203,74 @@ export default function SellerProductsPage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const name = createForm.name.trim();
-      const categoryId = Number(createForm.categoryId);
-      const priceCents = Number(createForm.priceCents);
+      const categoryId = createCategoryId;
+      const priceCents = parsePriceInputToCents(createForm.price);
       const stockRaw = createForm.stock.trim();
       const stock = stockRaw === '' ? undefined : Number(stockRaw);
+      const subtitle = createForm.subtitle.trim();
+      const sku = createForm.sku.trim();
+      const description = createForm.description.trim();
+      const features = createForm.features
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const imageUrl = createForm.imageUrl.trim();
+      const images = createForm.images
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const tags = createForm.tags
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const seoTitle = createForm.seoTitle.trim();
+      const seoDescription = createForm.seoDescription.trim();
 
       if (!name) throw new Error('Urun adi zorunludur.');
-      if (!Number.isFinite(categoryId) || categoryId <= 0) {
+      if (typeof categoryId !== 'number' || !Number.isFinite(categoryId) || categoryId <= 0) {
         throw new Error('Kategori secimi zorunludur.');
       }
-      if (!Number.isFinite(priceCents) || priceCents < 0) {
+      if (!Number.isFinite(priceCents) || (priceCents ?? 0) <= 0) {
         throw new Error('Fiyat gecersiz.');
       }
       if (stock !== undefined && (!Number.isFinite(stock) || stock < 0)) {
         throw new Error('Stok 0 veya daha buyuk olmali.');
       }
+      const validateHttpUrl = (raw: string) => {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new Error('invalid-url-protocol');
+        }
+      };
+      try {
+        if (imageUrl) validateHttpUrl(imageUrl);
+        for (const image of images) validateHttpUrl(image);
+      } catch {
+        throw new Error('Gorsel URL alanlari gecerli olmali (http/https).');
+      }
 
       await api.post('/seller/products', {
         name,
+        subtitle: subtitle || undefined,
+        sku: sku || undefined,
         categoryId,
-        type: 'PHYSICAL',
-        price: String(Math.trunc(priceCents)),
+        type: createForm.type,
+        price: String(Math.trunc(priceCents ?? 0)),
         stock: stock === undefined ? undefined : Math.trunc(stock),
+        description: description || undefined,
+        features: features.length > 0 ? features : undefined,
+        imageUrl: imageUrl || undefined,
+        images: images.length > 0 ? images : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        seoTitle: seoTitle || undefined,
+        seoDescription: seoDescription || undefined,
+        isPublished: createForm.isPublished,
       });
     },
     onSuccess: async () => {
       toast.success('Urun olusturuldu.');
-      setCreateForm({ name: '', categoryId: '', priceCents: '', stock: '' });
+      setCreateCategoryId(null);
+      setCreateForm(defaultProductEditorFormValue);
       await queryClient.invalidateQueries({ queryKey: ['seller-products'] });
     },
     onError: (err: unknown) => {
@@ -366,67 +410,38 @@ export default function SellerProductsPage() {
         ) : null}
       </div>
 
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          createMutation.mutate();
-        }}
-        className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6"
-      >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--neutral-500)]">
-          Yeni Urun Ekle
-        </p>
+      <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
         {!isSeller ? (
-          <div className="mt-3 rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="mb-3 rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Bu ekran yalnizca SELLER rolu icin aciktir.
           </div>
         ) : null}
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
-          <input
-            value={createForm.name}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Urun adi *"
-            className="h-10 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm outline-none"
-            required
-          />
-          <select
-            value={createForm.categoryId}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, categoryId: e.target.value }))}
-            className="h-10 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm outline-none"
-            required
-            disabled={isCategoriesLoading || flatCategories.length === 0}
-          >
-            <option value="">Kategori sec *</option>
-            {flatCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {`${'-- '.repeat(category.level)}${category.name}`}
-              </option>
-            ))}
-          </select>
-          <input
-            value={createForm.priceCents}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, priceCents: e.target.value }))}
-            inputMode="numeric"
-            placeholder="Fiyat (kurus) *"
-            className="h-10 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm outline-none"
-            required
-          />
-          <input
-            value={createForm.stock}
-            onChange={(e) => setCreateForm((prev) => ({ ...prev, stock: e.target.value }))}
-            inputMode="numeric"
-            placeholder="Stok"
-            className="h-10 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] px-3 text-sm outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={createMutation.isPending || !isSeller}
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {createMutation.isPending ? 'Olusturuluyor...' : 'Urun olustur'}
-        </button>
-      </form>
+        <ProductEditorForm
+          title="Yeni Urun Ekle"
+          subtitle="POS ile ayni urun olusturma ekranini kullanarak katalog ve satis kanallarini birlikte yonetin."
+          categoryId={createCategoryId}
+          categoryOptions={flatCategories}
+          onCategoryChange={setCreateCategoryId}
+          categoryPlaceholder={isCategoriesLoading ? 'Kategoriler yukleniyor...' : 'Kategori secin'}
+          value={createForm}
+          onChange={setCreateForm}
+          onSubmit={() => createMutation.mutate()}
+          submitLabel="Urun Olustur"
+          submitPending={createMutation.isPending}
+          submitDisabled={!isSeller || isCategoriesLoading || flatCategories.length === 0}
+          onReset={() => {
+            setCreateCategoryId(null);
+            setCreateForm(defaultProductEditorFormValue);
+          }}
+          resetLabel="Temizle"
+          resetDisabled={createMutation.isPending}
+          footerHint={
+            !isSeller
+              ? 'Bu hesapla urun olusturma kapali. SELLER rolunde tekrar deneyin.'
+              : undefined
+          }
+        />
+      </div>
 
       <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
         {isLoading && <Spinner fullscreen label="Urunler yukleniyor..." />}

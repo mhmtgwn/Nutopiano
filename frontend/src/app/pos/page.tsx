@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import Button from '@/components/common/Button';
 import ConflictResolutionModal from '@/components/common/ConflictResolutionModal';
+import ProductEditorForm, {
+  defaultProductEditorFormValue,
+  parsePriceInputToCents,
+  type ProductEditorFormValue,
+} from '@/components/products/ProductEditorForm';
 import {
   isConflictError,
   isNetworkError,
@@ -134,22 +139,6 @@ type PosManageProductsPayload = {
     pageSize?: number;
     totalPages?: number;
   };
-};
-type PosCategoryProductFormState = {
-  name: string;
-  subtitle: string;
-  sku: string;
-  type: ProductType;
-  price: string;
-  stock: string;
-  description: string;
-  features: string;
-  imageUrl: string;
-  images: string;
-  tags: string;
-  seoTitle: string;
-  seoDescription: string;
-  isPublished: boolean;
 };
 type PosCartDraftItem = {
   key: string;
@@ -381,19 +370,6 @@ const flattenCategoryTree = (
   return rows;
 };
 
-const parsePriceInputToCents = (raw: string) => {
-  const normalized = raw.trim().replace(/\s+/g, '').replace(',', '.');
-  if (!normalized) return null;
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
-
-  const [wholePart, fractionPart = ''] = normalized.split('.');
-  const whole = Number(wholePart);
-  const fraction = Number((fractionPart + '00').slice(0, 2));
-  if (!Number.isFinite(whole) || !Number.isFinite(fraction)) return null;
-
-  return whole * 100 + fraction;
-};
-
 const formatMoney = (amountCents?: number) => {
   if (typeof amountCents !== 'number') return '-';
   return new Intl.NumberFormat('tr-TR', {
@@ -411,22 +387,7 @@ const defaultSplitPaymentRows: PosSplitPaymentDraft[] = [
   { method: 'CASH', amountCents: '', reference: '' },
   { method: 'CARD', amountCents: '', reference: '' },
 ];
-const defaultCategoryProductForm: PosCategoryProductFormState = {
-  name: '',
-  subtitle: '',
-  sku: '',
-  type: 'PHYSICAL',
-  price: '',
-  stock: '',
-  description: '',
-  features: '',
-  imageUrl: '',
-  images: '',
-  tags: '',
-  seoTitle: '',
-  seoDescription: '',
-  isPublished: false,
-};
+const defaultCategoryProductForm: ProductEditorFormValue = defaultProductEditorFormValue;
 
 const allPosTabs: Array<{ id: PosTabId; label: string }> = [
   { id: 'home', label: 'Satis' },
@@ -914,7 +875,7 @@ export default function PosPage() {
   const [managementBarcodeInput, setManagementBarcodeInput] = useState('');
   const [isBarcodeProductLookupBusy, setIsBarcodeProductLookupBusy] = useState(false);
   const [categoryProductForm, setCategoryProductForm] =
-    useState<PosCategoryProductFormState>(defaultCategoryProductForm);
+    useState<ProductEditorFormValue>(defaultCategoryProductForm);
   const [cartItems, setCartItems] = useState<PosCartDraftItem[]>([]);
   const [quickPaymentMethod, setQuickPaymentMethod] = useState<PosQuickPaymentMethod>('NONE');
   const [customerMode, setCustomerMode] = useState<PosCustomerMode>('GUEST');
@@ -4458,229 +4419,29 @@ export default function PosPage() {
                     Okutulan barkod kayitliysa form otomatik dolar ve urunu hizlica guncelleyebilirsiniz.
                   </p>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Kategori
-                    <select
-                      value={selectedCategoryId ?? ''}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setSelectedCategoryId(Number.isFinite(next) && next > 0 ? next : null);
-                      }}
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                    >
-                      <option value="">Kategori secin</option>
-                      {flatCategoryRows.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {`${'--'.repeat(row.level)} ${row.name}`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Urun Adi
-                    <input
-                      value={categoryProductForm.name}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="Orn: Klasik Gitar Teli"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Alt Baslik
-                    <input
-                      value={categoryProductForm.subtitle}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, subtitle: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="Orn: Profesyonel seri"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    SKU
-                    <input
-                      value={categoryProductForm.sku}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, sku: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="NP-STR-001"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Urun Tipi
-                    <select
-                      value={categoryProductForm.type}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({
-                          ...prev,
-                          type: e.target.value as ProductType,
-                        }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-2 text-sm text-[#1A3C34]"
-                    >
-                      <option value="PHYSICAL">PHYSICAL</option>
-                      <option value="SERVICE">SERVICE</option>
-                      <option value="WEIGHT">WEIGHT</option>
-                      <option value="CUSTOM">CUSTOM</option>
-                    </select>
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Fiyat (TL)
-                    <input
-                      value={categoryProductForm.price}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, price: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="1499.90"
-                      inputMode="decimal"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Stok
-                    <input
-                      value={categoryProductForm.stock}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, stock: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="0"
-                      inputMode="numeric"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Gorsel URL
-                    <input
-                      value={categoryProductForm.imageUrl}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, imageUrl: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="https://..."
-                    />
-                  </label>
-                </div>
-
-                <label className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                  Aciklama
-                  <textarea
-                    value={categoryProductForm.description}
-                    onChange={(e) =>
-                      setCategoryProductForm((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    className="mt-1 min-h-[88px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
-                    placeholder="Marketplace detay sayfasinda gorunecek urun aciklamasi"
-                  />
-                </label>
-
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Ozellikler (satir satir)
-                    <textarea
-                      value={categoryProductForm.features}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, features: e.target.value }))
-                      }
-                      className="mt-1 min-h-[110px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
-                      placeholder={'Hafif govde\nUzun omur\nPremium malzeme'}
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Ek Gorseller (satir satir URL)
-                    <textarea
-                      value={categoryProductForm.images}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, images: e.target.value }))
-                      }
-                      className="mt-1 min-h-[110px] w-full rounded-lg border border-[#D9D9D3] bg-white px-3 py-2 text-sm text-[#1A3C34]"
-                      placeholder={'https://.../img-1.jpg\nhttps://.../img-2.jpg'}
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    Etiketler
-                    <input
-                      value={categoryProductForm.tags}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, tags: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="gitar, aksesuar, premium"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    SEO Baslik
-                    <input
-                      value={categoryProductForm.seoTitle}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({ ...prev, seoTitle: e.target.value }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="Google basligi"
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1A3C34]/70">
-                    SEO Aciklama
-                    <input
-                      value={categoryProductForm.seoDescription}
-                      onChange={(e) =>
-                        setCategoryProductForm((prev) => ({
-                          ...prev,
-                          seoDescription: e.target.value,
-                        }))
-                      }
-                      className="mt-1 h-10 w-full rounded-lg border border-[#D9D9D3] bg-white px-3 text-sm text-[#1A3C34]"
-                      placeholder="Arama sonucunda gorunen aciklama"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-xs text-[#1A3C34]">
-                      <input
-                        type="checkbox"
-                        checked={categoryProductForm.isPublished}
-                        onChange={(e) =>
-                          setCategoryProductForm((prev) => ({
-                            ...prev,
-                            isPublished: e.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 rounded border border-[#D9D9D3]"
-                      />
-                      Marketplace icin urunu hemen yayinla
-                    </label>
-                    <p className="text-xs text-[#5C5C5C]">
-                      Fiyat onizleme:{' '}
-                      <span className="font-semibold">
-                        {formatMoney(parsePriceInputToCents(categoryProductForm.price) ?? undefined)}
-                      </span>
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    className="h-9 px-4 text-xs"
-                    onClick={() =>
+                <div className="mt-3">
+                  <ProductEditorForm
+                    title="Kategoriye Yeni Urun Ekle"
+                    subtitle="Secili kategoriye yeni urun acarak hemen satisa ekleyebilirsiniz."
+                    badgeLabel={selectedCategoryName ?? 'Kategori secin'}
+                    categoryId={selectedCategoryId}
+                    categoryOptions={flatCategoryRows}
+                    onCategoryChange={setSelectedCategoryId}
+                    value={categoryProductForm}
+                    onChange={setCategoryProductForm}
+                    onSubmit={() =>
                       void (editingCategoryProductId
                         ? updateCategoryProductFromForm()
                         : createProductInSelectedCategory())
                     }
-                    disabled={isCreatingCategoryProduct || !canManageCategoryProducts}
-                  >
-                    {isCreatingCategoryProduct
-                      ? (editingCategoryProductId ? 'Guncelleniyor...' : 'Ekleniyor...')
-                      : (editingCategoryProductId ? 'Urunu Guncelle' : 'Urun Ekle')}
-                  </Button>
+                    submitLabel={editingCategoryProductId ? 'Urunu Guncelle' : 'Urun Ekle'}
+                    submitPending={isCreatingCategoryProduct}
+                    submitDisabled={!canManageCategoryProducts}
+                    onReset={resetCategoryProductCreateMode}
+                    resetLabel="Formu Temizle"
+                    resetDisabled={isCreatingCategoryProduct}
+                    priceFormatter={formatMoney}
+                  />
                 </div>
                 {!canManageCategoryProducts ? (
                   <p className="mt-2 text-xs text-[#9B1C1C]">
