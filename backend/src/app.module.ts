@@ -29,6 +29,15 @@ import { OutboxModule } from './modules/outbox/outbox.module';
 import { CommerceRulesModule } from './modules/commerce-rules/commerce-rules.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { CommerceModule } from './core/commerce';
+import { PermissionGroupModule } from './modules/permission-groups/permission-group.module';
+import { TwoFactorModule } from './modules/two-factor/two-factor.module';
+import { ImpersonationModule } from './modules/impersonation/impersonation.module';
+import { FeatureFlagModule } from './modules/feature-flags/feature-flag.module';
+import { EmailTemplateModule } from './modules/email-templates/email-template.module';
+import { SmsTemplateModule } from './modules/sms-templates/sms-template.module';
+import { ApiKeyModule } from './modules/api-keys/api-key.module';
+import { NotificationModule } from './modules/notifications/notification.module';
+import { ConfigSnapshotModule } from './modules/config-snapshots/config-snapshot.module';
 
 @Module({
   imports: [
@@ -81,9 +90,18 @@ import { CommerceModule } from './core/commerce';
     DashboardModule,
     PaymentsModule,
     PosModule,
+    PermissionGroupModule,
+    TwoFactorModule,
+    ImpersonationModule,
+    FeatureFlagModule,
+    EmailTemplateModule,
+    SmsTemplateModule,
+    ApiKeyModule,
+    NotificationModule,
+    ConfigSnapshotModule,
   ],
 
   controllers: [AppController, DevController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

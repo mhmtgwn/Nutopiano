@@ -40,7 +40,7 @@ import { SellersService } from './sellers.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class SellersController {
-  constructor(private readonly sellersService: SellersService) {}
+  constructor(private readonly sellersService: SellersService) { }
 
   @Post('sellers/applications')
   @Roles('CUSTOMER', 'USER')
@@ -474,6 +474,27 @@ export class SellersController {
 
     return this.sellersService.listPlatformSellers(req.user, {
       isActive: isActiveBool,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Get('platform/sellers/staff')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'List all seller staff (platform)',
+    description:
+      'Lists all seller team members across all sellers in the business.',
+  })
+  @ApiOkResponse({ description: 'Paginated list of seller staff.' })
+  listAllStaffForAdmin(
+    @Req() req: { user: JwtPayload },
+    @Query('sellerId') sellerId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.sellersService.listAllStaffForAdmin(req.user, {
+      sellerId: sellerId ? Number(sellerId) : undefined,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });

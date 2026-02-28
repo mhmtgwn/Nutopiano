@@ -13,7 +13,7 @@ type EnqueueOutboxEventInput = {
 
 @Injectable()
 export class OutboxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private isUniqueConstraintError(error: unknown): boolean {
     if (!error || typeof error !== 'object') return false;
@@ -197,5 +197,34 @@ export class OutboxService {
       failedCount,
       deadLetterCount,
     };
+  }
+
+  async retryEvent(businessId: number, eventId: number) {
+    const event = await this.prisma.outboxEvent.findFirst({
+      where: { id: eventId, businessId },
+    });
+    if (!event) {
+      throw new BadRequestException('Outbox event bulunamadı');
+    }
+    // Reset the event for re-processing
+    return this.prisma.outboxEvent.update({
+      where: { id: eventId },
+      data: {
+        deadLetteredAt: null,
+        processedAt: null,
+        nextRetryAt: new Date(),
+        lastError: null,
+      },
+      select: {
+        id: true,
+        aggregateType: true,
+        aggregateId: true,
+        eventType: true,
+        attemptCount: true,
+        deadLetteredAt: true,
+        processedAt: true,
+        nextRetryAt: true,
+      },
+    });
   }
 }

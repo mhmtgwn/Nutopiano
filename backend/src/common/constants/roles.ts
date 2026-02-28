@@ -7,7 +7,8 @@ export const ROLES = {
   ADMIN: 'ADMIN',
   SELLER: 'SELLER',
   CUSTOMER: 'CUSTOMER',
-  USER: 'USER',
+  USER: 'USER',           // Geriye uyumluluk - SELLER_STAFF takma adı
+  SELLER_STAFF: 'SELLER_STAFF', // Yeni rol: satıcı personeli
 } as const;
 
 export type RoleType = (typeof ROLES)[keyof typeof ROLES];
@@ -58,7 +59,18 @@ export const ROLE_PERMISSIONS = {
     canViewAnalytics: false,
   },
   USER: {
-    description: 'Staff member - limited access to business operations',
+    description: 'Staff member (legacy alias for SELLER_STAFF)',
+    canAccessPlatformAdmin: false,
+    canAccessSellerPortal: true,
+    canAccessCustomerPortal: false,
+    canManageUsers: false,
+    canManageSellers: false,
+    canManageOrders: true,
+    canManagePayments: false,
+    canViewAnalytics: false,
+  },
+  SELLER_STAFF: {
+    description: 'Seller staff member - permission group controlled',
     canAccessPlatformAdmin: false,
     canAccessSellerPortal: true,
     canAccessCustomerPortal: false,
@@ -73,6 +85,13 @@ export const ROLE_PERMISSIONS = {
 export const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN] as const;
 export const PLATFORM_ADMIN_ROLES = [ROLES.SUPER_ADMIN] as const;
 export const BUSINESS_ADMIN_ROLES = [ROLES.ADMIN] as const;
-export const SELLER_ROLES = [ROLES.SELLER, ROLES.USER] as const;
+export const SELLER_ROLES = [ROLES.SELLER, ROLES.USER, ROLES.SELLER_STAFF] as const;
+export const SELLER_STAFF_ROLES = [ROLES.USER, ROLES.SELLER_STAFF] as const;
 export const CUSTOMER_ROLES = [ROLES.CUSTOMER] as const;
 
+/**
+ * Legacy role alias mapping — USER → SELLER_STAFF geriye uyumluluk
+ */
+export const LEGACY_ROLE_ALIASES: Record<string, RoleType> = {
+  STAFF: ROLES.SELLER_STAFF,
+};

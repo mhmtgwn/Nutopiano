@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -16,7 +16,7 @@ import { OutboxService } from './outbox.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class OutboxController {
-  constructor(private readonly outboxService: OutboxService) {}
+  constructor(private readonly outboxService: OutboxService) { }
 
   @Get('platform/outbox/metrics')
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -46,6 +46,20 @@ export class OutboxController {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     });
+  }
+
+  @Post('platform/outbox/events/:id/retry')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Retry a dead-lettered outbox event',
+    description: 'Reset a dead-lettered event for re-processing.',
+  })
+  @ApiOkResponse({ description: 'Reset outbox event.' })
+  retryEvent(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.outboxService.retryEvent(Number(req.user.businessId), id);
   }
 
   @Post('platform/outbox/events/test')

@@ -65,6 +65,16 @@ model Business {
   paymentSessions      PaymentSession[]
   returnRequests       ReturnRequest[]
   cashRegisterSessions CashRegisterSession[]
+
+  // Faz 1: Yeni modeller
+  permissionGroups     PermissionGroup[]
+  userPermissionGroups UserPermissionGroup[]
+  featureFlags         FeatureFlag[]
+  notifications        Notification[]
+  configSnapshots      ConfigSnapshot[]
+  emailTemplates       EmailTemplate[]
+  smsTemplates         SmsTemplate[]
+  apiKeys              ApiKey[]
 }
 
 model User {
@@ -78,6 +88,8 @@ model User {
   resetPasswordExpiresAt DateTime?
   role                   Role
   isActive               Boolean   @default(true)
+  deletedAt              DateTime?
+  lastLoginAt            DateTime?
   createdAt              DateTime  @default(now())
 
   business            Business       @relation(fields: [businessId], references: [id])
@@ -107,7 +119,10 @@ model User {
 
   sellerProfile Seller?
 
-  refreshTokens RefreshToken[]
+  refreshTokens        RefreshToken[]
+  // Faz 1: Yeni ilişkiler
+  twoFactor            UserTwoFactor?
+  permissionGroups     UserPermissionGroup[]
 }
 
 model RefreshToken {
@@ -363,7 +378,8 @@ enum Role {
   SUPER_ADMIN
   ADMIN
   SELLER
-  USER
+  USER          // Geriye uyumluluk - SELLER_STAFF takma adı
+  SELLER_STAFF  // Yeni: satıcı personeli (USER'ın yeniden adlandırılmış hali)
   CUSTOMER
 }
 
@@ -1364,4 +1380,175 @@ model Appointment {
   @@index([businessId, customerId])
   @@index([businessId, startAt])
   @@index([businessId, serviceTypeId, startAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAZ 1: YENİ MODELLER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Yetki grupları — SELLER_STAFF kullanıcılarına atanır
+model PermissionGroup {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  name        String
+  description String?
+  permissions Json     // string[] — yetki kod listesi
+  isSystem    Boolean  @default(false) // true = preset, silinemez
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business        Business              @relation(fields: [businessId], references: [id])
+  userAssignments UserPermissionGroup[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@index([businessId, isActive])
+}
+
+/// Kullanıcı ↔ yetki grubu bağlantı tablosu
+model UserPermissionGroup {
+  id                Int      @id @default(autoincrement())
+  businessId        Int
+  userId            Int
+  permissionGroupId Int
+  createdAt         DateTime @default(now())
+
+  business        Business        @relation(fields: [businessId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
+  permissionGroup PermissionGroup @relation(fields: [permissionGroupId], references: [id])
+
+  @@unique([userId, permissionGroupId])
+  @@index([businessId, userId])
+}
+
+/// Feature flag sistemi
+model FeatureFlag {
+  id          Int      @id @default(autoincrement())
+  businessId  Int?
+  key         String
+  description String?
+  isActive    Boolean  @default(false)
+  scope       String   // GLOBAL | BUSINESS | SELLER
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business? @relation(fields: [businessId], references: [id])
+
+  @@unique([key, businessId])
+  @@index([scope, isActive])
+  @@index([businessId, isActive])
+}
+
+/// İki faktörlü doğrulama — User başına 1 kayıt
+model UserTwoFactor {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  secret      String    // TOTP secret (şifreli saklanmalı)
+  isEnabled   Boolean   @default(false)
+  backupCodes Json?     // string[] — hashed yedek kodlar
+  enabledAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+/// API key yönetimi — satıcı bazlı harici entegrasyon
+model ApiKey {
+  id          Int       @id @default(autoincrement())
+  businessId  Int
+  sellerId    Int?
+  name        String
+  keyHash     String    @unique  // SHA-256, raw key saklanmaz
+  keyPrefix   String             // İlk 8 karakter — görüntüleme için
+  scopes      Json               // string[] — izin listesi
+  ipWhitelist Json?              // string[] | null
+  rateLimit   Int?               // dakika başına istek limiti
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, sellerId])
+  @@index([keyHash])
+}
+
+/// Sistem bildirimleri (payout bekliyor, ledger uyumsuzluk vb.)
+model Notification {
+  id          Int       @id @default(autoincrement())
+  businessId  Int
+  type        String    // info | warning | critical
+  title       String
+  message     String
+  source      String    // system | finance | security | smtp | sms
+  isRead      Boolean   @default(false)
+  dismissedAt DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, isRead, createdAt])
+  @@index([businessId, type, createdAt])
+}
+
+/// Hesaplama profili snapshot — sipariş anındaki config kaydı
+model ConfigSnapshot {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  configType String   // tax_profile | commission_profile | calculation_profile
+  configKey  String
+  snapshot   Json
+  version    Int
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, configType, configKey])
+  @@index([businessId, configType, version])
+}
+
+/// E-posta şablonları (sipariş onayı, kargo, şifre sıfırlama vb.)
+model EmailTemplate {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  key        String   // unique template identifier: order_confirm, welcome vb.
+  name       String
+  subject    String
+  bodyHtml   String   @db.Text
+  variables  Json     // kullanılabilir değişken listesi
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, key])
+  @@index([businessId])
+  @@index([businessId, isActive])
+}
+
+/// SMS şablonları
+model SmsTemplate {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  key        String
+  name       String
+  bodyText   String
+  variables  Json
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, key])
+  @@index([businessId])
+  @@index([businessId, isActive])
 }

@@ -8,7 +8,7 @@ import tls from 'tls';
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private async checkRedisConnection(redisUrl: string): Promise<boolean> {
     return new Promise((resolve) => {
@@ -96,6 +96,45 @@ export class HealthService {
       checks,
       responseTime: `${duration}ms`,
       version: process.env.npm_package_version || '1.0.0',
+    };
+  }
+
+  /**
+   * Admin system dashboard — returns system health, database stats, and memory usage.
+   */
+  async adminDashboard(businessId: number) {
+    const health = await this.check();
+
+    const [userCount, sellerCount, orderCount, productCount, customerCount] =
+      await Promise.all([
+        this.prisma.user.count({ where: { businessId } }),
+        this.prisma.seller.count({ where: { businessId } }),
+        this.prisma.order.count({ where: { businessId } }),
+        this.prisma.product.count({ where: { businessId } }),
+        this.prisma.customer.count({ where: { businessId } }),
+      ]);
+
+    const memUsage = process.memoryUsage();
+
+    return {
+      health,
+      stats: {
+        users: userCount,
+        sellers: sellerCount,
+        orders: orderCount,
+        products: productCount,
+        customers: customerCount,
+      },
+      system: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        memoryUsageMb: {
+          rss: Math.round(memUsage.rss / 1024 / 1024),
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        },
+        uptime: Math.round(process.uptime()),
+      },
     };
   }
 }

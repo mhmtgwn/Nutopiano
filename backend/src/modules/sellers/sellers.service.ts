@@ -84,7 +84,7 @@ export class SellersService {
     private readonly auditService: AuditService,
     private readonly inviteDeliveryService: SellerInviteDeliveryService,
     private readonly outboxService: OutboxService,
-  ) {}
+  ) { }
 
   private slugifySeller(value: string): string {
     const normalized = String(value ?? '')
@@ -931,12 +931,12 @@ export class SellersService {
         ...(inviteStatus ? { status: inviteStatus } : {}),
         ...(deliveryStatus
           ? {
-              deliveries: {
-                some: {
-                  status: deliveryStatus,
-                },
+            deliveries: {
+              some: {
+                status: deliveryStatus,
               },
-            }
+            },
+          }
           : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -1207,9 +1207,9 @@ export class SellersService {
         stock: nextStock,
         ...(nextStock <= 0
           ? {
-              isPublished: false,
-              publishedAt: null,
-            }
+            isPublished: false,
+            publishedAt: null,
+          }
           : {}),
       },
       select: {
@@ -1328,14 +1328,14 @@ export class SellersService {
         relationScope,
         ...(q
           ? [
-              {
-                OR: [
-                  { name: { contains: q, mode: 'insensitive' } },
-                  { phone: { contains: q, mode: 'insensitive' } },
-                  ...(qNumber ? [{ id: qNumber }] : []),
-                ],
-              } as Prisma.CustomerWhereInput,
-            ]
+            {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+                ...(qNumber ? [{ id: qNumber }] : []),
+              ],
+            } as Prisma.CustomerWhereInput,
+          ]
           : []),
       ],
     };
@@ -1687,48 +1687,48 @@ export class SellersService {
 
     const saved = existing
       ? await this.prisma.seller.update({
-          where: { id: existing.id },
-          data: {
-            slug: targetSlug,
-            displayName,
-            description: payload.description?.trim() || null,
-            logoUrl: payload.logoUrl?.trim() || null,
-            isActive: existing.isActive,
-          },
-          select: {
-            id: true,
-            userId: true,
-            slug: true,
-            displayName: true,
-            description: true,
-            logoUrl: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        })
+        where: { id: existing.id },
+        data: {
+          slug: targetSlug,
+          displayName,
+          description: payload.description?.trim() || null,
+          logoUrl: payload.logoUrl?.trim() || null,
+          isActive: existing.isActive,
+        },
+        select: {
+          id: true,
+          userId: true,
+          slug: true,
+          displayName: true,
+          description: true,
+          logoUrl: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
       : await this.prisma.seller.create({
-          data: {
-            businessId,
-            userId,
-            slug: targetSlug,
-            displayName,
-            description: payload.description?.trim() || null,
-            logoUrl: payload.logoUrl?.trim() || null,
-            isActive: false,
-          },
-          select: {
-            id: true,
-            userId: true,
-            slug: true,
-            displayName: true,
-            description: true,
-            logoUrl: true,
-            isActive: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
+        data: {
+          businessId,
+          userId,
+          slug: targetSlug,
+          displayName,
+          description: payload.description?.trim() || null,
+          logoUrl: payload.logoUrl?.trim() || null,
+          isActive: false,
+        },
+        select: {
+          id: true,
+          userId: true,
+          slug: true,
+          displayName: true,
+          description: true,
+          logoUrl: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
     return {
       ...saved,
@@ -1986,15 +1986,15 @@ export class SellersService {
     const businessCandidate =
       Number.isFinite(publicBusinessId) && publicBusinessId > 0
         ? await this.prisma.business.findUnique({
-            where: { id: publicBusinessId },
-          })
+          where: { id: publicBusinessId },
+        })
         : null;
 
     const business = businessCandidate
       ? businessCandidate
       : await this.prisma.business.findFirst({
-          orderBy: { id: 'asc' },
-        });
+        orderBy: { id: 'asc' },
+      });
 
     if (!business) {
       throw new NotFoundException('Business not found');
@@ -2089,18 +2089,18 @@ export class SellersService {
     const categories =
       categoryIds.length > 0
         ? await this.prisma.category.findMany({
-            where: {
-              businessId: business.id,
-              id: { in: categoryIds },
-              isActive: true,
-            },
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              orderIndex: true,
-            },
-          })
+          where: {
+            businessId: business.id,
+            id: { in: categoryIds },
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            orderIndex: true,
+          },
+        })
         : [];
     const categoryById = new Map<
       number,
@@ -2246,9 +2246,9 @@ export class SellersService {
     };
     const where: Prisma.ProductWhereInput = selectedCategoryId
       ? {
-          ...baseWhere,
-          categoryId: selectedCategoryId,
-        }
+        ...baseWhere,
+        categoryId: selectedCategoryId,
+      }
       : baseWhere;
 
     const total = await this.prisma.product.count({ where });
@@ -2293,18 +2293,18 @@ export class SellersService {
     const availableCategories =
       availableCategoryIds.length > 0
         ? await this.prisma.category.findMany({
-            where: {
-              businessId: business.id,
-              id: { in: availableCategoryIds },
-              isActive: true,
-            },
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              orderIndex: true,
-            },
-          })
+          where: {
+            businessId: business.id,
+            id: { in: availableCategoryIds },
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            orderIndex: true,
+          },
+        })
         : [];
     const availableCategoryById = new Map<
       number,
@@ -2358,6 +2358,70 @@ export class SellersService {
         meta,
       },
     };
+  }
+
+  /**
+   * Admin endpoint: list all seller team members across all sellers.
+   */
+  async listAllStaffForAdmin(
+    currentUser: JwtPayload,
+    params?: { sellerId?: number; page?: number; pageSize?: number },
+  ) {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const businessId = Number(currentUser.businessId);
+    const page = clampPage(Number(params?.page ?? 1));
+    const pageSize = clampPageSize(Number(params?.pageSize ?? 20));
+
+    const where: any = { businessId };
+    if (params?.sellerId) {
+      where.sellerId = params.sellerId;
+    }
+
+    const total = await this.prisma.sellerTeamMember.count({ where });
+    const meta = buildPaginationMeta(total, page, pageSize);
+    const { skip, take } = paginationToSkipTake(meta);
+
+    const members = await this.prisma.sellerTeamMember.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      skip,
+      take,
+      select: {
+        id: true,
+        userId: true,
+        sellerId: true,
+        permissionsJson: true,
+        isActive: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            role: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            displayName: true,
+            slug: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    const data = members.map((m) => ({
+      ...m,
+      permissions: this.normalizePermissionsFromRow(m.permissionsJson),
+    }));
+
+    return { data, meta };
   }
 }
 

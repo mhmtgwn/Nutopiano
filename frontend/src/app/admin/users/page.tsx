@@ -2,20 +2,47 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle,
-  ChevronDown,
-  Search,
-  ToggleLeft,
-  ToggleRight,
+  Plus,
+  Shield,
+  ShieldCheck,
+  UserPlus,
+  X,
 } from 'lucide-react';
 
 import api from '@/services/api';
-import Spinner from '@/components/common/Spinner';
+import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
+import FilterPanel, { type FilterField } from '@/components/common/FilterPanel';
+import StatusBadge from '@/components/common/StatusBadge';
 
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER' | 'CUSTOMER';
-type UserRow = { id: number; name: string; phone?: string; role: UserRole; isActive: boolean; };
+/* ── Types ── */
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'SELLER_STAFF' | 'USER' | 'CUSTOMER';
+type UserRow = {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+  deletedAt?: string;
+};
+
+const roleLabel: Record<string, string> = {
+  SUPER_ADMIN: 'Süper Admin', ADMIN: 'Admin', SELLER: 'Satıcı',
+  SELLER_STAFF: 'Satıcı Personeli', USER: 'Personel', CUSTOMER: 'Müşteri',
+};
+
+const roleVariant: Record<string, 'error' | 'purple' | 'info' | 'warning' | 'neutral'> = {
+  SUPER_ADMIN: 'error', ADMIN: 'purple', SELLER: 'info',
+  SELLER_STAFF: 'warning', USER: 'warning', CUSTOMER: 'neutral',
+};
+
+const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER_STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   const msg = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
@@ -24,198 +51,322 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const roleLabel: Record<UserRole, string> = {
-  SUPER_ADMIN: 'Süper Admin', ADMIN: 'Admin', SELLER: 'Satıcı', USER: 'Personel', CUSTOMER: 'Müşteri',
-};
-
-const roleDot: Record<UserRole, string> = {
-  SUPER_ADMIN: 'bg-red-500', ADMIN: 'bg-violet-500',
-  SELLER: 'bg-blue-500', USER: 'bg-amber-500', CUSTOMER: 'bg-gray-400',
-};
-
-const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+/* ── Filter Config ── */
+const filterFields: FilterField[] = [
+  { key: 'role', label: 'Rol', type: 'select', options: roles.map((r) => ({ label: roleLabel[r], value: r })) },
+  {
+    key: 'status', label: 'Durum', type: 'select', options: [
+      { label: 'Aktif', value: 'active' },
+      { label: 'Pasif', value: 'inactive' },
+      { label: 'Silinmiş', value: 'deleted' },
+    ]
+  },
+  { key: 'search', label: 'Arama', type: 'text', placeholder: 'İsim, telefon veya e-posta...' },
+];
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
+  const [filters, setFilters] = useState<Record<string, string>>({ role: '', status: '', search: '' });
+  const [selectedKeys, setSelectedKeys] = useState<Set<string | number>>(new Set());
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
+  /* ── Queries ── */
   const { data: users, isLoading, isError } = useQuery<UserRow[]>({
     queryKey: ['admin-users'],
     queryFn: async () => (await api.get<UserRow[]>('/users')).data,
   });
 
+  /* ── Filter ── */
   const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (filters.search ?? '').trim().toLowerCase();
     return (users ?? []).filter((u) => {
-      const matchSearch = !q || u.name.toLowerCase().includes(q) || (u.phone ?? '').includes(q);
-      const matchRole = !roleFilter || u.role === roleFilter;
-      return matchSearch && matchRole;
+      if (filters.role && u.role !== filters.role) return false;
+      if (filters.status === 'active' && !u.isActive) return false;
+      if (filters.status === 'inactive' && u.isActive) return false;
+      if (filters.status === 'deleted' && !u.deletedAt) return false;
+      if (q && !u.name.toLowerCase().includes(q) && !(u.phone ?? '').includes(q) && !(u.email ?? '').toLowerCase().includes(q)) return false;
+      return true;
     });
-  }, [users, search, roleFilter]);
+  }, [users, filters]);
 
-  const updateActiveMutation = useMutation({
+  /* ── Mutations ── */
+  const toggleActiveMutation = useMutation({
     mutationFn: async (p: { id: number; isActive: boolean }) =>
       api.patch(`/users/${p.id}/active`, { isActive: p.isActive }),
-    onMutate: async ({ id, isActive }) => {
-      await queryClient.cancelQueries({ queryKey: ['admin-users'] });
-      const prev = queryClient.getQueryData<UserRow[]>(['admin-users']);
-      if (prev) queryClient.setQueryData<UserRow[]>(['admin-users'], prev.map((u) => u.id === id ? { ...u, isActive } : u));
-      return { prev };
-    },
-    onError: (err: unknown, _p, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['admin-users'], ctx.prev);
-      toast.error(resolveApiErrorMessage(err, 'Durum güncellenemedi.'));
-    },
     onSuccess: async () => {
       toast.success('Durum güncellendi.');
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
+    onError: (err: unknown) => toast.error(resolveApiErrorMessage(err, 'Durum güncellenemedi.')),
   });
 
-  const updateRoleMutation = useMutation({
-    mutationFn: async (p: { id: number; role: UserRole }) =>
-      api.patch(`/users/${p.id}/role`, { role: p.role }),
-    onMutate: async ({ id, role }) => {
-      await queryClient.cancelQueries({ queryKey: ['admin-users'] });
-      const prev = queryClient.getQueryData<UserRow[]>(['admin-users']);
-      if (prev) queryClient.setQueryData<UserRow[]>(['admin-users'], prev.map((u) => u.id === id ? { ...u, role } : u));
-      return { prev };
-    },
-    onError: (err: unknown, _p, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['admin-users'], ctx.prev);
-      toast.error(resolveApiErrorMessage(err, 'Rol güncellenemedi.'));
-    },
+  const bulkRoleMutation = useMutation({
+    mutationFn: async (p: { ids: number[]; role: UserRole }) =>
+      Promise.all(p.ids.map((id) => api.patch(`/users/${id}/role`, { role: p.role }))),
     onSuccess: async () => {
-      toast.success('Rol güncellendi.');
+      toast.success('Roller güncellendi.');
+      setSelectedKeys(new Set());
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
+    onError: (err: unknown) => toast.error(resolveApiErrorMessage(err, 'Toplu rol güncellenemedi.')),
   });
 
-  return (
-    <div className="space-y-8">
-
-      {/* ── Header ── */}
-      <div>
-        <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Kullanıcı Yönetimi</h1>
-        <p className="mt-1 text-sm text-[var(--neutral-600)]">Kayıtlı kullanıcıları görüntüleyin, rol ve durumlarını yönetin.</p>
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-col gap-3 border-b border-[var(--neutral-200)] pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-[var(--neutral-600)]">
-          <span className="font-semibold text-[var(--primary-800)]">{filteredUsers.length}</span> kullanıcı
-        </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--neutral-400)]" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="İsim veya telefon..."
-              className="h-8 w-48 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-8 pr-3 text-xs text-[var(--neutral-700)] outline-none focus:border-[var(--primary-800)]/40"
-            />
+  /* ── Columns ── */
+  const columns: DataTableColumn<UserRow>[] = [
+    {
+      key: 'name',
+      label: 'Kullanıcı',
+      sortable: true,
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-[var(--neutral-100)] flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-bold text-[var(--neutral-600)]">
+              {row.name.charAt(0).toUpperCase()}
+            </span>
           </div>
-          <div className="relative">
+          <div>
+            <p className="font-semibold text-[var(--primary-800)] leading-tight">{row.name}</p>
+            <p className="text-[11px] text-[var(--neutral-500)]">
+              {row.email ?? row.phone ?? `#${row.id}`}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'role',
+      label: 'Rol',
+      sortable: true,
+      render: (row) => (
+        <StatusBadge variant={roleVariant[row.role] ?? 'neutral'} dot>
+          {roleLabel[row.role] ?? row.role}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'isActive',
+      label: 'Durum',
+      render: (row) => (
+        <StatusBadge variant={row.deletedAt ? 'error' : row.isActive ? 'success' : 'neutral'}>
+          {row.deletedAt ? 'Silinmiş' : row.isActive ? 'Aktif' : 'Pasif'}
+        </StatusBadge>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Kayıt Tarihi',
+      sortable: true,
+      render: (row) => (
+        <span className="text-[var(--neutral-600)]">
+          {new Date(row.createdAt).toLocaleDateString('tr-TR')}
+        </span>
+      ),
+    },
+    {
+      key: 'lastLoginAt',
+      label: 'Son Giriş',
+      sortable: true,
+      render: (row) => (
+        <span className="text-[var(--neutral-500)]">
+          {row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleDateString('tr-TR') : '—'}
+        </span>
+      ),
+    },
+  ];
+
+  /* ── Row Actions ── */
+  const renderRowActions = (row: UserRow) => (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={toggleActiveMutation.isPending}
+        onClick={() => toggleActiveMutation.mutate({ id: row.id, isActive: !row.isActive })}
+        className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${row.isActive
+          ? 'text-amber-700 hover:bg-amber-50'
+          : 'text-emerald-700 hover:bg-emerald-50'
+          }`}
+      >
+        {row.isActive ? 'Pasife Al' : 'Aktifleştir'}
+      </button>
+    </div>
+  );
+
+  /* ── Toolbar ── */
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-3">
+      <FilterPanel
+        fields={filterFields}
+        values={filters}
+        onChange={setFilters}
+      >
+        {selectedKeys.size > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5">
+            <span className="text-xs font-semibold text-blue-700">
+              {selectedKeys.size} seçili
+            </span>
             <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as UserRole | '')}
-              className="h-8 appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-3 pr-7 text-xs text-[var(--neutral-700)] outline-none focus:border-[var(--primary-800)]/40"
+              onChange={(e) => {
+                if (!e.target.value) return;
+                bulkRoleMutation.mutate({
+                  ids: Array.from(selectedKeys) as number[],
+                  role: e.target.value as UserRole,
+                });
+                e.target.value = '';
+              }}
+              className="h-7 rounded-md border border-blue-200 bg-white px-2 text-[11px] text-blue-700"
             >
-              <option value="">Tüm roller</option>
+              <option value="">Rol Değiştir...</option>
               {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--neutral-400)] pointer-events-none" />
           </div>
+        )}
+      </FilterPanel>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Kullanıcı Yönetimi</h1>
+          <p className="mt-1 text-sm text-[var(--neutral-600)]">
+            Kayıtlı kullanıcıları görüntüleyin, rol ve durumlarını yönetin.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary-800)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--primary-700)]"
+          >
+            <UserPlus className="h-4 w-4" />
+            Yeni Kullanıcı
+          </button>
         </div>
       </div>
 
-      {/* ── States ── */}
-      {isLoading && <Spinner label="Kullanıcılar yükleniyor..." />}
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: 'Toplam', value: users?.length ?? 0, icon: Shield },
+          { label: 'Aktif', value: users?.filter((u) => u.isActive && !u.deletedAt).length ?? 0, icon: ShieldCheck },
+          { label: 'Pasif', value: users?.filter((u) => !u.isActive).length ?? 0, icon: AlertTriangle },
+          { label: 'Admin', value: users?.filter((u) => ['SUPER_ADMIN', 'ADMIN'].includes(u.role)).length ?? 0, icon: ShieldCheck },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl border border-[var(--neutral-200)] bg-white px-4 py-3">
+            <div className="flex items-center gap-2">
+              <s.icon className="h-4 w-4 text-[var(--neutral-400)]" />
+              <span className="text-xs font-medium text-[var(--neutral-500)]">{s.label}</span>
+            </div>
+            <p className="mt-1 text-xl font-bold text-[var(--primary-800)]">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Error State ── */}
       {isError && (
-        <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="h-4 w-4" /> Kullanıcılar alınamadı.
         </div>
       )}
 
       {/* ── Table ── */}
-      {!isLoading && !isError && (
-        filteredUsers.length === 0
-          ? <p className="py-10 text-center text-sm text-[var(--neutral-500)]">Kullanıcı bulunamadı.</p>
-          : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--neutral-200)]">
-                    {['Kullanıcı', 'Rol', 'Durum', ''].map((h) => (
-                      <th key={h} className={`pb-3 pr-6 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)] ${h === '' ? 'text-right' : ''}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--neutral-100)]">
-                  {filteredUsers.map((u) => (
-                    <tr key={u.id} className="transition-colors hover:bg-[var(--neutral-50)]">
-                      {/* Kullanıcı */}
-                      <td className="py-3 pr-6">
-                        <div className="flex items-center gap-3">
-                          <div className="h-7 w-7 rounded-full bg-[var(--neutral-100)] flex items-center justify-center flex-shrink-0">
-                            <span className="text-[11px] font-bold text-[var(--neutral-600)]">
-                              {u.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-[var(--primary-800)]">{u.name}</p>
-                            <p className="text-[11px] text-[var(--neutral-500)]">#{u.id}{u.phone ? ` · ${u.phone}` : ''}</p>
-                          </div>
-                        </div>
-                      </td>
-                      {/* Rol */}
-                      <td className="py-3 pr-6">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`h-1.5 w-1.5 rounded-full ${roleDot[u.role]}`} />
-                          <span className="text-[12px] font-medium text-[var(--neutral-700)]">{roleLabel[u.role]}</span>
-                        </div>
-                      </td>
-                      {/* Durum */}
-                      <td className="py-3 pr-6">
-                        <span className={`text-[12px] font-medium ${u.isActive ? 'text-emerald-700' : 'text-[var(--neutral-500)]'}`}>
-                          {u.isActive ? 'Aktif' : 'Pasif'}
-                        </span>
-                      </td>
-                      {/* İşlemler */}
-                      <td className="py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="relative">
-                            <select
-                              value={u.role}
-                              disabled={updateRoleMutation.isPending}
-                              onChange={(e) => updateRoleMutation.mutate({ id: u.id, role: e.target.value as UserRole })}
-                              className="h-7 appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white pl-2.5 pr-6 text-[11px] text-[var(--neutral-700)] outline-none hover:bg-[var(--neutral-50)] disabled:opacity-60"
-                            >
-                              {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-[var(--neutral-400)] pointer-events-none" />
-                          </div>
-                          <button
-                            type="button"
-                            disabled={updateActiveMutation.isPending}
-                            onClick={() => updateActiveMutation.mutate({ id: u.id, isActive: !u.isActive })}
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--neutral-600)] hover:text-[var(--primary-800)] disabled:opacity-60 transition"
-                          >
-                            {u.isActive
-                              ? <><ToggleRight className="h-4 w-4 text-emerald-500" />Pasife Al</>
-                              : <><ToggleLeft className="h-4 w-4 text-[var(--neutral-400)]" />Aktifleştir</>
-                            }
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+      <DataTable<UserRow>
+        columns={columns}
+        data={filteredUsers}
+        keyExtractor={(row) => row.id}
+        loading={isLoading}
+        selectable
+        selectedKeys={selectedKeys}
+        onSelectionChange={setSelectedKeys}
+        onRowClick={(row) => router.push(`/admin/users/${row.id}`)}
+        rowActions={(row) => renderRowActions(row)}
+        toolbar={toolbar}
+        emptyMessage="Kriterlere uygun kullanıcı bulunamadı."
+      />
+
+      {/* ── Create User Modal ── */}
+      {showCreateModal && (
+        <CreateUserModal onClose={() => setShowCreateModal(false)} />
       )}
+    </div>
+  );
+}
+
+/* ── Create User Modal ── */
+function CreateUserModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    name: '', phone: '', email: '', role: 'USER' as UserRole, password: '',
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => api.post('/users', formData),
+    onSuccess: async () => {
+      toast.success('Kullanıcı oluşturuldu.');
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      onClose();
+    },
+    onError: (err: unknown) => toast.error(resolveApiErrorMessage(err, 'Kullanıcı oluşturulamadı.')),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button type="button" aria-label="Kapat" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--neutral-200)] bg-white p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-[var(--primary-800)]">Yeni Kullanıcı</h3>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-[var(--neutral-500)] hover:bg-[var(--neutral-100)]">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }} className="space-y-4">
+          {[
+            { key: 'name', label: 'Ad Soyad', type: 'text', required: true },
+            { key: 'phone', label: 'Telefon', type: 'text', required: true },
+            { key: 'email', label: 'E-posta', type: 'email', required: false },
+            { key: 'password', label: 'Şifre', type: 'password', required: true },
+          ].map((f) => (
+            <div key={f.key}>
+              <label className="mb-1 block text-xs font-medium text-[var(--neutral-600)]">{f.label}</label>
+              <input
+                type={f.type}
+                required={f.required}
+                value={formData[f.key as keyof typeof formData]}
+                onChange={(e) => setFormData((p) => ({ ...p, [f.key]: e.target.value }))}
+                className="w-full rounded-lg border border-[var(--neutral-200)] px-3 py-2 text-sm outline-none focus:border-[var(--primary-400)] focus:ring-1 focus:ring-[var(--primary-200)]"
+              />
+            </div>
+          ))}
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--neutral-600)]">Rol</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData((p) => ({ ...p, role: e.target.value as UserRole }))}
+              className="w-full rounded-lg border border-[var(--neutral-200)] px-3 py-2 text-sm outline-none focus:border-[var(--primary-400)] focus:ring-1 focus:ring-[var(--primary-200)]"
+            >
+              {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-[var(--neutral-200)] px-4 py-2 text-sm font-medium text-[var(--neutral-700)] hover:bg-[var(--neutral-100)]">
+              İptal
+            </button>
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="rounded-lg bg-[var(--primary-800)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-700)] disabled:opacity-50"
+            >
+              {createMutation.isPending ? 'Oluşturuluyor...' : 'Oluştur'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

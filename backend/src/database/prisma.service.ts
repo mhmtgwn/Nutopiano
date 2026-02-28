@@ -7,8 +7,7 @@ import { requestContext } from '../common/context/request-context';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+  implements OnModuleInit, OnModuleDestroy {
   private readonly pool: Pool;
 
   private static readonly BUSINESS_SCOPED_MODELS = new Set<string>([
@@ -51,11 +50,21 @@ export class PrismaService
     'PlatformWallet',
     'FinanceLedgerEntry',
     'PayoutRequest',
+    'PermissionGroup',
+    'UserPermissionGroup',
+    'FeatureFlag',
+    'UserTwoFactor',
+    'ApiKey',
+    'Notification',
+    'ConfigSnapshot',
+    'EmailTemplate',
+    'SmsTemplate',
   ]);
 
   private static readonly SOFT_DELETE_MODELS = new Set<string>([
     'Customer',
     'Order',
+    'User',
   ]);
 
   constructor() {
@@ -84,7 +93,7 @@ export class PrismaService
 
             const delegate =
               delegateKey &&
-              Object.prototype.hasOwnProperty.call(this, delegateKey)
+                Object.prototype.hasOwnProperty.call(this, delegateKey)
                 ? this[delegateKey]
                 : null;
 

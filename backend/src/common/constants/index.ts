@@ -4,5 +4,6 @@
 
 export * from './app.constants';
 export * from './roles';
+export * from './permissions';
 export * from './error.constants';
 export * from './messages';

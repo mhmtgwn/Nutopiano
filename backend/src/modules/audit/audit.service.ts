@@ -16,7 +16,7 @@ type CreateAuditLogInput = {
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async logFromActor(currentUser: JwtPayload, input: CreateAuditLogInput) {
     const businessId = Number(input.businessId ?? currentUser.businessId);
@@ -60,6 +60,8 @@ export class AuditService {
       pageSize?: number;
       actionType?: string;
       targetType?: string;
+      dateFrom?: string;
+      dateTo?: string;
     },
   ) {
     const normalizedBusinessId = Number(businessId);
@@ -82,6 +84,11 @@ export class AuditService {
     };
     if (actionType) where.actionType = actionType;
     if (targetType) where.targetType = targetType;
+    if (params?.dateFrom || params?.dateTo) {
+      where.createdAt = {};
+      if (params.dateFrom) (where.createdAt as any).gte = new Date(params.dateFrom);
+      if (params.dateTo) (where.createdAt as any).lte = new Date(params.dateTo);
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.auditLog.count({ where }),
@@ -120,4 +127,46 @@ export class AuditService {
       },
     };
   }
+
+  async exportCsv(
+    businessId: number,
+    params?: {
+      actionType?: string;
+      targetType?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    const where: Prisma.AuditLogWhereInput = { businessId };
+    if (params?.actionType) where.actionType = params.actionType;
+    if (params?.targetType) where.targetType = params.targetType;
+    if (params?.dateFrom || params?.dateTo) {
+      where.createdAt = {};
+      if (params?.dateFrom) (where.createdAt as any).gte = new Date(params.dateFrom);
+      if (params?.dateTo) (where.createdAt as any).lte = new Date(params.dateTo);
+    }
+
+    const logs = await this.prisma.auditLog.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      take: 10000, // limit export
+      select: {
+        id: true,
+        actorRole: true,
+        actorUserId: true,
+        actionType: true,
+        targetType: true,
+        targetId: true,
+        createdAt: true,
+        actorUser: { select: { name: true } },
+      },
+    });
+
+    const header = 'ID,Tarih,Kullanıcı,Rol,İşlem,Hedef Tipi,Hedef ID\n';
+    const rows = logs.map(l =>
+      `${l.id},"${l.createdAt.toISOString()}","${l.actorUser?.name ?? ''}",${l.actorRole},${l.actionType},${l.targetType},${l.targetId}`
+    ).join('\n');
+    return header + rows;
+  }
 }
+

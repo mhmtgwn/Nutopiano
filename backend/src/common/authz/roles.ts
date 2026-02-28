@@ -1,8 +1,4 @@
-import { ROLES, type RoleType } from '../constants/roles';
-
-const LEGACY_ROLE_ALIASES: Record<string, RoleType> = {
-  STAFF: ROLES.USER,
-};
+import { ROLES, LEGACY_ROLE_ALIASES, type RoleType } from '../constants/roles';
 
 const isRoleType = (value: string): value is RoleType =>
   (Object.values(ROLES) as readonly string[]).includes(value);
@@ -17,7 +13,10 @@ export const normalizeRole = (role?: string | null): RoleType | null => {
 export const toEffectiveRole = (role?: string | null): RoleType | null => {
   const normalized = normalizeRole(role);
   if (!normalized) return null;
-  return normalized === ROLES.SUPER_ADMIN ? ROLES.ADMIN : normalized;
+  // SUPER_ADMIN ve SELLER_STAFF efektif rolleri
+  if (normalized === ROLES.SUPER_ADMIN) return ROLES.ADMIN;
+  if (normalized === ROLES.USER) return ROLES.SELLER_STAFF;
+  return normalized;
 };
 
 export const isAdminRole = (role?: string | null): boolean =>
@@ -26,5 +25,10 @@ export const isAdminRole = (role?: string | null): boolean =>
 export const isSellerRole = (role?: string | null): boolean =>
   toEffectiveRole(role) === ROLES.SELLER;
 
-export const isViewerRole = (role?: string | null): boolean =>
-  toEffectiveRole(role) === ROLES.USER;
+export const isStaffRole = (role?: string | null): boolean => {
+  const effective = toEffectiveRole(role);
+  return effective === ROLES.SELLER_STAFF || effective === ROLES.USER;
+};
+
+/** @deprecated isViewerRole yerine isStaffRole kullanın */
+export const isViewerRole = isStaffRole;
