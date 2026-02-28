@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import HomeClient from './HomeClient';
 import { getSiteUrl } from '@/utils/site';
 
+export const dynamic = 'force-dynamic';
+
 const SITE_NAME = 'Nutopiano Store';
 const SITE_DESCRIPTION =
   'Özenle seçilmiş ürünler, güvenli ödeme ve stok takibi ile Nutopiano e-ticaret deneyimi.';
