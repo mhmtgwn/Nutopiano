@@ -29,6 +29,7 @@ ECOSYSTEM_FILE="${ECOSYSTEM_FILE:-$DEFAULT_ECOSYSTEM_FILE}"
 FRONTEND_BUILD_WORKER="${FRONTEND_BUILD_WORKER:-1}"
 FRONTEND_BUILD_NODE_OPTIONS="${FRONTEND_BUILD_NODE_OPTIONS:---max-old-space-size=4096}"
 FRONTEND_BUILD_MODE="${FRONTEND_BUILD_MODE:-webpack}"
+FRONTEND_STATIC_BACKUP_DIR=""
 
 log() {
   printf "\n==> %s\n" "$1"
@@ -48,6 +49,41 @@ ensure_frontend_env() {
   else
     printf "\nNEXT_PUBLIC_API_URL=%s\n" "$desired_api_url" >>"$env_file"
   fi
+}
+
+backup_previous_frontend_static() {
+  local static_dir="$FRONTEND_DIR/.next/static"
+
+  if [[ ! -d "$static_dir" ]]; then
+    return 0
+  fi
+
+  FRONTEND_STATIC_BACKUP_DIR="$(mktemp -d /tmp/nutopiano-prev-static.XXXXXX)"
+  cp -a "$static_dir"/. "$FRONTEND_STATIC_BACKUP_DIR"/
+  log "Frontend: backed up previous static assets to $FRONTEND_STATIC_BACKUP_DIR"
+}
+
+merge_previous_frontend_static() {
+  local target_dir="$FRONTEND_DIR/.next/static"
+
+  if [[ -z "$FRONTEND_STATIC_BACKUP_DIR" || ! -d "$FRONTEND_STATIC_BACKUP_DIR" ]]; then
+    return 0
+  fi
+
+  if [[ ! -d "$target_dir" ]]; then
+    rm -rf "$FRONTEND_STATIC_BACKUP_DIR" || true
+    return 0
+  fi
+
+  log "Frontend: merging previous static assets for backward-compatible chunk URLs"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --ignore-existing "$FRONTEND_STATIC_BACKUP_DIR"/ "$target_dir"/
+  else
+    cp -an "$FRONTEND_STATIC_BACKUP_DIR"/. "$target_dir"/
+  fi
+
+  rm -rf "$FRONTEND_STATIC_BACKUP_DIR" || true
+  FRONTEND_STATIC_BACKUP_DIR=""
 }
 
 restart_pm2() {
@@ -111,12 +147,14 @@ else
 fi
 
 ensure_frontend_env
+backup_previous_frontend_static
 
 if [[ "$FRONTEND_BUILD_MODE" == "webpack" ]]; then
   NEXT_PRIVATE_BUILD_WORKER="$FRONTEND_BUILD_WORKER" NODE_OPTIONS="$FRONTEND_BUILD_NODE_OPTIONS" npx next build --webpack
 else
   NEXT_PRIVATE_BUILD_WORKER="$FRONTEND_BUILD_WORKER" NODE_OPTIONS="$FRONTEND_BUILD_NODE_OPTIONS" npm run build
 fi
+merge_previous_frontend_static
 
 log "Restart services"
 restarted=false
