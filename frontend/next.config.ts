@@ -54,8 +54,19 @@ const nextConfig: NextConfig = {
         value: 'no-store, must-revalidate, no-cache, max-age=0, private',
       },
     ];
+    const serviceWorkerHeaders = [
+      {
+        key: 'Cache-Control',
+        value: 'no-store, no-cache, must-revalidate, max-age=0',
+      },
+      {
+        key: 'Service-Worker-Allowed',
+        value: '/pos',
+      },
+    ];
 
     return [
+      { source: '/sw.js', headers: serviceWorkerHeaders },
       { source: '/', headers: noStoreHeaders },
       { source: '/login', headers: noStoreHeaders },
       { source: '/admin', headers: noStoreHeaders },

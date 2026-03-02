@@ -35,9 +35,48 @@ export function Providers({ children }: ProvidersProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
-    });
+
+    const syncServiceWorkerScope = async () => {
+      const isPosRoute = window.location.pathname.startsWith('/pos');
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      const isPosScope = (scope: string) => {
+        try {
+          return new URL(scope).pathname.startsWith('/pos');
+        } catch {
+          return false;
+        }
+      };
+
+      // Remove old root-scoped workers that can cache stale HTML/chunks.
+      await Promise.all(
+        registrations
+          .filter((registration) => {
+            if (isPosRoute) {
+              return !isPosScope(registration.scope);
+            }
+            return true;
+          })
+          .map((registration) => registration.unregister()),
+      );
+
+      if (isPosRoute) {
+        await navigator.serviceWorker
+          .register('/sw.js', { scope: '/pos' })
+          .catch(() => undefined);
+        return;
+      }
+
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith('nutopiano-pwa-'))
+            .map((key) => caches.delete(key)),
+        );
+      }
+    };
+
+    syncServiceWorkerScope().catch(() => undefined);
   }, []);
 
   return (
