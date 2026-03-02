@@ -11,6 +11,9 @@ export default function NotFound() {
       <p className="max-w-prose text-sm text-[var(--neutral-600)] md:text-base">
         Aradığın sayfa kaldırılmış olabilir veya adres yanlış yazılmış olabilir.
       </p>
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--neutral-500)]">
+        Hata kodu: 404
+      </p>
       <Link
         href="/"
         className="inline-flex h-10 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--primary-800)] px-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-white"
