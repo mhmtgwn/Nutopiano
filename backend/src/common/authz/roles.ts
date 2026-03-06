@@ -13,9 +13,19 @@ export const normalizeRole = (role?: string | null): RoleType | null => {
 export const toEffectiveRole = (role?: string | null): RoleType | null => {
   const normalized = normalizeRole(role);
   if (!normalized) return null;
-  // SUPER_ADMIN ve SELLER_STAFF efektif rolleri
+  // SUPER_ADMIN -> ADMIN (yetki matrisi efektif davranisi)
   if (normalized === ROLES.SUPER_ADMIN) return ROLES.ADMIN;
-  if (normalized === ROLES.USER) return ROLES.SELLER_STAFF;
+  return normalized;
+};
+
+/**
+ * Legacy kod yollari icin SELLER_STAFF -> USER compat donusumu.
+ * Not: dis API cevaplari normalize rol (SELLER_STAFF) dondurmelidir.
+ */
+export const toLegacyCompatRole = (role?: string | null): RoleType | null => {
+  const normalized = normalizeRole(role);
+  if (!normalized) return null;
+  if (normalized === ROLES.SELLER_STAFF) return ROLES.USER;
   return normalized;
 };
 
@@ -25,10 +35,10 @@ export const isAdminRole = (role?: string | null): boolean =>
 export const isSellerRole = (role?: string | null): boolean =>
   toEffectiveRole(role) === ROLES.SELLER;
 
-export const isStaffRole = (role?: string | null): boolean => {
-  const effective = toEffectiveRole(role);
-  return effective === ROLES.SELLER_STAFF || effective === ROLES.USER;
-};
+export const isStaffRole = (role?: string | null): boolean =>
+  toEffectiveRole(role) === ROLES.SELLER_STAFF;
+
+export const isSellerStaffRole = isStaffRole;
 
 /** @deprecated isViewerRole yerine isStaffRole kullanın */
 export const isViewerRole = isStaffRole;

@@ -4,15 +4,7 @@ import { useEffect, useRef } from 'react';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setCredentials } from '@/store/userSlice';
-
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-}
+import type { ProfileResponse } from '@/types/profile';
 
 export default function AuthBootstrap() {
   const dispatch = useAppDispatch();
@@ -42,6 +34,11 @@ export default function AuthBootstrap() {
               phone: profile.phone,
               email: profile.email,
               role: profile.role,
+              effectiveRole: profile.effectiveRole,
+              permissions: profile.permissions,
+              panelHome: profile.panelHome,
+              allowedPanels: profile.allowedPanels,
+              featureStatuses: profile.featureStatuses,
               businessId: profile.businessId,
             },
             token: null,

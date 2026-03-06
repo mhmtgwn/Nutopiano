@@ -81,7 +81,7 @@ export function proxy(req: NextRequest) {
 
         if (!isAdminRole(role)) {
           const redirectUrl = req.nextUrl.clone();
-          redirectUrl.pathname = '/';
+          redirectUrl.pathname = '/forbidden';
           redirectUrl.search = '';
           response = NextResponse.redirect(redirectUrl);
         } else {

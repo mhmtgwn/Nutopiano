@@ -94,4 +94,5 @@ export const CUSTOMER_ROLES = [ROLES.CUSTOMER] as const;
  */
 export const LEGACY_ROLE_ALIASES: Record<string, RoleType> = {
   STAFF: ROLES.SELLER_STAFF,
+  USER: ROLES.SELLER_STAFF,
 };

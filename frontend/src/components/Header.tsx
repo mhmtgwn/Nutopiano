@@ -25,7 +25,11 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
-import { getPanelLabelByRole, isPosRoleAllowed } from '@/lib/role-routing';
+import {
+  getPanelLabelByRole,
+  isPosRoleAllowed,
+  normalizeRole,
+} from '@/lib/role-routing';
 
 export default function Header() {
   const router = useRouter();
@@ -61,6 +65,7 @@ export default function Header() {
   const panelHref = user ? '/panel' : '/login';
   const panelLabel = getPanelLabelByRole(user?.role);
   const isCustomer = user?.role === 'CUSTOMER';
+  const normalizedUserRole = normalizeRole(user?.role);
 
   type BackofficeMenuLink = {
     href: string;
@@ -89,7 +94,7 @@ export default function Header() {
   };
 
   const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(() => {
-    switch (user?.role) {
+    switch (normalizedUserRole) {
       case 'SUPER_ADMIN':
       case 'ADMIN':
         return [
@@ -112,15 +117,38 @@ export default function Header() {
           { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
           { href: '/dashboard/customers', label: 'Müşteriler', icon: User },
         ];
-      case 'USER':
-        return [
-          { href: '/pos', label: 'POS', icon: LayoutDashboard },
-          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
-        ];
+      case 'SELLER_STAFF':
+        {
+          const permissionSet = new Set(
+            Array.isArray(user?.permissions)
+              ? user.permissions.map((permission) =>
+                  String(permission ?? '').trim().toLowerCase(),
+                )
+              : [],
+          );
+          const canPos = ['pos.sales', 'pos.orders', 'pos.reports'].some((permission) =>
+            permissionSet.has(permission),
+          );
+          const canOrders = [
+            'orders.view',
+            'orders.create',
+            'orders.edit',
+            'orders.status_update',
+            'orders.cancel',
+            'orders.return.process',
+          ].some((permission) => permissionSet.has(permission));
+
+          return [
+            ...(canPos ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }] : []),
+            ...(canOrders
+              ? [{ href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList }]
+              : []),
+          ];
+        }
       default:
         return [];
     }
-  }, [user?.role]);
+  }, [normalizedUserRole, user?.permissions, user?.role]);
 
   const navigationLinks = [
     { href: '/categories', label: 'Kategoriler' },

@@ -2,16 +2,21 @@ export const APP_ROLES = [
   'SUPER_ADMIN',
   'ADMIN',
   'SELLER',
-  'USER',
+  'SELLER_STAFF',
   'CUSTOMER',
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
-export type EffectiveAppRole = 'ADMIN' | 'SELLER' | 'VIEWER' | 'CUSTOMER';
+export type EffectiveAppRole =
+  | 'ADMIN'
+  | 'SELLER'
+  | 'SELLER_STAFF'
+  | 'CUSTOMER';
 
 const APP_ROLE_SET = new Set<string>(APP_ROLES);
 const LEGACY_ROLE_ALIASES: Record<string, AppRole> = {
-  STAFF: 'USER',
+  STAFF: 'SELLER_STAFF',
+  USER: 'SELLER_STAFF',
 };
 
 export const normalizeRole = (role?: string | null): AppRole | null => {
@@ -27,7 +32,6 @@ export const getEffectiveRole = (
   const normalized = normalizeRole(role);
   if (!normalized) return null;
   if (normalized === 'SUPER_ADMIN') return 'ADMIN';
-  if (normalized === 'USER') return 'VIEWER';
   return normalized;
 };
 
@@ -40,13 +44,16 @@ export const isAdminRole = (role?: string | null): boolean =>
 export const isSuperAdminRole = (role?: string | null): boolean =>
   normalizeRole(role) === 'SUPER_ADMIN';
 
+export const isSellerStaffRole = (role?: string | null): boolean =>
+  normalizeRole(role) === 'SELLER_STAFF';
+
 export const isSellerPanelRole = (role?: string | null): boolean => {
   const normalized = normalizeRole(role);
   return (
     normalized === 'SUPER_ADMIN' ||
     normalized === 'ADMIN' ||
     normalized === 'SELLER' ||
-    normalized === 'USER'
+    normalized === 'SELLER_STAFF'
   );
 };
 
@@ -56,7 +63,7 @@ export const isPosRoleAllowed = (role?: string | null): boolean => {
     normalized === 'SUPER_ADMIN' ||
     normalized === 'ADMIN' ||
     normalized === 'SELLER' ||
-    normalized === 'USER'
+    normalized === 'SELLER_STAFF'
   );
 };
 
@@ -67,8 +74,9 @@ export const getPanelHomePathByRole = (role?: string | null): string => {
     case 'ADMIN':
       return '/admin';
     case 'SELLER':
-    case 'USER':
       return '/dashboard';
+    case 'SELLER_STAFF':
+      return '/dashboard/orders';
     case 'CUSTOMER':
       return '/account/orders';
     default:
@@ -84,8 +92,8 @@ export const getPanelLabelByRole = (role?: string | null): string => {
       return 'Admin Paneli';
     case 'SELLER':
       return 'Satıcı Paneli';
-    case 'USER':
-      return 'Viewer Paneli';
+    case 'SELLER_STAFF':
+      return 'Personel Paneli';
     case 'CUSTOMER':
       return 'Hesabım';
     default:

@@ -1,4 +1,5 @@
 import {
+    ForbiddenException,
     Controller,
     Get,
     Post,
@@ -9,6 +10,7 @@ import {
     ParseIntPipe,
     HttpCode,
     HttpStatus,
+    Req,
     UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -18,6 +20,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { Permission } from '../../common/constants/permissions';
 import { PermissionGroupService } from './permission-group.service';
+import { JwtPayload } from '../../auth/types/jwt-payload';
+import { parseBusinessId } from '../../common/utils';
 
 @Controller('permission-groups')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionGuard)
@@ -25,34 +29,41 @@ import { PermissionGroupService } from './permission-group.service';
 export class PermissionGroupController {
     constructor(private readonly service: PermissionGroupService) { }
 
+    private getScopedBusinessId(req: { user?: JwtPayload }): number {
+        const businessId = parseBusinessId(req.user?.businessId);
+        if (!businessId) {
+            throw new ForbiddenException('Business context bulunamadi');
+        }
+        return businessId;
+    }
+
     @Get()
     @RequirePermissions(Permission.USERS_VIEW)
-    findAll(@Body() body: { businessId?: number }, @Param() _: unknown) {
-        // businessId JWT'den alınacak — şimdilik body'den
-        return this.service.findAll(body.businessId ?? 1);
+    findAll(@Req() req: { user: JwtPayload }) {
+        return this.service.findAll(this.getScopedBusinessId(req));
     }
 
     @Get(':id')
     @RequirePermissions(Permission.USERS_VIEW)
     findOne(
+        @Req() req: { user: JwtPayload },
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: { businessId?: number },
     ) {
-        return this.service.findOne(id, body.businessId ?? 1);
+        return this.service.findOne(id, this.getScopedBusinessId(req));
     }
 
     @Post()
     @RequirePermissions(Permission.USERS_EDIT)
     create(
+        @Req() req: { user: JwtPayload },
         @Body()
         body: {
-            businessId: number;
             name: string;
             description?: string;
             permissions: Permission[];
         },
     ) {
-        return this.service.create(body.businessId, {
+        return this.service.create(this.getScopedBusinessId(req), {
             name: body.name,
             description: body.description,
             permissions: body.permissions,
@@ -62,17 +73,17 @@ export class PermissionGroupController {
     @Put(':id')
     @RequirePermissions(Permission.USERS_EDIT)
     update(
+        @Req() req: { user: JwtPayload },
         @Param('id', ParseIntPipe) id: number,
         @Body()
         body: {
-            businessId: number;
             name?: string;
             description?: string;
             permissions?: Permission[];
             isActive?: boolean;
         },
     ) {
-        return this.service.update(id, body.businessId, {
+        return this.service.update(id, this.getScopedBusinessId(req), {
             name: body.name,
             description: body.description,
             permissions: body.permissions,
@@ -84,23 +95,24 @@ export class PermissionGroupController {
     @HttpCode(HttpStatus.NO_CONTENT)
     @RequirePermissions(Permission.USERS_EDIT)
     delete(
+        @Req() req: { user: JwtPayload },
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: { businessId: number },
     ) {
-        return this.service.delete(id, body.businessId);
+        return this.service.delete(id, this.getScopedBusinessId(req));
     }
 
     @Post('users/:userId/assign')
     @RequirePermissions(Permission.USERS_EDIT)
     assignToUser(
+        @Req() req: { user: JwtPayload },
         @Param('userId', ParseIntPipe) userId: number,
         @Body()
-        body: { permissionGroupId: number; businessId: number },
+        body: { permissionGroupId: number },
     ) {
         return this.service.assignToUser(
             userId,
             body.permissionGroupId,
-            body.businessId,
+            this.getScopedBusinessId(req),
         );
     }
 
@@ -116,7 +128,7 @@ export class PermissionGroupController {
 
     @Post('seed')
     @Roles('SUPER_ADMIN')
-    seedPresets(@Body() body: { businessId: number }) {
-        return this.service.seedPresets(body.businessId);
+    seedPresets(@Req() req: { user: JwtPayload }) {
+        return this.service.seedPresets(this.getScopedBusinessId(req));
     }
 }

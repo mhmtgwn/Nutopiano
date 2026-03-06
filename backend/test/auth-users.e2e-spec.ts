@@ -84,14 +84,14 @@ describe('Auth & Users (e2e)', () => {
       });
     });
 
-    it('USER can see own profile', async () => {
+    it('legacy USER login is normalized to SELLER_STAFF in profile', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/profile')
         .set('Authorization', `Bearer ${staffToken}`)
         .expect(200);
 
       expect(res.body).toMatchObject({
-        role: 'USER',
+        role: 'SELLER_STAFF',
         phone: STAFF_PHONE,
       });
     });

@@ -38,7 +38,7 @@ const ROLE_CAPABILITY_MAP: Record<EffectiveAppRole, AppCapability[]> = {
     'VIEW_SUPPORT_MODE',
     'EXECUTE_BULK_ACTIONS',
   ],
-  VIEWER: ['USE_POS'],
+  SELLER_STAFF: ['USE_POS'],
   SELLER: [
     'VIEW_FINANCE',
     'PROCESS_RETURN',

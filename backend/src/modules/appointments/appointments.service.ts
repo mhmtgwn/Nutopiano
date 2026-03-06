@@ -100,7 +100,7 @@ export class AppointmentsService {
         where: {
           id: payload.staffUserId,
           businessId,
-          role: 'USER',
+          role: { in: ['USER', 'SELLER_STAFF'] },
         },
         select: { id: true },
       });
@@ -282,7 +282,7 @@ export class AppointmentsService {
           where: {
             id: payload.staffUserId,
             businessId: appointment.businessId,
-            role: 'USER',
+            role: { in: ['USER', 'SELLER_STAFF'] },
           },
           select: { id: true },
         });

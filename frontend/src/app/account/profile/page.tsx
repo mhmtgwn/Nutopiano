@@ -11,10 +11,12 @@ import {
 } from 'lucide-react';
 
 import Button from '@/components/common/Button';
+import StatusBadge from '@/components/common/StatusBadge';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
 import { getPanelHomePathByRole, getPanelLabelByRole } from '@/lib/role-routing';
+import type { FeatureStatusCode, ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -33,14 +35,14 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-}
+const featureStatusVariant = (
+  status?: FeatureStatusCode,
+): 'success' | 'warning' | 'error' | 'neutral' => {
+  if (status === 'ACTIVE') return 'success';
+  if (status === 'PLANNED') return 'warning';
+  if (status === 'BLOCKED') return 'error';
+  return 'neutral';
+};
 
 type TabType = 'profile' | 'security' | 'admin';
 type MenuItem = {
@@ -86,6 +88,11 @@ export default function ProfilePage() {
               phone: profile.phone,
               email: profile.email,
               role: profile.role,
+              effectiveRole: profile.effectiveRole,
+              permissions: profile.permissions,
+              panelHome: profile.panelHome,
+              allowedPanels: profile.allowedPanels,
+              featureStatuses: profile.featureStatuses,
               businessId: profile.businessId,
             },
             token: null,
@@ -135,13 +142,14 @@ export default function ProfilePage() {
       setIsSavingProfile(true);
       dispatch(startAuth());
 
-      const response = await api.patch<ProfileResponse>('/auth/profile', {
+      await api.patch('/auth/profile', {
         name: fullName || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
       });
 
-      const profile = response.data;
+      const refreshed = await api.get<ProfileResponse>('/auth/profile');
+      const profile = refreshed.data;
 
       dispatch(
         setCredentials({
@@ -151,6 +159,11 @@ export default function ProfilePage() {
             phone: profile.phone,
             email: profile.email,
             role: profile.role,
+            effectiveRole: profile.effectiveRole,
+            permissions: profile.permissions,
+            panelHome: profile.panelHome,
+            allowedPanels: profile.allowedPanels,
+            featureStatuses: profile.featureStatuses,
             businessId: profile.businessId,
           },
           token: null,
@@ -309,6 +322,74 @@ export default function ProfilePage() {
                   <p className="flex h-11 items-center rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-3 text-[#111827]">
                     {user.businessId ?? '-'}
                   </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6b7280]">
+                  Erisim Baglami
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1 text-sm">
+                    <span className="text-[#6b7280]">Effective Rol</span>
+                    <p className="font-medium text-[#111827]">
+                      {user.effectiveRole ?? user.role}
+                    </p>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <span className="text-[#6b7280]">Panel Home</span>
+                    <p className="font-medium text-[#111827]">
+                      {user.panelHome ?? getPanelHomePathByRole(user.role)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6b7280]">
+                    Izinler ({user.permissions?.length ?? 0})
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(user.permissions ?? []).length > 0 ? (
+                      (user.permissions ?? []).slice(0, 32).map((permission) => (
+                        <span
+                          key={permission}
+                          className="rounded-full border border-[#d1d5db] bg-white px-2.5 py-1 text-[11px] font-medium text-[#374151]"
+                        >
+                          {permission}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-sm text-[#6b7280]">Aktif izin bulunmuyor.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6b7280]">
+                    Ozellik Durumlari
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {(user.featureStatuses ?? []).length > 0 ? (
+                      (user.featureStatuses ?? []).map((item) => (
+                        <div
+                          key={item.key}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#e5e7eb] bg-white px-3 py-2"
+                        >
+                          <p className="text-sm font-medium text-[#111827]">{item.key}</p>
+                          <div className="flex items-center gap-2">
+                            {item.note ? (
+                              <span className="text-xs text-[#6b7280]">{item.note}</span>
+                            ) : null}
+                            <StatusBadge variant={featureStatusVariant(item.status)}>
+                              {item.status}
+                            </StatusBadge>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-[#6b7280]">Durum bilgisi bulunmuyor.</p>
+                    )}
+                  </div>
                 </div>
               </div>
 

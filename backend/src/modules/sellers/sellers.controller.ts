@@ -281,11 +281,11 @@ export class SellersController {
   }
 
   @Patch('platform/sellers/:sellerId/products/:id/publish-force')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Override publish status for seller product',
     description:
-      'Controlled override for publish-force. reason zorunludur ve audit log yazilir.',
+      'SUPER_ADMIN controlled override for publish-force. reason zorunludur ve audit log yazilir.',
   })
   overridePlatformSellerProductPublish(
     @Req() req: { user: JwtPayload },
@@ -302,11 +302,11 @@ export class SellersController {
   }
 
   @Patch('platform/sellers/:sellerId/products/:id/stock-force')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles('SUPER_ADMIN')
   @ApiOperation({
     summary: 'Override stock for seller product',
     description:
-      'Controlled override for stock-adjust-force. reason zorunludur ve audit log yazilir.',
+      'SUPER_ADMIN controlled override for stock-adjust-force. reason zorunludur ve audit log yazilir.',
   })
   overridePlatformSellerProductStock(
     @Req() req: { user: JwtPayload },

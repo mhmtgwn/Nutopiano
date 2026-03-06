@@ -17,15 +17,17 @@ import api from '@/services/api';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import FilterPanel, { type FilterField } from '@/components/common/FilterPanel';
 import StatusBadge from '@/components/common/StatusBadge';
+import { normalizeRole } from '@/lib/role-routing';
 
 /* ── Types ── */
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'SELLER_STAFF' | 'USER' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'SELLER_STAFF' | 'CUSTOMER';
+type ApiUserRole = UserRole | 'USER';
 type UserRow = {
   id: number;
   name: string;
   phone?: string;
   email?: string;
-  role: UserRole;
+  role: ApiUserRole;
   isActive: boolean;
   createdAt: string;
   lastLoginAt?: string;
@@ -34,15 +36,18 @@ type UserRow = {
 
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: 'Süper Admin', ADMIN: 'Admin', SELLER: 'Satıcı',
-  SELLER_STAFF: 'Satıcı Personeli', USER: 'Personel', CUSTOMER: 'Müşteri',
+  SELLER_STAFF: 'Satıcı Personeli', CUSTOMER: 'Müşteri',
 };
 
 const roleVariant: Record<string, 'error' | 'purple' | 'info' | 'warning' | 'neutral'> = {
   SUPER_ADMIN: 'error', ADMIN: 'purple', SELLER: 'info',
-  SELLER_STAFF: 'warning', USER: 'warning', CUSTOMER: 'neutral',
+  SELLER_STAFF: 'warning', CUSTOMER: 'neutral',
 };
 
-const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER_STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+const roles: UserRole[] = ['CUSTOMER', 'SELLER_STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+
+const toSystemRole = (role: string): UserRole =>
+  normalizeRole(role) ?? 'CUSTOMER';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   const msg = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
@@ -81,7 +86,7 @@ export default function AdminUsersPage() {
   const filteredUsers = useMemo(() => {
     const q = (filters.search ?? '').trim().toLowerCase();
     return (users ?? []).filter((u) => {
-      if (filters.role && u.role !== filters.role) return false;
+      if (filters.role && toSystemRole(u.role) !== filters.role) return false;
       if (filters.status === 'active' && !u.isActive) return false;
       if (filters.status === 'inactive' && u.isActive) return false;
       if (filters.status === 'deleted' && !u.deletedAt) return false;
@@ -139,8 +144,8 @@ export default function AdminUsersPage() {
       label: 'Rol',
       sortable: true,
       render: (row) => (
-        <StatusBadge variant={roleVariant[row.role] ?? 'neutral'} dot>
-          {roleLabel[row.role] ?? row.role}
+        <StatusBadge variant={roleVariant[toSystemRole(row.role)] ?? 'neutral'} dot>
+          {roleLabel[toSystemRole(row.role)] ?? toSystemRole(row.role)}
         </StatusBadge>
       ),
     },
@@ -253,7 +258,7 @@ export default function AdminUsersPage() {
           { label: 'Toplam', value: users?.length ?? 0, icon: Shield },
           { label: 'Aktif', value: users?.filter((u) => u.isActive && !u.deletedAt).length ?? 0, icon: ShieldCheck },
           { label: 'Pasif', value: users?.filter((u) => !u.isActive).length ?? 0, icon: AlertTriangle },
-          { label: 'Admin', value: users?.filter((u) => ['SUPER_ADMIN', 'ADMIN'].includes(u.role)).length ?? 0, icon: ShieldCheck },
+          { label: 'Admin', value: users?.filter((u) => ['SUPER_ADMIN', 'ADMIN'].includes(toSystemRole(u.role))).length ?? 0, icon: ShieldCheck },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-[var(--neutral-200)] bg-white px-4 py-3">
             <div className="flex items-center gap-2">
@@ -299,7 +304,7 @@ export default function AdminUsersPage() {
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
-    name: '', phone: '', email: '', role: 'USER' as UserRole, password: '',
+    name: '', phone: '', email: '', role: 'SELLER_STAFF' as UserRole, password: '',
   });
 
   const createMutation = useMutation({

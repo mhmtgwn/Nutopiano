@@ -7,6 +7,7 @@ import { CalendarClock, CheckCircle2, RefreshCcw, UserRound } from 'lucide-react
 
 import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
+import { normalizeRole } from '@/lib/role-routing';
 
 type AppointmentStatus = 'SCHEDULED' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
 
@@ -24,15 +25,23 @@ type AppointmentRow = {
   updatedAt: string;
 };
 
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'USER' | 'CUSTOMER';
+type UserRole =
+  | 'SUPER_ADMIN'
+  | 'ADMIN'
+  | 'SELLER'
+  | 'SELLER_STAFF'
+  | 'CUSTOMER';
 
 type UserRow = {
   id: number;
   name: string;
   phone?: string;
-  role: UserRole;
+  role: UserRole | 'USER';
   isActive: boolean;
 };
+
+const toSystemRole = (role: string): UserRole =>
+  normalizeRole(role) ?? 'CUSTOMER';
 
 type CustomerRow = {
   id: number;
@@ -102,15 +111,16 @@ export default function AdminServicesPage() {
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | 'ALL'>('ALL');
   const [customerSearch, setCustomerSearch] = useState('');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     customerId: '',
     staffUserId: '',
     serviceName: '',
+    // Lazily compute default time once on mount.
     startAt: toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000)),
     durationMinutes: 60,
     status: 'SCHEDULED' as AppointmentStatus,
     notes: '',
-  });
+  }));
 
   const appointmentsQuery = useQuery<AppointmentRow[]>({
     queryKey: ['admin-services-appointments'],
@@ -194,7 +204,10 @@ export default function AdminServicesPage() {
   });
 
   const staffOptions = useMemo(
-    () => (usersQuery.data ?? []).filter((u) => u.role === 'USER' && u.isActive),
+    () =>
+      (usersQuery.data ?? []).filter(
+        (u) => toSystemRole(u.role) === 'SELLER_STAFF' && u.isActive,
+      ),
     [usersQuery.data],
   );
 

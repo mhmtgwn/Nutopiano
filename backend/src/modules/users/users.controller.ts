@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -22,6 +25,8 @@ import { JwtPayload } from '../../auth/types/jwt-payload';
 import { UsersService } from './users.service';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserRoleOverrideDto } from './dto/update-user-role-override.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -29,6 +34,21 @@ import { UpdateUserRoleOverrideDto } from './dto/update-user-role-override.dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Post()
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Create user',
+    description:
+      'Creates a user in current business. USER legacy input is normalized to SELLER_STAFF.',
+  })
+  @ApiCreatedResponse({ description: 'Created user summary.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN/SUPER_ADMIN.',
+  })
+  create(@Req() req: { user: JwtPayload }, @Body() body: CreateUserDto) {
+    return this.usersService.create(req.user, body);
+  }
 
   @Roles('ADMIN')
   @Get()
@@ -88,6 +108,25 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.usersService.findById(req.user, id);
+  }
+
+  @Patch(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Update user profile fields',
+    description: 'Updates name/phone/email for a user in current business.',
+  })
+  @ApiOkResponse({ description: 'Updated user summary.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN/SUPER_ADMIN.',
+  })
+  @ApiNotFoundResponse({ description: 'User not found in current business.' })
+  update(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserDto,
+  ) {
+    return this.usersService.update(req.user, id, body);
   }
 
   @Patch(':id/role')
@@ -153,6 +192,25 @@ export class UsersController {
     @Body() body: { isActive: boolean },
   ) {
     return this.usersService.updateActive(req.user, id, Boolean(body.isActive));
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({
+    summary: 'Soft delete user',
+    description:
+      'Soft-deletes a user (deletedAt + isActive=false). Can be restored later by admin tooling.',
+  })
+  @ApiOkResponse({ description: 'Soft-deleted user summary.' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden for roles other than ADMIN/SUPER_ADMIN.',
+  })
+  @ApiNotFoundResponse({ description: 'User not found in current business.' })
+  remove(
+    @Req() req: { user: JwtPayload },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.usersService.delete(req.user, id);
   }
 }
 

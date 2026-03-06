@@ -10,6 +10,7 @@ import {
   STAFF_SELF_KEY,
   StaffSelfCheck,
 } from '../decorators/staff-self.decorator';
+import { isStaffRole } from '../authz';
 
 @Injectable()
 export class StaffSelfGuard implements CanActivate {
@@ -30,7 +31,7 @@ export class StaffSelfGuard implements CanActivate {
       .getRequest<{ user?: JwtPayload; params?: Record<string, string> }>();
     const user = request.user;
 
-    if (!user || user.role !== 'USER') {
+    if (!user || !isStaffRole(user.role)) {
       return true;
     }
 

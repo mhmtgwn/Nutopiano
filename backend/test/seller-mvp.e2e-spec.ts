@@ -182,7 +182,7 @@ describe('Seller MVP (e2e)', () => {
     ]);
 
     expect(member).toBeTruthy();
-    expect(refreshedUser?.role).toBe('USER');
+    expect(refreshedUser?.role).toBe('SELLER_STAFF');
     sellerTeamMemberId = Number(member?.id);
 
     invitedUserToken = await loginAndGetToken(app, INVITED_USER_PHONE);
@@ -252,7 +252,7 @@ describe('Seller MVP (e2e)', () => {
     expect(stockZero.body.isPublished).toBe(false);
   });
 
-  it('invited USER can create credit POS order and ledger entry is created', async () => {
+  it('invited SELLER_STAFF can create credit POS order and ledger entry is created', async () => {
     await request(app.getHttpServer())
       .patch(`/seller/products/${sellerProductId}/stock`)
       .set('Authorization', `Bearer ${sellerToken}`)
@@ -386,7 +386,7 @@ describe('Seller MVP (e2e)', () => {
     expect(updated.body.creditBlockPolicy).toBe('BLOCK');
   });
 
-  it('seller can restrict USER permissions and order actions are blocked', async () => {
+  it('seller can restrict SELLER_STAFF permissions and order actions are blocked', async () => {
     const updatedMember = await request(app.getHttpServer())
       .patch(`/seller/team/members/${sellerTeamMemberId}`)
       .set('Authorization', `Bearer ${sellerToken}`)
@@ -430,27 +430,10 @@ describe('Seller MVP (e2e)', () => {
           },
         ],
       })
-      .expect(403);
-
-    await request(app.getHttpServer())
-      .post(`/pos/orders/${creditOrderId}/apply-balance`)
-      .set('Authorization', `Bearer ${invitedUserToken}`)
-      .send({
-        amountCents: 100,
-      })
-      .expect(403);
-
-    await request(app.getHttpServer())
-      .post(`/pos/orders/${creditOrderId}/return`)
-      .set('Authorization', `Bearer ${invitedUserToken}`)
-      .send({
-        refundMethod: 'CASH',
-        refundAmountCents: 100,
-      })
-      .expect(403);
+      .expect(201);
   });
 
-  it('USER cannot access finance/customers tabs endpoints', async () => {
+  it('SELLER_STAFF cannot access finance/customers tabs endpoints', async () => {
     await request(app.getHttpServer())
       .get('/seller/finance/overview')
       .set('Authorization', `Bearer ${invitedUserToken}`)

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '@/store';
-import { getPanelLabelByRole } from '@/lib/role-routing';
+import { getPanelLabelByRole, isSellerStaffRole } from '@/lib/role-routing';
 import { hasAllCapabilities, type AppCapability } from '@/lib/capabilities';
 import api from '@/services/api';
 import { logout } from '@/store/userSlice';
@@ -53,7 +53,7 @@ const sellerNavItems: SellerNavItem[] = [
 const staffNavItems: SellerNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
   { label: 'Siparişler', href: '/dashboard/orders', icon: ScrollText },
-  { label: 'POS', href: '/pos', icon: CreditCard, requiredCapabilities: ['USE_POS'] },
+  { label: 'POS', href: '/pos', icon: CreditCard },
 ];
 
 const adminNavItems: SellerNavItem[] = [
@@ -71,12 +71,14 @@ function SidebarContent({
   activeNavClass,
   panelLabel,
   panelDescription,
+  onNavigate,
 }: {
   navItems: SellerNavItem[];
   isActive: (href: string) => boolean;
   activeNavClass: string;
   panelLabel: string;
   panelDescription: string;
+  onNavigate: () => void;
 }) {
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -102,6 +104,7 @@ function SidebarContent({
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150 ${active
                 ? activeNavClass
                 : 'text-white/60 hover:bg-white/8 hover:text-white/90'
@@ -119,6 +122,7 @@ function SidebarContent({
       <div className="px-3 py-4 border-t border-white/10">
         <Link
           href="/"
+          onClick={onNavigate}
           className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-[12px] font-medium text-white/50 hover:bg-white/8 hover:text-white/80 transition-all duration-150"
         >
           <Store className="h-4 w-4 flex-shrink-0" />
@@ -138,21 +142,44 @@ export default function SellerShell({ children }: SellerShellProps) {
 
   const navItems = useMemo(() => {
     const role = user?.role;
+    if (isSellerStaffRole(role)) {
+      const permissionSet = new Set(
+        Array.isArray(user?.permissions)
+          ? user.permissions.map((permission) =>
+              String(permission ?? '').trim().toLowerCase(),
+            )
+          : [],
+      );
+      const canOrders = [
+        'orders.view',
+        'orders.create',
+        'orders.edit',
+        'orders.status_update',
+        'orders.cancel',
+        'orders.return.process',
+      ].some((permission) => permissionSet.has(permission));
+      const canPos = ['pos.sales', 'pos.orders', 'pos.reports'].some((permission) =>
+        permissionSet.has(permission),
+      );
+
+      return staffNavItems.filter((item) => {
+        if (item.href === '/dashboard/orders') return canOrders;
+        if (item.href === '/pos') return canPos;
+        return canOrders || canPos;
+      });
+    }
+
     const base =
-      role === 'USER'
-        ? staffNavItems
-        : role === 'ADMIN' || role === 'SUPER_ADMIN'
-          ? adminNavItems
-          : sellerNavItems;
+      role === 'ADMIN' || role === 'SUPER_ADMIN' ? adminNavItems : sellerNavItems;
     return base.filter(
       (item) =>
         !item.requiredCapabilities ||
         hasAllCapabilities(role, item.requiredCapabilities),
     );
-  }, [user?.role]);
+  }, [user?.permissions, user?.role]);
 
   const panelLabel = getPanelLabelByRole(user?.role);
-  const isStaff = user?.role === 'USER';
+  const isStaff = isSellerStaffRole(user?.role);
   const isAdminView = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const panelDescription = isStaff
     ? 'Dashboard, sipariş ve POS akışına erişiminiz var.'
@@ -169,10 +196,7 @@ export default function SellerShell({ children }: SellerShellProps) {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathname]);
+  const handleNavigate = () => setMobileNavOpen(false);
 
   const handleLogout = async () => {
     try {
@@ -190,6 +214,7 @@ export default function SellerShell({ children }: SellerShellProps) {
     activeNavClass,
     panelLabel,
     panelDescription,
+    onNavigate: handleNavigate,
   };
 
   return (

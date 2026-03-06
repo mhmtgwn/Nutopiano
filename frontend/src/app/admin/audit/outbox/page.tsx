@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { RefreshCcw } from 'lucide-react';
@@ -10,135 +10,224 @@ import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import FilterPanel, { type FilterField } from '@/components/common/FilterPanel';
 import StatusBadge from '@/components/common/StatusBadge';
 
-type OutboxEvent = {
-    id: number;
-    eventType: string;
-    status: 'PENDING' | 'PROCESSED' | 'DEAD_LETTER';
-    attemptCount: number;
-    maxAttempts: number;
-    payload: Record<string, unknown>;
-    errorMessage: string | null;
-    createdAt: string;
-    processedAt: string | null;
+type OutboxEventRow = {
+  id: number;
+  aggregateType: string;
+  aggregateId: string;
+  eventType: string;
+  idempotencyKey: string | null;
+  payloadJson: Record<string, unknown> | null;
+  attemptCount: number;
+  nextRetryAt: string | null;
+  lastError: string | null;
+  deadLetteredAt: string | null;
+  processedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const statusVariant: Record<string, 'warning' | 'success' | 'error'> = { PENDING: 'warning', PROCESSED: 'success', DEAD_LETTER: 'error' };
-const statusLabel: Record<string, string> = { PENDING: 'Bekliyor', PROCESSED: 'İşlendi', DEAD_LETTER: 'Dead Letter' };
+type PaginatedOutbox = {
+  data: OutboxEventRow[];
+  meta: { total: number; page: number; pageSize: number; totalPages: number };
+};
+
+type OutboxStatus = 'PENDING' | 'RETRY' | 'PROCESSED' | 'DEAD_LETTER';
+
+const resolveStatus = (row: OutboxEventRow): OutboxStatus => {
+  if (row.deadLetteredAt) return 'DEAD_LETTER';
+  if (row.processedAt) return 'PROCESSED';
+  if (row.attemptCount > 0) return 'RETRY';
+  return 'PENDING';
+};
+
+const statusVariant: Record<OutboxStatus, 'warning' | 'success' | 'error' | 'info'> = {
+  PENDING: 'warning',
+  RETRY: 'info',
+  PROCESSED: 'success',
+  DEAD_LETTER: 'error',
+};
+
+const statusLabel: Record<OutboxStatus, string> = {
+  PENDING: 'Bekliyor',
+  RETRY: 'Tekrar Deneme',
+  PROCESSED: 'Islendi',
+  DEAD_LETTER: 'Dead Letter',
+};
 
 const filterFields: FilterField[] = [
-    {
-        key: 'status', label: 'Durum', type: 'select', options: [
-            { label: 'Bekliyor', value: 'PENDING' },
-            { label: 'İşlendi', value: 'PROCESSED' },
-            { label: 'Dead Letter', value: 'DEAD_LETTER' },
-        ]
-    },
-    { key: 'eventType', label: 'Olay Tipi', type: 'text' },
+  {
+    key: 'status',
+    label: 'Durum',
+    type: 'select',
+    options: [
+      { label: 'Bekliyor', value: 'PENDING' },
+      { label: 'Tekrar Deneme', value: 'RETRY' },
+      { label: 'Islendi', value: 'PROCESSED' },
+      { label: 'Dead Letter', value: 'DEAD_LETTER' },
+    ],
+  },
+  { key: 'eventType', label: 'Event Type', type: 'text' },
 ];
 
-const resolveApiErr = (e: unknown, f: string) => { const m = (e as any)?.response?.data?.message; return typeof m === 'string' ? m : f; };
+const resolveApiErr = (error: unknown, fallback: string) => {
+  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  if (Array.isArray(message)) return message.map(String).join(', ');
+  if (typeof message === 'string') return message;
+  return fallback;
+};
 
 export default function OutboxEventsPage() {
-    const queryClient = useQueryClient();
-    const [filters, setFilters] = useState<Record<string, string>>({ status: '', eventType: '' });
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<Record<string, string>>({
+    status: '',
+    eventType: '',
+  });
 
-    const { data: events, isLoading } = useQuery<OutboxEvent[]>({
-        queryKey: ['outbox-events', filters],
-        queryFn: async () => {
-            try {
-                const params = new URLSearchParams();
-                Object.entries(filters).forEach(([k, v]) => v && params.set(k, v));
-                return (await api.get<OutboxEvent[]>(`/outbox-events?${params.toString()}`)).data;
-            } catch { return []; }
-        },
+  const { data, isLoading } = useQuery<PaginatedOutbox>({
+    queryKey: ['platform-outbox-events'],
+    queryFn: async () =>
+      (await api.get<PaginatedOutbox>('/platform/outbox/events?page=1&pageSize=120')).data,
+  });
+
+  const events = useMemo(() => {
+    const rows = data?.data ?? [];
+    return rows.filter((row) => {
+      const status = resolveStatus(row);
+      if (filters.status && status !== filters.status) return false;
+      if (filters.eventType) {
+        const q = filters.eventType.trim().toLowerCase();
+        if (!row.eventType.toLowerCase().includes(q)) return false;
+      }
+      return true;
     });
+  }, [data?.data, filters.eventType, filters.status]);
 
-    const retryMutation = useMutation({
-        mutationFn: async (id: number) => api.post(`/outbox-events/${id}/retry`),
-        onSuccess: async () => {
-            toast.success('Yeniden deneme kuyruğa eklendi.');
-            await queryClient.invalidateQueries({ queryKey: ['outbox-events'] });
-        },
-        onError: (err: unknown) => toast.error(resolveApiErr(err, 'İşlem başarısız.')),
-    });
+  const retryMutation = useMutation({
+    mutationFn: async (id: number) => api.post(`/platform/outbox/events/${id}/retry`),
+    onSuccess: async () => {
+      toast.success('Yeniden deneme kuyruğa eklendi.');
+      await queryClient.invalidateQueries({ queryKey: ['platform-outbox-events'] });
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErr(error, 'Islem basarisiz.'));
+    },
+  });
 
-    const columns: DataTableColumn<OutboxEvent>[] = [
-        {
-            key: 'eventType', label: 'Olay Tipi', sortable: true,
-            render: (row) => <span className="font-mono text-sm font-medium text-[var(--primary-800)]">{row.eventType}</span>,
-        },
-        {
-            key: 'status', label: 'Durum',
-            render: (row) => <StatusBadge variant={statusVariant[row.status] ?? 'neutral'}>{statusLabel[row.status] ?? row.status}</StatusBadge>,
-        },
-        {
-            key: 'attemptCount', label: 'Deneme',
-            render: (row) => (
-                <span className={`text-sm font-medium ${row.attemptCount >= row.maxAttempts ? 'text-red-600' : 'text-[var(--neutral-600)]'}`}>
-                    {row.attemptCount}/{row.maxAttempts}
-                </span>
-            ),
-        },
-        {
-            key: 'errorMessage', label: 'Hata',
-            render: (row) => (
-                <span className="text-xs text-red-600 truncate block max-w-[200px]" title={row.errorMessage ?? undefined}>
-                    {row.errorMessage ?? '—'}
-                </span>
-            ),
-        },
-        {
-            key: 'createdAt', label: 'Oluşturma', sortable: true,
-            render: (row) => <span className="text-[var(--neutral-500)]">{new Date(row.createdAt).toLocaleString('tr-TR')}</span>,
-        },
-        {
-            key: 'processedAt', label: 'İşlenme',
-            render: (row) => <span className="text-[var(--neutral-500)]">{row.processedAt ? new Date(row.processedAt).toLocaleString('tr-TR') : '—'}</span>,
-        },
-    ];
+  const columns: DataTableColumn<OutboxEventRow>[] = [
+    {
+      key: 'eventType',
+      label: 'Event',
+      sortable: true,
+      render: (row) => (
+        <div>
+          <p className="font-mono text-sm font-medium text-[var(--primary-800)]">{row.eventType}</p>
+          <p className="text-[10px] text-[var(--neutral-500)]">
+            {row.aggregateType}#{row.aggregateId}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Durum',
+      render: (row) => {
+        const status = resolveStatus(row);
+        return (
+          <StatusBadge variant={statusVariant[status]}>{statusLabel[status]}</StatusBadge>
+        );
+      },
+    },
+    {
+      key: 'attemptCount',
+      label: 'Deneme',
+      render: (row) => (
+        <span className="text-sm font-medium text-[var(--neutral-600)]">{row.attemptCount}</span>
+      ),
+    },
+    {
+      key: 'lastError',
+      label: 'Son Hata',
+      render: (row) => (
+        <span
+          className="block max-w-[240px] truncate text-xs text-red-600"
+          title={row.lastError ?? undefined}
+        >
+          {row.lastError ?? '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Olusturma',
+      sortable: true,
+      render: (row) => (
+        <span className="text-[var(--neutral-500)]">
+          {new Date(row.createdAt).toLocaleString('tr-TR')}
+        </span>
+      ),
+    },
+    {
+      key: 'processedAt',
+      label: 'Islenme',
+      render: (row) => (
+        <span className="text-[var(--neutral-500)]">
+          {row.processedAt ? new Date(row.processedAt).toLocaleString('tr-TR') : '—'}
+        </span>
+      ),
+    },
+  ];
 
-    const rowActions = (row: OutboxEvent) =>
-        (row.status === 'DEAD_LETTER' || row.status === 'PENDING') ? (
-            <button type="button" onClick={() => retryMutation.mutate(row.id)}
-                disabled={retryMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50">
-                <RefreshCcw className="h-3 w-3" /> Yeniden Dene
-            </button>
-        ) : null;
-
-    const pendingCount = (events ?? []).filter(e => e.status === 'PENDING').length;
-    const deadCount = (events ?? []).filter(e => e.status === 'DEAD_LETTER').length;
-    const toolbar = <FilterPanel fields={filterFields} values={filters} onChange={setFilters} />;
+  const rowActions = (row: OutboxEventRow) => {
+    const status = resolveStatus(row);
+    if (status !== 'PENDING' && status !== 'DEAD_LETTER' && status !== 'RETRY') return null;
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Outbox Olayları</h1>
-                <p className="mt-1 text-sm text-[var(--neutral-600)]">Event-driven mimari outbox kayıtları. Dead letter yönetimi.</p>
-            </div>
-
-            <div className="flex gap-3">
-                {pendingCount > 0 && (
-                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-700">
-                        <strong>{pendingCount}</strong> bekleyen olay
-                    </div>
-                )}
-                {deadCount > 0 && (
-                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-                        <strong>{deadCount}</strong> dead letter
-                    </div>
-                )}
-            </div>
-
-            <DataTable<OutboxEvent>
-                columns={columns}
-                data={events ?? []}
-                keyExtractor={(row) => row.id}
-                loading={isLoading}
-                toolbar={toolbar}
-                rowActions={(row) => rowActions(row)}
-                emptyMessage="Outbox olayı bulunamadı."
-            />
-        </div>
+      <button
+        type="button"
+        onClick={() => retryMutation.mutate(row.id)}
+        disabled={retryMutation.isPending}
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+      >
+        <RefreshCcw className="h-3 w-3" /> Yeniden Dene
+      </button>
     );
+  };
+
+  const pendingCount = events.filter((row) => resolveStatus(row) === 'PENDING').length;
+  const deadLetterCount = events.filter((row) => resolveStatus(row) === 'DEAD_LETTER').length;
+  const toolbar = <FilterPanel fields={filterFields} values={filters} onChange={setFilters} />;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-[22px] font-semibold text-[var(--primary-800)]">Outbox Olaylari</h1>
+        <p className="mt-1 text-sm text-[var(--neutral-600)]">
+          Event-driven outbox akisi (canonical: /platform/outbox/events).
+        </p>
+      </div>
+
+      <div className="flex gap-3">
+        {pendingCount > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
+            <strong>{pendingCount}</strong> bekleyen olay
+          </div>
+        ) : null}
+        {deadLetterCount > 0 ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+            <strong>{deadLetterCount}</strong> dead letter
+          </div>
+        ) : null}
+      </div>
+
+      <DataTable<OutboxEventRow>
+        columns={columns}
+        data={events}
+        keyExtractor={(row) => row.id}
+        loading={isLoading}
+        toolbar={toolbar}
+        rowActions={rowActions}
+        emptyMessage="Outbox olayi bulunamadi."
+      />
+    </div>
+  );
 }

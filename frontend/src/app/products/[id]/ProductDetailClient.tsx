@@ -2,9 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Search, ShoppingBag, Star } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/services/api';
@@ -12,7 +11,6 @@ import { useAppDispatch } from '@/store';
 import { useAppSelector } from '@/store';
 import { addItem } from '@/store/cartSlice';
 import { formatDate, formatPrice } from '@/utils/helpers';
-import Button from '@/components/common/Button';
 import Spinner from '@/components/common/Spinner';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
@@ -64,7 +62,6 @@ export default function ProductDetailClient({
   product,
   categoryId,
 }: ProductDetailClientProps) {
-  const router = useRouter();
   const dispatch = useAppDispatch();
   const isOutOfStock = typeof product.stock === 'number' && product.stock <= 0;
 
@@ -197,10 +194,6 @@ export default function ProductDetailClient({
     return sum / list.length;
   }, [reviews]);
 
-  const myExistingReview = useMemo(() => {
-    return null;
-  }, []);
-
   const upsertReviewMutation = useMutation({
     mutationFn: async (payload: { rating: number; comment?: string }) => {
       const res = await api.post('/customer/reviews', {
@@ -235,22 +228,11 @@ export default function ProductDetailClient({
   }, [product.tags]);
 
   const [selectedVariation, setSelectedVariation] = useState<string>('');
-
-  useEffect(() => {
-    if (variationOptions.length === 0) {
-      if (selectedVariation) setSelectedVariation('');
-      return;
-    }
-
-    if (variationOptions.length === 1) {
-      const only = variationOptions[0];
-      if (selectedVariation !== only) setSelectedVariation(only);
-      return;
-    }
-
-    if (selectedVariation && !variationOptions.includes(selectedVariation)) {
-      setSelectedVariation('');
-    }
+  const effectiveVariation = useMemo(() => {
+    if (variationOptions.length === 0) return '';
+    if (variationOptions.includes(selectedVariation)) return selectedVariation;
+    if (variationOptions.length === 1) return variationOptions[0];
+    return '';
   }, [selectedVariation, variationOptions]);
 
   const placeholderSeed = Number.parseInt(String(product.id), 10);
@@ -325,10 +307,10 @@ export default function ProductDetailClient({
     dispatch(
       addItem({
         item: {
-          lineId: `${product.id}${selectedVariation ? `::${selectedVariation}` : ''}`,
+          lineId: `${product.id}${effectiveVariation ? `::${effectiveVariation}` : ''}`,
           productId: product.id,
           name: product.name,
-          variant: selectedVariation || undefined,
+          variant: effectiveVariation || undefined,
           price: product.price,
           imageUrl: product.imageUrl ?? undefined,
         },
@@ -499,7 +481,7 @@ export default function ProductDetailClient({
               <div className="min-h-[44px]">
                 {variationOptions.length > 0 ? (
                   <select
-                    value={selectedVariation}
+                    value={effectiveVariation}
                     onChange={(e) => setSelectedVariation(e.target.value)}
                     className="h-11 w-full appearance-none rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-white px-4 text-sm font-medium text-[var(--neutral-700)] shadow-[var(--shadow-sm)] outline-none transition focus-visible:border-[var(--primary-800)] focus-visible:ring-1 focus-visible:ring-[var(--primary-800)]"
                   >
@@ -550,7 +532,7 @@ export default function ProductDetailClient({
               <button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={isOutOfStock || (variationOptions.length > 0 && !selectedVariation)}
+                disabled={isOutOfStock || (variationOptions.length > 0 && !effectiveVariation)}
                 className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-2xl)] bg-[var(--primary-800)] px-6 text-sm font-semibold uppercase tracking-[0.22em] text-white shadow-[var(--shadow-md)] transition hover:bg-[var(--primary-700)] hover:shadow-[var(--shadow-lg)] active:bg-[var(--primary-900)] disabled:cursor-not-allowed disabled:bg-[var(--neutral-300)] disabled:text-[var(--neutral-700)]"
                 aria-label={isOutOfStock ? 'Tükendi' : 'Sepete ekle'}
               >

@@ -10,7 +10,8 @@ import {
     ANY_PERMISSIONS_KEY,
 } from '../decorators/permissions.decorator';
 import { Permission, ROLE_DEFAULT_PERMISSIONS } from '../constants/permissions';
-import { LEGACY_ROLE_ALIASES } from '../constants/roles';
+import { normalizeRole } from '../authz';
+import { ROLES } from '../constants/roles';
 
 interface AuthUser {
     id: number;
@@ -58,11 +59,13 @@ export class PermissionGuard implements CanActivate {
         }
 
         // Normalize rol
-        const rawRole = String(user.role ?? '').trim().toUpperCase();
-        const normalizedRole = LEGACY_ROLE_ALIASES[rawRole] ?? rawRole;
+        const normalizedRole = normalizeRole(user.role);
+        if (!normalizedRole) {
+            throw new ForbiddenException('Geçersiz rol');
+        }
 
         // SUPER_ADMIN sınırsız erişime sahip
-        if (normalizedRole === 'SUPER_ADMIN') return true;
+        if (normalizedRole === ROLES.SUPER_ADMIN) return true;
 
         // Aktif yetkiler = rol varsayılanları + yetki grubu yetkileri
         const defaultPerms: string[] =

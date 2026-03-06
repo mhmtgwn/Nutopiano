@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
+import { PermissionGroupService } from '../modules/permission-groups/permission-group.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -26,6 +27,12 @@ describe('AuthService', () => {
           provide: EmailService,
           useValue: {
             sendPasswordResetEmail: jest.fn(),
+          },
+        },
+        {
+          provide: PermissionGroupService,
+          useValue: {
+            resolveForUser: jest.fn().mockResolvedValue([]),
           },
         },
       ],

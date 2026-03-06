@@ -298,7 +298,7 @@ export class SellersService {
   }
 
   private assertPlatformOverrideActor(currentUser: JwtPayload) {
-    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
+    if (currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
   }
@@ -396,9 +396,13 @@ export class SellersService {
     if (!targetUser) {
       throw new NotFoundException('Hedef kullanici bulunamadi');
     }
-    if (targetUser.role !== 'CUSTOMER' && targetUser.role !== 'USER') {
+    if (
+      targetUser.role !== 'CUSTOMER' &&
+      targetUser.role !== 'USER' &&
+      targetUser.role !== 'SELLER_STAFF'
+    ) {
       throw new BadRequestException(
-        'Sadece CUSTOMER veya USER rolu olan kullanicilar davet edilebilir',
+        'Sadece CUSTOMER veya SELLER_STAFF rolu olan kullanicilar davet edilebilir',
       );
     }
 
@@ -572,7 +576,7 @@ export class SellersService {
 
       await tx.user.update({
         where: { id: userId },
-        data: { role: 'USER' },
+        data: { role: 'SELLER_STAFF' },
       });
 
       return member;
@@ -736,11 +740,12 @@ export class SellersService {
       if (
         (payload.isActive ?? true) &&
         targetUser.role !== 'USER' &&
+        targetUser.role !== 'SELLER_STAFF' &&
         targetUser.role !== 'SELLER'
       ) {
         await tx.user.update({
           where: { id: targetUserId },
-          data: { role: 'USER', isActive: true },
+          data: { role: 'SELLER_STAFF', isActive: true },
         });
       }
 
@@ -827,7 +832,10 @@ export class SellersService {
         }),
       ]);
 
-      if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
+      if (
+        !hasAnyActiveMembership &&
+        (targetUser?.role === 'USER' || targetUser?.role === 'SELLER_STAFF')
+      ) {
         await this.prisma.user.update({
           where: { id: existing.userId },
           data: { role: 'CUSTOMER' },
@@ -880,7 +888,10 @@ export class SellersService {
       }),
     ]);
 
-    if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
+    if (
+      !hasAnyActiveMembership &&
+      (targetUser?.role === 'USER' || targetUser?.role === 'SELLER_STAFF')
+    ) {
       await this.prisma.user.update({
         where: { id: existing.userId },
         data: { role: 'CUSTOMER' },
@@ -1041,7 +1052,10 @@ export class SellersService {
           select: { role: true },
         }),
       ]);
-      if (!hasAnyActiveMembership && targetUser?.role === 'USER') {
+      if (
+        !hasAnyActiveMembership &&
+        (targetUser?.role === 'USER' || targetUser?.role === 'SELLER_STAFF')
+      ) {
         await this.prisma.user.update({
           where: { id: existing.userId },
           data: { role: 'CUSTOMER' },

@@ -49,7 +49,6 @@ export default function CategoryClient() {
   const router = useRouter();
 
   const slug = params?.id ?? '';
-  const [isRedirecting, setIsRedirecting] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [qInput, setQInput] = useState('');
   const [inStockOnly, setInStockOnly] = useState(false);
@@ -58,7 +57,6 @@ export default function CategoryClient() {
 
   useEffect(() => {
     if (slug === 'all') {
-      setIsRedirecting(true);
       router.replace('/products');
     }
   }, [router, slug]);
@@ -207,7 +205,7 @@ export default function CategoryClient() {
   );
   const hasProducts = pagedProducts.length > 0;
 
-  if (isRedirecting) {
+  if (slug === 'all') {
     return null;
   }
 

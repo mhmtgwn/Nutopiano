@@ -5,4 +5,7 @@ export interface JwtPayload {
   phone?: string;
   role: RoleType;
   businessId?: string | null;
+  normalizedRole?: RoleType | null;
+  effectiveRole?: RoleType | null;
+  resolvedPermissions?: string[];
 }

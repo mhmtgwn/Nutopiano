@@ -5,11 +5,22 @@ import {
     Check,
     ChevronDown,
     ChevronRight,
-    Shield,
     ShieldCheck,
-    Users,
 } from 'lucide-react';
 import StatusBadge from '@/components/common/StatusBadge';
+
+type FeatureStatusCode = 'ACTIVE' | 'PLANNED' | 'BLOCKED';
+type RoleFeatureStatus = {
+    key: string;
+    status: FeatureStatusCode;
+    note?: string;
+};
+
+const featureStatusVariant = (status: FeatureStatusCode) => {
+    if (status === 'ACTIVE') return 'success' as const;
+    if (status === 'PLANNED') return 'warning' as const;
+    return 'error' as const;
+};
 
 /* ── Static Roles ── */
 const ROLES = [
@@ -19,6 +30,14 @@ const ROLES = [
         description: 'Platform yöneticisi — tam erişim',
         variant: 'error' as const,
         permissionScope: 'Tüm yetkiler',
+        features: [
+            { key: 'platform.settings', status: 'ACTIVE' },
+            { key: 'platform.feature_flags', status: 'ACTIVE' },
+            { key: 'platform.api_keys', status: 'ACTIVE' },
+            { key: 'platform.audit_outbox', status: 'ACTIVE' },
+            { key: 'platform.finance_all', status: 'ACTIVE' },
+            { key: 'platform.report_exports', status: 'PLANNED', note: 'Ek export modulleri faz-2.' },
+        ] as RoleFeatureStatus[],
     },
     {
         key: 'ADMIN',
@@ -26,6 +45,13 @@ const ROLES = [
         description: 'İşletme yöneticisi — kendi işletmesinde tam erişim',
         variant: 'purple' as const,
         permissionScope: 'Rol atama ve impersonation hariç tüm yetkiler',
+        features: [
+            { key: 'business.operations', status: 'ACTIVE' },
+            { key: 'seller.management', status: 'ACTIVE' },
+            { key: 'finance.payouts', status: 'ACTIVE' },
+            { key: 'audit.read', status: 'ACTIVE' },
+            { key: 'platform.superadmin_only', status: 'BLOCKED', note: 'Sadece SUPER_ADMIN.' },
+        ] as RoleFeatureStatus[],
     },
     {
         key: 'SELLER',
@@ -33,20 +59,25 @@ const ROLES = [
         description: 'Satıcı — kendi mağazasını yönetir',
         variant: 'info' as const,
         permissionScope: 'Kendi ürün/sipariş/müşteri/finans yetkileri',
+        features: [
+            { key: 'seller.products', status: 'ACTIVE' },
+            { key: 'seller.orders', status: 'ACTIVE' },
+            { key: 'seller.customers', status: 'ACTIVE' },
+            { key: 'seller.pos', status: 'ACTIVE' },
+            { key: 'seller.finance_own', status: 'ACTIVE' },
+            { key: 'seller.advanced_modules', status: 'PLANNED', note: 'Dokumanda olan ek moduller.' },
+        ] as RoleFeatureStatus[],
     },
     {
         key: 'SELLER_STAFF',
         label: 'Satıcı Personeli',
-        description: 'Satıcı personelidir — Yetki Gruplarıyla kontrol edilir',
+        description: 'Satıcı personelidir — Yetki Gruplarıyla kontrol edilir (legacy USER alias desteklenir)',
         variant: 'warning' as const,
         permissionScope: 'Varsayılan yok — atanmış yetki grubu belirler',
-    },
-    {
-        key: 'USER',
-        label: 'Personel (Legacy)',
-        description: 'SELLER_STAFF\'ın eski adı — geriye uyumluluk',
-        variant: 'warning' as const,
-        permissionScope: 'SELLER_STAFF ile aynı',
+        features: [
+            { key: 'staff.assigned_permissions', status: 'ACTIVE', note: 'Atanan yetki grubuna gore degisir.' },
+            { key: 'staff.out_of_scope', status: 'BLOCKED', note: 'Yetki grubu disindaki islemler kapali.' },
+        ] as RoleFeatureStatus[],
     },
     {
         key: 'CUSTOMER',
@@ -54,6 +85,14 @@ const ROLES = [
         description: 'Son kullanıcı — sadece mağaza ve sipariş işlemleri',
         variant: 'neutral' as const,
         permissionScope: 'Sipariş verme, profil yönetimi',
+        features: [
+            { key: 'customer.profile', status: 'ACTIVE' },
+            { key: 'customer.addresses', status: 'ACTIVE' },
+            { key: 'customer.orders', status: 'ACTIVE' },
+            { key: 'customer.favorites', status: 'ACTIVE' },
+            { key: 'customer.reviews', status: 'ACTIVE' },
+            { key: 'customer.backoffice', status: 'BLOCKED', note: 'Backoffice panellerine erisim yok.' },
+        ] as RoleFeatureStatus[],
     },
 ];
 
@@ -86,7 +125,6 @@ const permissionMatrix: Record<string, Record<string, string[]>> = {
         'POS': ['pos.sales', 'pos.orders', 'pos.reports', 'pos.register.open', 'pos.register.close', 'pos.return', 'pos.discount'],
     },
     SELLER_STAFF: {},
-    USER: {},
     CUSTOMER: {},
 };
 
@@ -150,6 +188,32 @@ export default function RolesPage() {
                                         {role.permissionScope}
                                     </p>
 
+                                    <div className="mb-4 space-y-2">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
+                                            Ozellik Durumu
+                                        </p>
+                                        {role.features.map((feature) => (
+                                            <div
+                                                key={`${role.key}-${feature.key}`}
+                                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-2"
+                                            >
+                                                <div>
+                                                    <p className="text-xs font-semibold text-[var(--primary-800)]">
+                                                        {feature.key}
+                                                    </p>
+                                                    {feature.note ? (
+                                                        <p className="text-[11px] text-[var(--neutral-500)] mt-0.5">
+                                                            {feature.note}
+                                                        </p>
+                                                    ) : null}
+                                                </div>
+                                                <StatusBadge variant={featureStatusVariant(feature.status)}>
+                                                    {feature.status}
+                                                </StatusBadge>
+                                            </div>
+                                        ))}
+                                    </div>
+
                                     {Object.keys(matrix).length > 0 ? (
                                         <div className="space-y-3">
                                             {Object.entries(matrix).map(([category, perms]) => (
@@ -175,7 +239,7 @@ export default function RolesPage() {
                                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
                                             <p className="font-semibold">Bu rolde varsayılan yetki tanımlanmamıştır.</p>
                                             <p className="mt-1">
-                                                {role.key === 'SELLER_STAFF' || role.key === 'USER'
+                                                {role.key === 'SELLER_STAFF'
                                                     ? 'Bu role sahip kullanıcılar, atanmış Yetki Gruplarına göre yetkilendirilir.'
                                                     : 'Müşteriler sadece mağaza frontend işlemlerine erişebilir.'
                                                 }

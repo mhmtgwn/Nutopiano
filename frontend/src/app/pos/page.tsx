@@ -19,7 +19,8 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store';
 import api from '@/services/api';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { isPosRoleAllowed } from '@/lib/role-routing';
+import { isPosRoleAllowed, isSellerStaffRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 import {
   filterAllowedPosTabs,
   hasPosPermission,
@@ -45,15 +46,6 @@ import {
   type PosOrderQueueItem,
   type PosOrderQueuePayload,
 } from '@/lib/offline/pos-order-queue';
-
-type ProfileResponse = {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-};
 
 type PosPermissionsResponse = {
   userId: string;
@@ -407,7 +399,7 @@ const fallbackPosPermissionsByRole = (role?: string | null): string[] => {
   ) {
     return ['pos.sales', 'pos.orders', 'pos.reports'];
   }
-  if (normalized === 'USER') {
+  if (normalized === 'USER' || normalized === 'SELLER_STAFF') {
     return ['pos.sales'];
   }
   return [];
@@ -762,7 +754,7 @@ export default function PosPage() {
   useEffect(() => {
     if (user) {
       if (!isPosRoleAllowed(user.role)) {
-        router.replace('/');
+        router.replace('/forbidden');
         toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
       }
       return;
@@ -784,6 +776,11 @@ export default function PosPage() {
               phone: profile.phone,
               email: profile.email,
               role: profile.role,
+              effectiveRole: profile.effectiveRole,
+              permissions: profile.permissions,
+              panelHome: profile.panelHome,
+              allowedPanels: profile.allowedPanels,
+              featureStatuses: profile.featureStatuses,
               businessId: profile.businessId,
             },
             token: null,
@@ -791,7 +788,7 @@ export default function PosPage() {
         );
 
         if (!isPosRoleAllowed(profile.role)) {
-          router.replace('/');
+          router.replace('/forbidden');
           toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
         }
       } catch (error: unknown) {
@@ -3422,7 +3419,7 @@ export default function PosPage() {
             </div>
           ) : null}
 
-          {isAuthed && user?.role !== 'USER' && !isFocusMode ? (
+          {isAuthed && !isSellerStaffRole(user?.role) && !isFocusMode ? (
             <details className="rounded-2xl border border-[#D8DED8] bg-white px-4 py-4" open={false}>
               <summary className="cursor-pointer list-none text-sm font-semibold text-[#1A3C34]">
                 Detayli POS operasyon paneli (vardiya, split, analitik, fatura)

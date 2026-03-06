@@ -14,16 +14,23 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { EmailService } from '../email/email.service';
 import {
   isAdminRole,
+  isStaffRole,
+  normalizeRole,
   normalizePosPermissionsJson,
   permissionsFromPreset,
   toEffectiveRole,
 } from '@common/authz';
+import { ROLES, type RoleType } from '@common/constants/roles';
+import { PermissionGroupService } from '../modules/permission-groups/permission-group.service';
 
 type RefreshJwtPayload = {
   userId: string;
   type: 'refresh';
   jti: string;
 };
+
+type FeatureStatusCode = 'ACTIVE' | 'PLANNED' | 'BLOCKED';
+type AccessPanel = 'ADMIN' | 'SELLER' | 'POS' | 'CUSTOMER';
 
 /**
  * OWASP recommended bcrypt salt rounds for modern hardware (2024).
@@ -38,6 +45,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly permissionGroupService: PermissionGroupService,
   ) { }
 
   private hashToken(token: string) {
@@ -209,6 +217,126 @@ export class AuthService {
 
     const name = process.env.BUSINESS_NAME ?? process.env.SITE_NAME ?? 'Nutopiano';
     return this.prisma.business.create({ data: { name } });
+  }
+
+  private getVisibleRole(role?: string | null): RoleType {
+    return normalizeRole(role) ?? ROLES.CUSTOMER;
+  }
+
+  private hasAnyPermission(
+    permissions: string[],
+    candidates: readonly string[],
+  ) {
+    if (!permissions.length) return false;
+    const set = new Set(permissions);
+    return candidates.some((permission) => set.has(permission));
+  }
+
+  private resolveAllowedPanels(
+    role: RoleType,
+    permissions: string[],
+  ): AccessPanel[] {
+    if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) {
+      return ['ADMIN', 'SELLER', 'POS', 'CUSTOMER'];
+    }
+
+    if (role === ROLES.SELLER) {
+      return ['SELLER', 'POS'];
+    }
+
+    if (role === ROLES.SELLER_STAFF) {
+      const panels: AccessPanel[] = [];
+      const hasSellerPanelPerm = this.hasAnyPermission(permissions, [
+        'orders.view',
+        'products.view',
+        'customers.view',
+        'finance.view',
+        'reports.view',
+      ]);
+      const hasPosPerm = this.hasAnyPermission(permissions, [
+        'pos.sales',
+        'pos.orders',
+        'pos.reports',
+      ]);
+
+      if (hasSellerPanelPerm) panels.push('SELLER');
+      if (hasPosPerm) panels.push('POS');
+      return panels;
+    }
+
+    return ['CUSTOMER'];
+  }
+
+  private resolvePanelHome(role: RoleType, allowedPanels: AccessPanel[]): string {
+    if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) return '/admin';
+    if (role === ROLES.SELLER) return '/dashboard';
+    if (role === ROLES.CUSTOMER) return '/account/orders';
+    if (allowedPanels.includes('SELLER')) return '/dashboard/orders';
+    if (allowedPanels.includes('POS')) return '/pos';
+    return '/account/profile';
+  }
+
+  private buildFeatureStatuses(
+    role: RoleType,
+    permissions: string[],
+  ): Array<{ key: string; status: FeatureStatusCode; note?: string }> {
+    if (role === ROLES.SUPER_ADMIN) {
+      return [
+        { key: 'platform.settings', status: 'ACTIVE' },
+        { key: 'platform.feature_flags', status: 'ACTIVE' },
+        { key: 'platform.api_keys', status: 'ACTIVE' },
+        { key: 'platform.audit_outbox', status: 'ACTIVE' },
+        { key: 'platform.finance_all', status: 'ACTIVE' },
+        { key: 'platform.report_exports', status: 'PLANNED', note: 'Ek export modulleri faz-2.' },
+      ];
+    }
+
+    if (role === ROLES.ADMIN) {
+      return [
+        { key: 'business.operations', status: 'ACTIVE' },
+        { key: 'seller.management', status: 'ACTIVE' },
+        { key: 'finance.payouts', status: 'ACTIVE' },
+        { key: 'audit.read', status: 'ACTIVE' },
+        { key: 'platform.superadmin_only', status: 'BLOCKED', note: 'Sadece SUPER_ADMIN.' },
+      ];
+    }
+
+    if (role === ROLES.SELLER) {
+      return [
+        { key: 'seller.products', status: 'ACTIVE' },
+        { key: 'seller.orders', status: 'ACTIVE' },
+        { key: 'seller.customers', status: 'ACTIVE' },
+        { key: 'seller.pos', status: 'ACTIVE' },
+        { key: 'seller.finance_own', status: 'ACTIVE' },
+        { key: 'seller.advanced_modules', status: 'PLANNED', note: 'Dokumanda olan ek moduller.' },
+      ];
+    }
+
+    if (role === ROLES.SELLER_STAFF) {
+      return [
+        {
+          key: 'staff.assigned_permissions',
+          status: permissions.length > 0 ? 'ACTIVE' : 'BLOCKED',
+          note: permissions.length > 0
+            ? 'Atanan yetki gruplari aktif.'
+            : 'Atanmamis yetki grubu bulunuyor.',
+        },
+        {
+          key: 'staff.out_of_scope',
+          status: 'BLOCKED',
+          note: 'Yetki grubu disindaki islemler kapali.',
+        },
+      ];
+    }
+
+    return [
+      { key: 'customer.profile', status: 'ACTIVE' },
+      { key: 'customer.addresses', status: 'ACTIVE' },
+      { key: 'customer.orders', status: 'ACTIVE' },
+      { key: 'customer.favorites', status: 'ACTIVE' },
+      { key: 'customer.reviews', status: 'ACTIVE' },
+      { key: 'customer.backoffice', status: 'BLOCKED', note: 'Backoffice panellerine erisim yok.' },
+    ];
   }
 
   async login(credentials: LoginDto) {
@@ -532,7 +660,7 @@ export class AuthService {
         name: updated.name,
         phone: updated.phone ?? undefined,
         email: updated.email ?? undefined,
-        role: updated.role,
+        role: this.getVisibleRole(updated.role),
         businessId: String(updated.businessId),
       };
     } catch {
@@ -588,12 +716,24 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const role = this.getVisibleRole(user.role);
+    const effectiveRole = toEffectiveRole(role) ?? role;
+    const permissions = await this.permissionGroupService.resolveForUser(user.id);
+    const allowedPanels = this.resolveAllowedPanels(role, permissions);
+    const panelHome = this.resolvePanelHome(role, allowedPanels);
+    const featureStatuses = this.buildFeatureStatuses(role, permissions);
+
     return {
       userId: String(user.id),
       name: user.name,
       phone: user.phone ?? undefined,
       email: user.email ?? undefined,
-      role: user.role,
+      role,
+      effectiveRole,
+      permissions,
+      panelHome,
+      allowedPanels,
+      featureStatuses,
       businessId: String(user.businessId),
     };
   }
@@ -621,7 +761,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const role = user.role;
+    const role = this.getVisibleRole(user.role);
     const effectiveRole = toEffectiveRole(role) ?? role;
 
     if (isAdminRole(role) || role === 'SELLER') {
@@ -634,7 +774,7 @@ export class AuthService {
       };
     }
 
-    if (role === 'USER') {
+    if (isStaffRole(role)) {
       const memberships = await this.prisma.sellerTeamMember.findMany({
         where: {
           businessId,
@@ -661,7 +801,7 @@ export class AuthService {
       return {
         userId: String(user.id),
         role,
-        effectiveRole: 'VIEWER',
+        effectiveRole,
         permissions,
       };
     }

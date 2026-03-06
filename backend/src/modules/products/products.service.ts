@@ -1465,7 +1465,7 @@ export class ProductsService {
         });
       }
 
-      if (updated.stock !== existing.stock) {
+      if (payload.stock !== undefined || updated.stock !== existing.stock) {
         await this.auditService.logFromActor(currentUser, {
           actionType: AUDIT_ACTION_TYPES.STOCK_ADJUST_FORCE,
           targetType: 'PRODUCT',

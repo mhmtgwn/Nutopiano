@@ -9,6 +9,7 @@ import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import { isAdminRole, isSuperAdminRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -26,13 +27,6 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (typeof message === 'string') return message;
   return fallback;
 };
-
-interface ProfileResponse {
-  userId: string;
-  phone?: string;
-  role: string;
-  businessId?: string | null;
-}
 
 interface AdminGuardProps {
   children: ReactNode;
@@ -57,7 +51,7 @@ export default function AdminGuard({
   useEffect(() => {
     if (user) {
       if (!hasAccess(user.role)) {
-        router.replace('/');
+        router.replace('/forbidden');
         toast.error(deniedMessage);
       }
 
@@ -76,8 +70,15 @@ export default function AdminGuard({
           setCredentials({
             user: {
               id: profile.userId,
+              name: profile.name,
               phone: profile.phone,
+              email: profile.email,
               role: profile.role,
+              effectiveRole: profile.effectiveRole,
+              permissions: profile.permissions,
+              panelHome: profile.panelHome,
+              allowedPanels: profile.allowedPanels,
+              featureStatuses: profile.featureStatuses,
               businessId: profile.businessId,
             },
             token: null,
@@ -85,7 +86,7 @@ export default function AdminGuard({
         );
 
         if (!hasAccess(profile.role)) {
-          router.replace('/');
+          router.replace('/forbidden');
           toast.error(deniedMessage);
         }
       } catch (error: unknown) {

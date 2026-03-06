@@ -8,7 +8,8 @@ import Spinner from '@/components/common/Spinner';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { isSellerPanelRole } from '@/lib/role-routing';
+import { isSellerPanelRole, isSellerStaffRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -25,21 +26,43 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-}
-
 interface SellerGuardProps {
   children: ReactNode;
 }
 
+type StaffPanelAccess = {
+  canDashboardOrders: boolean;
+  canPos: boolean;
+};
+
 const isUserAllowedDashboardPath = (pathname: string) =>
   pathname === '/dashboard/orders' || pathname.startsWith('/dashboard/orders/');
+
+const resolveStaffPanelAccess = (permissions?: string[]): StaffPanelAccess => {
+  const set = new Set(
+    Array.isArray(permissions)
+      ? permissions.map((permission) => String(permission ?? '').trim().toLowerCase())
+      : [],
+  );
+
+  const canDashboardOrders = [
+    'orders.view',
+    'orders.create',
+    'orders.edit',
+    'orders.status_update',
+    'orders.cancel',
+    'orders.return.process',
+  ].some((permission) => set.has(permission));
+
+  const canPos = ['pos.sales', 'pos.orders', 'pos.reports'].some((permission) =>
+    set.has(permission),
+  );
+
+  return {
+    canDashboardOrders,
+    canPos,
+  };
+};
 
 export default function SellerGuard({ children }: SellerGuardProps) {
   const router = useRouter();
@@ -52,18 +75,29 @@ export default function SellerGuard({ children }: SellerGuardProps) {
   useEffect(() => {
     if (user) {
       if (!isSellerPanelRole(user.role)) {
-        router.replace('/');
+        router.replace('/forbidden');
         toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
         return;
       }
-      if (user.role === 'USER') {
+      if (isSellerStaffRole(user.role)) {
+        const staffAccess = resolveStaffPanelAccess(user.permissions);
+        if (!staffAccess.canDashboardOrders && !staffAccess.canPos) {
+          router.replace('/forbidden');
+          toast.error('Bu hesap icin seller panel yetkisi atanmis degil.');
+          return;
+        }
         if (pathname === '/dashboard') {
-          router.replace('/dashboard/orders');
+          router.replace(staffAccess.canDashboardOrders ? '/dashboard/orders' : '/pos');
+          return;
+        }
+        if (!staffAccess.canDashboardOrders && isUserAllowedDashboardPath(pathname)) {
+          router.replace('/forbidden');
+          toast.error('Siparis ekrani icin gerekli yetki bulunmuyor.');
           return;
         }
         if (!isUserAllowedDashboardPath(pathname)) {
-          router.replace('/dashboard/orders');
-          toast.error('Bu sekme sadece satici rolune aciktir.');
+          router.replace('/forbidden');
+          toast.error('Bu sekme sadece yetkili satici personeline aciktir.');
         }
       }
       return;
@@ -85,6 +119,11 @@ export default function SellerGuard({ children }: SellerGuardProps) {
               phone: profile.phone,
               email: profile.email,
               role: profile.role,
+              effectiveRole: profile.effectiveRole,
+              permissions: profile.permissions,
+              panelHome: profile.panelHome,
+              allowedPanels: profile.allowedPanels,
+              featureStatuses: profile.featureStatuses,
               businessId: profile.businessId,
             },
             token: null,
@@ -92,18 +131,29 @@ export default function SellerGuard({ children }: SellerGuardProps) {
         );
 
         if (!isSellerPanelRole(profile.role)) {
-          router.replace('/');
+          router.replace('/forbidden');
           toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
           return;
         }
-        if (profile.role === 'USER') {
+        if (isSellerStaffRole(profile.role)) {
+          const staffAccess = resolveStaffPanelAccess(profile.permissions);
+          if (!staffAccess.canDashboardOrders && !staffAccess.canPos) {
+            router.replace('/forbidden');
+            toast.error('Bu hesap icin seller panel yetkisi atanmis degil.');
+            return;
+          }
           if (pathname === '/dashboard') {
-            router.replace('/dashboard/orders');
+            router.replace(staffAccess.canDashboardOrders ? '/dashboard/orders' : '/pos');
+            return;
+          }
+          if (!staffAccess.canDashboardOrders && isUserAllowedDashboardPath(pathname)) {
+            router.replace('/forbidden');
+            toast.error('Siparis ekrani icin gerekli yetki bulunmuyor.');
             return;
           }
           if (!isUserAllowedDashboardPath(pathname)) {
-            router.replace('/dashboard/orders');
-            toast.error('Bu sekme sadece satici rolune aciktir.');
+            router.replace('/forbidden');
+            toast.error('Bu sekme sadece yetkili satici personeline aciktir.');
           }
         }
       } catch (error: unknown) {

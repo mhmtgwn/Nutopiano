@@ -98,7 +98,7 @@ describe('Role Isolation Smoke (e2e)', () => {
         name: 'Smoke Team User',
         phone: TEAM_USER_PHONE,
         passwordHash,
-        role: 'USER',
+        role: 'SELLER_STAFF',
         isActive: true,
       },
       select: { id: true, phone: true },
@@ -110,7 +110,7 @@ describe('Role Isolation Smoke (e2e)', () => {
         name: 'Smoke Free User',
         phone: FREE_USER_PHONE,
         passwordHash,
-        role: 'USER',
+        role: 'SELLER_STAFF',
         isActive: true,
       },
       select: { id: true, phone: true },
@@ -270,7 +270,7 @@ describe('Role Isolation Smoke (e2e)', () => {
       .expect(200);
   });
 
-  it('USER with membership can access sales/orders flows', async () => {
+  it('SELLER_STAFF with membership can access sales/orders flows', async () => {
     const createRes = await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${teamUserToken}`)
@@ -297,7 +297,7 @@ describe('Role Isolation Smoke (e2e)', () => {
       .expect(200);
   });
 
-  it('USER is blocked from finance/customers tabs APIs', async () => {
+  it('SELLER_STAFF is blocked from finance/customers tabs APIs', async () => {
     await request(app.getHttpServer())
       .get('/seller/finance/overview')
       .set('Authorization', `Bearer ${teamUserToken}`)
@@ -338,90 +338,66 @@ describe('Role Isolation Smoke (e2e)', () => {
       .expect(200);
   });
 
-  it('ADMIN is read-only on critical actions; override writes audit logs', async () => {
-    await request(app.getHttpServer())
+  it('ADMIN can do normal writes but is blocked on super-admin force endpoints', async () => {
+    const adminPublish = await request(app.getHttpServer())
       .patch(`/products/${productRow.id}`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ isPublished: false })
-      .expect(403);
+      .expect(200);
+    expect(adminPublish.body.isPublished).toBe(false);
 
-    const publishOverride = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .patch(`/platform/sellers/${sellerProfile.id}/products/${productRow.id}/publish-force`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         isPublished: false,
         reason: 'Admin moderation publish override',
       })
-      .expect(200);
+      .expect(403);
 
-    expect(publishOverride.body.isPublished).toBe(false);
-
-    await request(app.getHttpServer())
+    const adminStock = await request(app.getHttpServer())
       .patch(`/products/${productRow.id}`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ stock: 17 })
-      .expect(403);
+      .expect(200);
+    expect(adminStock.body.stock).toBe(17);
 
-    const stockOverride = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .patch(`/platform/sellers/${sellerProfile.id}/products/${productRow.id}/stock-force`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         stock: 17,
         reason: 'Admin stock correction override',
       })
-      .expect(200);
-
-    expect(stockOverride.body.stock).toBe(17);
+      .expect(403);
 
     await request(app.getHttpServer())
       .patch(`/users/${roleTargetUser.id}/role`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ role: 'USER' })
+      .send({ role: 'SELLER_STAFF' })
       .expect(403);
 
     const roleOverride = await request(app.getHttpServer())
       .patch(`/users/${roleTargetUser.id}/role/override`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        role: 'USER',
+        role: 'SELLER_STAFF',
         reason: 'Seller team role assignment override',
       })
       .expect(200);
 
-    expect(roleOverride.body.role).toBe('USER');
+    expect(roleOverride.body.role).toBe('SELLER_STAFF');
 
-    const [publishAudit, stockAudit, roleAudit] = await Promise.all([
-      prisma.auditLog.findFirst({
-        where: {
-          businessId: business.id,
-          actorUserId: adminUser.id,
-          actionType: 'publish-force',
-          targetType: 'PRODUCT',
-          targetId: String(productRow.id),
-        },
-      }),
-      prisma.auditLog.findFirst({
-        where: {
-          businessId: business.id,
-          actorUserId: adminUser.id,
-          actionType: 'stock-adjust-force',
-          targetType: 'PRODUCT',
-          targetId: String(productRow.id),
-        },
-      }),
-      prisma.auditLog.findFirst({
-        where: {
-          businessId: business.id,
-          actorUserId: adminUser.id,
-          actionType: 'role-change',
-          targetType: 'USER',
-          targetId: String(roleTargetUser.id),
-        },
-      }),
-    ]);
+    const roleAudit = await prisma.auditLog.findFirst({
+      where: {
+        businessId: business.id,
+        actorUserId: adminUser.id,
+        actionType: 'role-change',
+        targetType: 'USER',
+        targetId: String(roleTargetUser.id),
+      },
+    });
 
-    expect(publishAudit).toBeTruthy();
-    expect(stockAudit).toBeTruthy();
     expect(roleAudit).toBeTruthy();
   });
 
@@ -482,7 +458,7 @@ describe('Role Isolation Smoke (e2e)', () => {
     expect(roleAudit).toBeTruthy();
   });
 
-  it('USER without membership is blocked from seller-scope APIs', async () => {
+  it('SELLER_STAFF without membership is blocked from seller-scope APIs', async () => {
     await request(app.getHttpServer())
       .get('/orders')
       .set('Authorization', `Bearer ${freeUserToken}`)

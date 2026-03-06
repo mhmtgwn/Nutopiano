@@ -22,14 +22,16 @@ import {
 import api from '@/services/api';
 import StatusBadge from '@/components/common/StatusBadge';
 import ConfirmDeleteModal from '@/components/common/ConfirmDeleteModal';
+import { normalizeRole } from '@/lib/role-routing';
 
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'SELLER_STAFF' | 'USER' | 'CUSTOMER';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'SELLER_STAFF' | 'CUSTOMER';
+type ApiUserRole = UserRole | 'USER';
 type UserDetail = {
     id: number;
     name: string;
     phone: string;
     email: string | null;
-    role: UserRole;
+    role: ApiUserRole;
     isActive: boolean;
     createdAt: string;
     lastLoginAt: string | null;
@@ -38,15 +40,18 @@ type UserDetail = {
 
 const roleLabel: Record<string, string> = {
     SUPER_ADMIN: 'Süper Admin', ADMIN: 'Admin', SELLER: 'Satıcı',
-    SELLER_STAFF: 'Satıcı Personeli', USER: 'Personel', CUSTOMER: 'Müşteri',
+    SELLER_STAFF: 'Satıcı Personeli', CUSTOMER: 'Müşteri',
 };
 
 const roleVariant: Record<string, 'error' | 'purple' | 'info' | 'warning' | 'neutral'> = {
     SUPER_ADMIN: 'error', ADMIN: 'purple', SELLER: 'info',
-    SELLER_STAFF: 'warning', USER: 'warning', CUSTOMER: 'neutral',
+    SELLER_STAFF: 'warning', CUSTOMER: 'neutral',
 };
 
-const roles: UserRole[] = ['CUSTOMER', 'USER', 'SELLER_STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+const roles: UserRole[] = ['CUSTOMER', 'SELLER_STAFF', 'SELLER', 'ADMIN', 'SUPER_ADMIN'];
+
+const toSystemRole = (role: string): UserRole =>
+    normalizeRole(role) ?? 'CUSTOMER';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
     const msg = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
@@ -138,8 +143,8 @@ export default function AdminUserDetailPage() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-xl font-semibold text-[var(--primary-800)]">{user.name}</h1>
-                            <StatusBadge variant={roleVariant[user.role] ?? 'neutral'}>
-                                {roleLabel[user.role] ?? user.role}
+                            <StatusBadge variant={roleVariant[toSystemRole(user.role)] ?? 'neutral'}>
+                                {roleLabel[toSystemRole(user.role)] ?? toSystemRole(user.role)}
                             </StatusBadge>
                             <StatusBadge variant={user.deletedAt ? 'error' : user.isActive ? 'success' : 'neutral'}>
                                 {user.deletedAt ? 'Silinmiş' : user.isActive ? 'Aktif' : 'Pasif'}
@@ -264,7 +269,7 @@ export default function AdminUserDetailPage() {
                                 <label className="mb-1 block text-[11px] font-medium text-[var(--neutral-500)]">ROL</label>
                                 <div className="relative">
                                     <select
-                                        value={user.role}
+                                        value={toSystemRole(user.role)}
                                         onChange={(e) => roleMutation.mutate(e.target.value as UserRole)}
                                         disabled={roleMutation.isPending}
                                         className="w-full appearance-none rounded-lg border border-[var(--neutral-200)] bg-white px-3 py-2 pr-8 text-sm outline-none focus:border-[var(--primary-400)] disabled:opacity-50"

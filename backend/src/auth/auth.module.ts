@@ -6,12 +6,14 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailModule } from '../email/email.module';
+import { PermissionGroupModule } from '../modules/permission-groups/permission-group.module';
 
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
     EmailModule,
+    PermissionGroupModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => ({

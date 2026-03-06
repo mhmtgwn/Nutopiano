@@ -6,7 +6,9 @@ export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   SELLER = 'SELLER',
+  SELLER_STAFF = 'SELLER_STAFF',
   CUSTOMER = 'CUSTOMER',
+  // Legacy alias: backend normalizes USER -> SELLER_STAFF
   USER = 'USER',
 }
 
@@ -89,7 +91,8 @@ export const UserRoleDisplay: Record<UserRole, string> = {
   [UserRole.SUPER_ADMIN]: 'Süper Admin',
   [UserRole.ADMIN]: 'Admin',
   [UserRole.SELLER]: 'Satıcı',
+  [UserRole.SELLER_STAFF]: 'Satıcı Personeli',
   [UserRole.CUSTOMER]: 'Müşteri',
-  [UserRole.USER]: 'Personel',
+  [UserRole.USER]: 'Satıcı Personeli',
 };
 

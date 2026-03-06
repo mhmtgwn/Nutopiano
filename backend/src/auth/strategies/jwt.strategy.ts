@@ -3,6 +3,9 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../types/jwt-payload';
+import { PermissionGroupService } from '../../modules/permission-groups/permission-group.service';
+import { normalizeRole, toEffectiveRole, toLegacyCompatRole } from '@common/authz';
+import { ROLES } from '@common/constants/roles';
 
 const COOKIE_ACCESS_TOKEN = 'nutopiano_access';
 
@@ -27,7 +30,10 @@ const cookieExtractor: JwtExtractor = (req: unknown): string | null => {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly permissionGroupService: PermissionGroupService,
+  ) {
     super({
       jwtFromRequest: ej.fromExtractors([
         ej.fromAuthHeaderAsBearerToken(),
@@ -38,7 +44,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
-    return payload;
+  async validate(payload: JwtPayload): Promise<JwtPayload> {
+    const userId = Number(payload.userId);
+    const normalizedRole = normalizeRole(payload.role);
+    const effectiveRole = toEffectiveRole(payload.role);
+    const compatRole = toLegacyCompatRole(payload.role) ?? payload.role;
+    const resolvedPermissions = Number.isFinite(userId) && userId > 0
+      ? await this.permissionGroupService.resolveForUser(userId)
+      : [];
+
+    return {
+      ...payload,
+      role: compatRole === ROLES.SELLER_STAFF ? ROLES.USER : compatRole,
+      normalizedRole,
+      effectiveRole,
+      resolvedPermissions,
+    };
   }
 }
