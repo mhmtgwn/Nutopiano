@@ -30,6 +30,8 @@ model Business {
   settings            Settings[]
   coupons             Coupon[]
   payments            Payment[]
+  paymentTransactions PaymentTransaction[]
+  refunds             Refund[]
   appointments        Appointment[]
   workingHours        WorkingHours[]
   timeSlots           TimeSlot[]
@@ -114,6 +116,8 @@ model User {
   receivedSellerInvites      SellerInvite[]        @relation("SellerInviteTargetUser")
   sentSellerInvites          SellerInvite[]        @relation("SellerInviteInvitedBy")
   createdPayments            Payment[]             @relation("PaymentCreatedBy")
+  createdPaymentTransactions PaymentTransaction[]  @relation("PaymentTransactionCreatedBy")
+  createdRefunds             Refund[]              @relation("RefundCreatedBy")
   createdCustomerLedger      CustomerLedgerEntry[] @relation("CustomerLedgerCreatedBy")
   auditLogsAsActor           AuditLog[]            @relation("AuditLogActor")
 
@@ -297,6 +301,7 @@ model Customer {
   businessId        Int
   createdByUserId   Int
   userId            Int?              @unique
+  storeId           Int?
   name              String
   phone             String
   balance           Int               @default(0)
@@ -321,6 +326,7 @@ model Customer {
   @@unique([businessId, phone])
   @@index([businessId])
   @@index([businessId, deletedAt])
+  @@index([businessId, storeId])
   @@index([userId])
 }
 
@@ -721,6 +727,7 @@ model Product {
   businessId      Int
   createdByUserId Int
   categoryId      Int
+  storeId         Int?
   ownerSellerId   Int?
   name            String
   subtitle        String?
@@ -758,6 +765,7 @@ model Product {
   @@index([businessId, categoryId])
   @@index([businessId, isActive, createdAt])
   @@index([businessId, isActive, name])
+  @@index([businessId, storeId, isActive])
   @@index([businessId, ownerSellerId, isPublished])
   @@index([businessId, ownerSellerId, isActive, createdAt])
 }
@@ -828,6 +836,18 @@ enum OrderSource {
   API
 }
 
+enum OrderLifecycleState {
+  DRAFT
+  PENDING
+  AUTHORIZED
+  PAID
+  FULFILLING
+  FULFILLED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
 enum ReturnRequestStatus {
   PENDING
   APPROVED
@@ -844,8 +864,10 @@ model Order {
   businessId             Int
   customerId             Int
   createdByUserId        Int
+  storeId                Int?
   sellerId               Int?
   statusId               Int
+  lifecycleState         OrderLifecycleState @default(PENDING)
   subtotalAmountCents    Int         @default(0)
   taxAmountCents         Int         @default(0)
   taxRateBps             Int         @default(0)
@@ -886,6 +908,8 @@ model Order {
   status        OrderStatus           @relation(fields: [statusId], references: [id])
   items         OrderItem[]
   payments      Payment[]
+  paymentTransactions PaymentTransaction[]
+  refunds       Refund[]
   ledgerEntries CustomerLedgerEntry[]
   financeLedgerEntries FinanceLedgerEntry[]
   commission    Commission?           @relation("OrderCommission")
@@ -897,6 +921,8 @@ model Order {
   @@index([businessId])
   @@index([businessId, customerId])
   @@index([businessId, deletedAt])
+  @@index([businessId, storeId, createdAt])
+  @@index([businessId, lifecycleState, createdAt])
   @@index([businessId, statusId, createdAt])
   @@index([businessId, createdAt])
   @@index([businessId, sellerId, createdAt])
@@ -1033,6 +1059,7 @@ model Payment {
   id              Int           @id @default(autoincrement())
   businessId      Int
   orderId         Int
+  storeId         Int?
   sellerId        Int?
   createdByUserId Int?
   amountCents     Int
@@ -1044,10 +1071,95 @@ model Payment {
   order     Order    @relation(fields: [orderId], references: [id])
   seller    Seller?  @relation("SellerPayments", fields: [sellerId], references: [id])
   createdBy User?    @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id])
+  transactions PaymentTransaction[]
+  refunds      Refund[]
 
   @@index([businessId, orderId])
   @@index([businessId, createdAt])
+  @@index([businessId, storeId, createdAt])
   @@index([businessId, sellerId, createdAt])
+}
+
+enum PaymentTransactionKind {
+  SALE
+  CAPTURE
+  REFUND
+  CANCEL
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model PaymentTransaction {
+  id              Int                      @id @default(autoincrement())
+  businessId      Int
+  orderId         Int
+  paymentId       Int?
+  storeId         Int?
+  createdByUserId Int?
+  provider        PaymentProvider?
+  kind            PaymentTransactionKind
+  status          PaymentTransactionStatus @default(PENDING)
+  amountCents     Int
+  method          PaymentMethod?
+  externalReference String?
+  idempotencyKey  String?
+  metadataJson    Json?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+  createdBy User?    @relation("PaymentTransactionCreatedBy", fields: [createdByUserId], references: [id])
+  refunds   Refund[]
+
+  @@index([businessId, orderId, createdAt])
+  @@index([businessId, paymentId, createdAt])
+  @@index([businessId, storeId, createdAt])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, kind, createdAt])
+}
+
+model Refund {
+  id                   Int          @id @default(autoincrement())
+  businessId           Int
+  orderId              Int
+  paymentId            Int?
+  paymentTransactionId Int?
+  storeId              Int?
+  createdByUserId      Int?
+  amountCents          Int
+  method               PaymentMethod?
+  status               RefundStatus @default(PENDING)
+  reason               String?
+  externalReference    String?
+  metadataJson         Json?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  business           Business            @relation(fields: [businessId], references: [id])
+  order              Order               @relation(fields: [orderId], references: [id])
+  payment            Payment?            @relation(fields: [paymentId], references: [id])
+  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+  createdBy          User?               @relation("RefundCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([businessId, orderId, createdAt])
+  @@index([businessId, paymentId, createdAt])
+  @@index([businessId, paymentTransactionId, createdAt])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, storeId, createdAt])
 }
 
 model PaymentWebhookEvent {

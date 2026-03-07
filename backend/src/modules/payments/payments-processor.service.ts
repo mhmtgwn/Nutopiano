@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { PaymentMethod, PaymentProvider } from '@prisma/client';
+import { PaymentsService } from './payments.service';
 
 type WebhookEventRecord = {
   id: number;
@@ -12,7 +14,10 @@ type WebhookEventRecord = {
 
 @Injectable()
 export class PaymentsProcessorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   private readonly logger = new Logger(PaymentsProcessorService.name);
 
@@ -193,6 +198,7 @@ export class PaymentsProcessorService {
                 select: {
                   id: true,
                   sellerId: true,
+                  storeId: true,
                 },
               });
 
@@ -209,17 +215,17 @@ export class PaymentsProcessorService {
               });
 
               if (!existing) {
-                await this.prisma.payment.create({
-                  data: {
-                    businessId: Number(session.businessId),
-                    orderId: order.id,
-                    sellerId: order.sellerId ?? null,
-                    createdByUserId: null,
-                    amountCents,
-                    method: 'CARD',
-                    reference: paymentId,
-                  } as any,
-                  select: { id: true },
+                await this.paymentsService.recordPayment({
+                  businessId: Number(session.businessId),
+                  orderId: order.id,
+                  storeId: order.storeId ?? null,
+                  sellerId: order.sellerId ?? null,
+                  createdByUserId: null,
+                  amountCents,
+                  method: PaymentMethod.CARD,
+                  reference: paymentId,
+                  provider: PaymentProvider.IYZICO,
+                  idempotencyKey: `payment-webhook:${paymentId}`,
                 });
               }
 

@@ -9,6 +9,7 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { PaymentsService } from './payments.service';
+import { PaymentsProcessorService } from './payments-processor.service';
 import { ReceiveWebhookDto } from './dto/receive-webhook.dto';
 import { IyzicoProvider } from './providers/iyzico.provider';
 
@@ -21,6 +22,7 @@ type RequestWithRawBody = {
 export class PaymentsWebhooksController {
   constructor(
     private readonly paymentsService: PaymentsService,
+    private readonly paymentsProcessor: PaymentsProcessorService,
     private readonly iyzico: IyzicoProvider,
   ) {}
 
@@ -75,6 +77,12 @@ export class PaymentsWebhooksController {
       signature,
       businessId: body.businessId,
     });
+
+    if (recorded.created && recorded.eventDbId) {
+      void this.paymentsProcessor.processEventById({
+        eventDbId: recorded.eventDbId,
+      });
+    }
 
     return recorded;
   }

@@ -7,7 +7,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PaymentMethod, Prisma } from '@prisma/client';
+import { OrderLifecycleState, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtPayload } from '../../auth/types/jwt-payload';
 import { OpenRegisterSessionDto } from './dto/open-register-session.dto';
@@ -18,6 +18,7 @@ import { ApplySplitPaymentsDto } from './dto/apply-split-payments.dto';
 import { CreatePosCustomerDto } from './dto/create-pos-customer.dto';
 import { AuditService } from '../audit/audit.service';
 import { AUDIT_ACTION_TYPES } from '../audit/audit.constants';
+import { InventoryPort, OrderLifecyclePolicy, PaymentsPort } from '../../core/commerce';
 import {
   hasPosPermission,
   normalizePosPermissionsJson,
@@ -34,6 +35,9 @@ export class PosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly inventoryPort: InventoryPort,
+    private readonly paymentsPort: PaymentsPort,
+    private readonly orderLifecyclePolicy: OrderLifecyclePolicy,
   ) {}
 
   private buildExportRateLimitKey(currentUser: JwtPayload) {
@@ -69,31 +73,6 @@ export class PosService {
         }
       }
     }
-  }
-
-  private aggregateStockLines(
-    lines: Array<{
-      productId: number;
-      variantId?: number | null;
-      quantity: number;
-    }>,
-  ) {
-    const byProduct = new Map<number, number>();
-    const byVariant = new Map<number, number>();
-
-    for (const line of lines) {
-      const qty = Number(line.quantity) || 0;
-      if (qty <= 0) continue;
-      if (line.variantId) {
-        const prev = byVariant.get(line.variantId) ?? 0;
-        byVariant.set(line.variantId, prev + qty);
-      } else {
-        const prev = byProduct.get(line.productId) ?? 0;
-        byProduct.set(line.productId, prev + qty);
-      }
-    }
-
-    return { byProduct, byVariant };
   }
 
   private assertAllowedRole(currentUser: JwtPayload) {
@@ -229,6 +208,21 @@ export class PosService {
     }
 
     throw new ForbiddenException('Access denied');
+  }
+
+  private async getNetPaidAmountCents(
+    client: Prisma.TransactionClient | PrismaService,
+    businessId: number,
+    orderId: number,
+  ) {
+    const aggregate = await client.payment.aggregate({
+      where: {
+        businessId,
+        orderId,
+      },
+      _sum: { amountCents: true },
+    });
+    return Number(aggregate._sum.amountCents ?? 0);
   }
 
   private async assertOrderScopeAccess(
@@ -1474,6 +1468,7 @@ export class PosService {
         deletedAt: null,
       },
       include: {
+        // lifecycleState/storeId are used to normalize refund state and payment records.
         status: {
           select: { key: true },
         },
@@ -1554,46 +1549,36 @@ export class PosService {
         where: { businessId, orderId: order.id },
         select: { productId: true, variantId: true, quantity: true },
       });
+      await this.inventoryPort.incrementStock(tx, items, 'refund');
 
-      const aggregated = this.aggregateStockLines(items);
-      for (const [variantId, quantity] of aggregated.byVariant.entries()) {
-        await tx.productVariant.updateMany({
-          where: { id: variantId, stock: { not: null } },
-          data: { stock: { increment: quantity } },
-        });
-      }
-      for (const [productId, quantity] of aggregated.byProduct.entries()) {
-        await tx.product.updateMany({
-          where: { id: productId, stock: { not: null } },
-          data: { stock: { increment: quantity } },
-        });
-      }
+      const nextLifecycleState = this.orderLifecyclePolicy.resolveAfterRefund({
+        currentState: order.lifecycleState ?? OrderLifecycleState.PAID,
+        totalAmountCents: order.totalAmountCents,
+        refundedAmountCents: refundAmountCents + alreadyRefunded,
+        approved: true,
+      });
 
       await tx.order.update({
         where: { id: order.id },
         data: {
           statusId: targetStatusId,
+          lifecycleState: nextLifecycleState,
           returnCostCents: { increment: refundAmountCents },
         },
       });
 
-      const refundPayment = await tx.payment.create({
-        data: {
-          businessId,
-          orderId: order.id,
-          sellerId: order.sellerId ?? null,
-          createdByUserId: userId,
-          amountCents: -refundAmountCents,
-          method: refundMethod,
-          reference: `POS_RETURN:${order.id}`,
-        },
-        select: {
-          id: true,
-          amountCents: true,
-          method: true,
-          reference: true,
-          createdAt: true,
-        },
+      const refundRecord = await this.paymentsPort.recordRefund({
+        businessId,
+        orderId: order.id,
+        storeId: order.storeId ?? null,
+        sellerId: order.sellerId ?? null,
+        createdByUserId: userId,
+        amountCents: refundAmountCents,
+        method: refundMethod,
+        reason,
+        reference: `POS_RETURN:${order.id}`,
+        provider: null,
+        tx,
       });
 
       await this.applyCreditLedgerForPayment({
@@ -1637,7 +1622,7 @@ export class PosService {
         });
       }
 
-      return refundPayment;
+      return refundRecord.payment;
     });
 
     return {
@@ -2302,6 +2287,8 @@ export class PosService {
           id: true,
           createdByUserId: true,
           sellerId: true,
+          storeId: true,
+          lifecycleState: true,
           customerId: true,
           totalAmountCents: true,
         },
@@ -2322,15 +2309,7 @@ export class PosService {
 
       await tx.$queryRaw`SELECT 1 FROM "Order" WHERE "id" = ${order.id} FOR UPDATE`;
 
-      const paymentAggregate = await tx.payment.aggregate({
-        where: {
-          businessId,
-          orderId: order.id,
-        },
-        _sum: { amountCents: true },
-      });
-
-      const paidNet = Number(paymentAggregate._sum.amountCents ?? 0);
+      const paidNet = await this.getNetPaidAmountCents(tx, businessId, order.id);
       const remainingDue = Math.max(order.totalAmountCents - paidNet, 0);
       if (remainingDue <= 0) {
         throw new BadRequestException('Siparisin kalan borcu yok');
@@ -2351,23 +2330,18 @@ export class PosService {
       }> = [];
 
       for (const line of paymentLines) {
-        const payment = await tx.payment.create({
-          data: {
-            businessId,
-            orderId: order.id,
-            sellerId: order.sellerId ?? null,
-            createdByUserId: userId,
-            amountCents: line.amountCents,
-            method: line.method,
-            reference: line.reference,
-          },
-          select: {
-            id: true,
-            amountCents: true,
-            method: true,
-            reference: true,
-            createdAt: true,
-          },
+        const payment = await this.paymentsPort.recordPayment({
+          businessId,
+          orderId: order.id,
+          storeId: order.storeId ?? null,
+          sellerId: order.sellerId ?? null,
+          createdByUserId: userId,
+          amountCents: line.amountCents,
+          method: line.method,
+          reference: line.reference,
+          provider: null,
+          idempotencyKey: `pos-split:${order.id}:${line.method}:${line.amountCents}`,
+          tx,
         });
         await this.applyCreditLedgerForPayment({
           tx,
@@ -2379,7 +2353,19 @@ export class PosService {
           createdByUserId: userId,
           sourceType: 'PAYMENT_CREDIT',
         });
-        createdPayments.push(payment);
+        createdPayments.push(payment.payment);
+      }
+
+      const nextLifecycleState = this.orderLifecyclePolicy.resolveAfterPayment({
+        currentState: order.lifecycleState ?? OrderLifecycleState.PENDING,
+        totalAmountCents: order.totalAmountCents,
+        paidAmountCents: paidNet + splitTotalCents,
+      });
+      if (nextLifecycleState !== order.lifecycleState) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { lifecycleState: nextLifecycleState },
+        });
       }
 
       const newRemainingDue = Math.max(remainingDue - splitTotalCents, 0);
@@ -2412,6 +2398,8 @@ export class PosService {
         id: true,
         customerId: true,
         sellerId: true,
+        storeId: true,
+        lifecycleState: true,
         totalAmountCents: true,
         createdByUserId: true,
       },
@@ -2473,23 +2461,18 @@ export class PosService {
         select: { id: true, balance: true },
       });
 
-      const payment = await tx.payment.create({
-        data: {
-          businessId,
-          orderId: order.id,
-          sellerId: order.sellerId ?? null,
-          createdByUserId: userId,
-          amountCents: applyAmount,
-          method: PaymentMethod.OTHER,
-          reference: 'CUSTOMER_BALANCE',
-        },
-        select: {
-          id: true,
-          amountCents: true,
-          method: true,
-          reference: true,
-          createdAt: true,
-        },
+      const payment = await this.paymentsPort.recordPayment({
+        businessId,
+        orderId: order.id,
+        storeId: order.storeId ?? null,
+        sellerId: order.sellerId ?? null,
+        createdByUserId: userId,
+        amountCents: applyAmount,
+        method: PaymentMethod.OTHER,
+        reference: 'CUSTOMER_BALANCE',
+        provider: null,
+        idempotencyKey: `customer-balance:${order.id}:${applyAmount}`,
+        tx,
       });
 
       await this.applyCreditLedgerForPayment({
@@ -2505,9 +2488,20 @@ export class PosService {
 
       const newPaidNet = paidNet + applyAmount;
       const newRemaining = Math.max(order.totalAmountCents - newPaidNet, 0);
+      const nextLifecycleState = this.orderLifecyclePolicy.resolveAfterPayment({
+        currentState: order.lifecycleState ?? OrderLifecycleState.PENDING,
+        totalAmountCents: order.totalAmountCents,
+        paidAmountCents: newPaidNet,
+      });
+      if (nextLifecycleState !== order.lifecycleState) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { lifecycleState: nextLifecycleState },
+        });
+      }
 
       return {
-        payment,
+        payment: payment.payment,
         customer: updatedCustomer,
         remainingDueCents: newRemaining,
       };

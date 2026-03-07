@@ -748,6 +748,7 @@ export class ProductsService {
         seoTitle: true,
         seoDescription: true,
         isActive: true,
+        updatedAt: true,
       },
     });
 
@@ -756,6 +757,19 @@ export class ProductsService {
       productId: product.id,
       images: normalizedImages.images,
       primaryUrl: normalizedImages.primary,
+    });
+    await this.outboxService.enqueueEvent({
+      businessId,
+      aggregateType: 'PRODUCT',
+      aggregateId: product.id,
+      eventType: OUTBOX_EVENT_TYPES.CATALOG_PRODUCT_UPDATED,
+      idempotencyKey: `catalog-product:${product.id}:create`,
+      payloadJson: {
+        productId: product.id,
+        isPublished: product.isPublished,
+        isActive: product.isActive,
+        actorUserId: Number(currentUser.userId),
+      },
     });
 
     return product;
@@ -1282,6 +1296,7 @@ export class ProductsService {
         seoTitle: true,
         seoDescription: true,
         isActive: true,
+        updatedAt: true,
       },
     });
 
@@ -1414,6 +1429,7 @@ export class ProductsService {
         seoTitle: true,
         seoDescription: true,
         isActive: true,
+        updatedAt: true,
       },
     });
 
@@ -1443,6 +1459,19 @@ export class ProductsService {
         },
       });
     }
+    await this.outboxService.enqueueEvent({
+      businessId: Number(currentUser.businessId),
+      aggregateType: 'PRODUCT',
+      aggregateId: updated.id,
+      eventType: OUTBOX_EVENT_TYPES.CATALOG_PRODUCT_UPDATED,
+      idempotencyKey: `catalog-product:${updated.id}:update:${updated.updatedAt.toISOString()}`,
+      payloadJson: {
+        productId: updated.id,
+        isPublished: updated.isPublished,
+        isActive: updated.isActive,
+        actorUserId: Number(currentUser.userId),
+      },
+    });
 
     if (currentUser.role === 'SUPER_ADMIN') {
       if (updated.isPublished !== existing.isPublished) {
@@ -1520,6 +1549,19 @@ export class ProductsService {
         seoTitle: true,
         seoDescription: true,
         isActive: true,
+      },
+    });
+    await this.outboxService.enqueueEvent({
+      businessId: Number(currentUser.businessId),
+      aggregateType: 'PRODUCT',
+      aggregateId: removed.id,
+      eventType: OUTBOX_EVENT_TYPES.CATALOG_PRODUCT_UPDATED,
+      idempotencyKey: `catalog-product:${removed.id}:remove`,
+      payloadJson: {
+        productId: removed.id,
+        isPublished: removed.isPublished,
+        isActive: removed.isActive,
+        actorUserId: Number(currentUser.userId),
       },
     });
 
