@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { Bot, Sparkles } from 'lucide-react';
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { Bot, Sparkles } from "lucide-react";
 
-import api from '@/services/api';
-import Spinner from '@/components/common/Spinner';
-import { formatPrice } from '@/lib/format';
+import api from "@/services/api";
+import Spinner from "@/components/common/Spinner";
+import { useDraftState } from "@/hooks/useDraftState";
+import { formatPrice } from "@/lib/format";
 
 interface SettingRow {
   id: number;
@@ -32,22 +33,22 @@ const DEFAULT_POLICY: AutoCampaignPolicy = {
 };
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
+  if (!error || typeof error !== "object") return fallback;
+  if (!("response" in error)) return fallback;
   const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
+  if (!response || typeof response !== "object") return fallback;
+  if (!("data" in response)) return fallback;
   const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
+  if (!data || typeof data !== "object") return fallback;
+  if (!("message" in data)) return fallback;
   const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) return message.map(String).join(', ');
-  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) return message.map(String).join(", ");
+  if (typeof message === "string") return message;
   return fallback;
 };
 
 const readBoolean = (value: unknown, fallback = false) =>
-  typeof value === 'boolean' ? value : fallback;
+  typeof value === "boolean" ? value : fallback;
 
 const readNumber = (value: unknown, fallback: number) => {
   const parsed = Number(value);
@@ -58,86 +59,102 @@ export default function SellerAutomaticCampaignsPage() {
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery<SettingRow[]>({
-    queryKey: ['seller-auto-campaign-settings'],
+    queryKey: ["seller-auto-campaign-settings"],
     queryFn: async () => {
-      const res = await api.get<SettingRow[]>('/settings');
+      const res = await api.get<SettingRow[]>("/settings");
       return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const [policy, setPolicy] = useState<AutoCampaignPolicy>(DEFAULT_POLICY);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    if (!hydrated && settingsQuery.data) {
-      const byKey = new Map(settingsQuery.data.map((s) => [s.key, s.value] as const));
-      setPolicy({
-        enabled: readBoolean(byKey.get('campaigns.auto.enabled'), DEFAULT_POLICY.enabled),
-        firstOrderDiscountBps: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.auto.firstOrderDiscountBps'),
-              DEFAULT_POLICY.firstOrderDiscountBps,
-            ),
-          ),
-        ),
-        reactivationDiscountBps: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.auto.reactivationDiscountBps'),
-              DEFAULT_POLICY.reactivationDiscountBps,
-            ),
-          ),
-        ),
-        freeShippingThresholdCents: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.auto.freeShippingThresholdCents'),
-              DEFAULT_POLICY.freeShippingThresholdCents,
-            ),
-          ),
-        ),
-        loyaltySpendThresholdCents: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.auto.loyaltySpendThresholdCents'),
-              DEFAULT_POLICY.loyaltySpendThresholdCents,
-            ),
-          ),
-        ),
-      });
-      setHydrated(true);
+  const initialPolicy = useMemo<AutoCampaignPolicy>(() => {
+    if (!settingsQuery.data) {
+      return DEFAULT_POLICY;
     }
-  }, [hydrated, settingsQuery.data]);
+
+    const byKey = new Map(
+      settingsQuery.data.map(
+        (setting) => [setting.key, setting.value] as const,
+      ),
+    );
+    return {
+      enabled: readBoolean(
+        byKey.get("campaigns.auto.enabled"),
+        DEFAULT_POLICY.enabled,
+      ),
+      firstOrderDiscountBps: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.auto.firstOrderDiscountBps"),
+            DEFAULT_POLICY.firstOrderDiscountBps,
+          ),
+        ),
+      ),
+      reactivationDiscountBps: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.auto.reactivationDiscountBps"),
+            DEFAULT_POLICY.reactivationDiscountBps,
+          ),
+        ),
+      ),
+      freeShippingThresholdCents: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.auto.freeShippingThresholdCents"),
+            DEFAULT_POLICY.freeShippingThresholdCents,
+          ),
+        ),
+      ),
+      loyaltySpendThresholdCents: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.auto.loyaltySpendThresholdCents"),
+            DEFAULT_POLICY.loyaltySpendThresholdCents,
+          ),
+        ),
+      ),
+    };
+  }, [settingsQuery.data]);
+
+  const {
+    value: policy,
+    reset: resetPolicy,
+    setDraft: setPolicy,
+  } = useDraftState<AutoCampaignPolicy>(initialPolicy);
 
   const saveMutation = useMutation({
     mutationFn: async (nextPolicy: AutoCampaignPolicy) => {
       await Promise.all([
-        api.post('/settings/campaigns.auto.enabled', { value: nextPolicy.enabled }),
-        api.post('/settings/campaigns.auto.firstOrderDiscountBps', {
+        api.post("/settings/campaigns.auto.enabled", {
+          value: nextPolicy.enabled,
+        }),
+        api.post("/settings/campaigns.auto.firstOrderDiscountBps", {
           value: nextPolicy.firstOrderDiscountBps,
         }),
-        api.post('/settings/campaigns.auto.reactivationDiscountBps', {
+        api.post("/settings/campaigns.auto.reactivationDiscountBps", {
           value: nextPolicy.reactivationDiscountBps,
         }),
-        api.post('/settings/campaigns.auto.freeShippingThresholdCents', {
+        api.post("/settings/campaigns.auto.freeShippingThresholdCents", {
           value: nextPolicy.freeShippingThresholdCents,
         }),
-        api.post('/settings/campaigns.auto.loyaltySpendThresholdCents', {
+        api.post("/settings/campaigns.auto.loyaltySpendThresholdCents", {
           value: nextPolicy.loyaltySpendThresholdCents,
         }),
       ]);
     },
     onSuccess: async () => {
-      toast.success('Otomatik kampanya kuralları kaydedildi.');
-      await queryClient.invalidateQueries({ queryKey: ['seller-auto-campaign-settings'] });
+      toast.success("Otomatik kampanya kuralları kaydedildi.");
+      await queryClient.invalidateQueries({
+        queryKey: ["seller-auto-campaign-settings"],
+      });
+      resetPolicy();
     },
     onError: (error: unknown) => {
-      toast.error(resolveApiErrorMessage(error, 'Kurallar kaydedilemedi.'));
+      toast.error(resolveApiErrorMessage(error, "Kurallar kaydedilemedi."));
     },
   });
 
@@ -147,9 +164,12 @@ export default function SellerAutomaticCampaignsPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
           Satıcı
         </p>
-        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Otomatik kampanyalar</h1>
+        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+          Otomatik kampanyalar
+        </h1>
         <p className="mt-2 text-sm text-[var(--neutral-600)]">
-          İlk sipariş, yeniden kazanım ve sadakat kampanyası eşiklerini belirleyin.
+          İlk sipariş, yeniden kazanım ve sadakat kampanyası eşiklerini
+          belirleyin.
         </p>
       </div>
 
@@ -174,7 +194,7 @@ export default function SellerAutomaticCampaignsPage() {
                 Otomasyon
               </p>
               <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">
-                {policy.enabled ? 'Açık' : 'Kapalı'}
+                {policy.enabled ? "Açık" : "Kapalı"}
               </p>
             </div>
 
@@ -200,13 +220,20 @@ export default function SellerAutomaticCampaignsPage() {
           </div>
 
           <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-            <h2 className="text-xl font-serif text-[var(--primary-800)]">Kural ayarları</h2>
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">
+              Kural ayarları
+            </h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-3 text-sm text-[var(--primary-800)]">
                 <input
                   type="checkbox"
                   checked={policy.enabled}
-                  onChange={(e) => setPolicy((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  onChange={(e) =>
+                    setPolicy((prev) => ({
+                      ...prev,
+                      enabled: e.target.checked,
+                    }))
+                  }
                 />
                 Otomatik kampanya aktif
               </label>
@@ -223,7 +250,10 @@ export default function SellerAutomaticCampaignsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      firstOrderDiscountBps: Math.max(0, Number(e.target.value) || 0),
+                      firstOrderDiscountBps: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -242,7 +272,10 @@ export default function SellerAutomaticCampaignsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      reactivationDiscountBps: Math.max(0, Number(e.target.value) || 0),
+                      reactivationDiscountBps: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -261,7 +294,10 @@ export default function SellerAutomaticCampaignsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      freeShippingThresholdCents: Math.max(0, Number(e.target.value) || 0),
+                      freeShippingThresholdCents: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -280,7 +316,10 @@ export default function SellerAutomaticCampaignsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      loyaltySpendThresholdCents: Math.max(0, Number(e.target.value) || 0),
+                      loyaltySpendThresholdCents: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -294,7 +333,7 @@ export default function SellerAutomaticCampaignsPage() {
               disabled={saveMutation.isPending}
               className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[var(--primary-800)] px-6 text-[11px] font-semibold uppercase tracking-[0.25em] text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saveMutation.isPending ? 'Kaydediliyor...' : 'Kuralları kaydet'}
+              {saveMutation.isPending ? "Kaydediliyor..." : "Kuralları kaydet"}
             </button>
           </div>
         </>

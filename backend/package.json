@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
-    "prisma:migrate:status": "prisma migrate status --schema prisma/schema.prisma"
+    "prisma:migrate:status": "prisma migrate status --schema prisma/schema.prisma",
+    "auth:report": "tsx scripts/report-auth-login-readiness.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

@@ -1,17 +1,11 @@
-import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
-import AdminShell from '@/components/admin/AdminShell';
-import AdminGuard from '@/components/admin/AdminGuard';
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: 'Platform Panel | Nutopiano',
+  title: "Platform Panel | Nutopiano",
   robots: { index: false, follow: false },
 };
 
-export default function PlatformLayout({ children }: { children: ReactNode }) {
-  return (
-    <AdminGuard>
-      <AdminShell basePath="/platform">{children}</AdminShell>
-    </AdminGuard>
-  );
+export default function PlatformLayout() {
+  redirect("/admin");
 }

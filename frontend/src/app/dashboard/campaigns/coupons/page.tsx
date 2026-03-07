@@ -1,14 +1,15 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { ArrowUpRight, Tag, TicketPercent } from 'lucide-react';
+import Link from "next/link";
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { ArrowUpRight, Tag, TicketPercent } from "lucide-react";
 
-import api from '@/services/api';
-import Spinner from '@/components/common/Spinner';
-import { formatPrice } from '@/lib/format';
+import api from "@/services/api";
+import Spinner from "@/components/common/Spinner";
+import { useDraftState } from "@/hooks/useDraftState";
+import { formatPrice } from "@/lib/format";
 
 interface SettingRow {
   id: number;
@@ -33,22 +34,22 @@ const DEFAULT_POLICY: CouponPolicy = {
 };
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
+  if (!error || typeof error !== "object") return fallback;
+  if (!("response" in error)) return fallback;
   const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
+  if (!response || typeof response !== "object") return fallback;
+  if (!("data" in response)) return fallback;
   const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
+  if (!data || typeof data !== "object") return fallback;
+  if (!("message" in data)) return fallback;
   const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) return message.map(String).join(', ');
-  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) return message.map(String).join(", ");
+  if (typeof message === "string") return message;
   return fallback;
 };
 
 const readBoolean = (value: unknown, fallback = false) =>
-  typeof value === 'boolean' ? value : fallback;
+  typeof value === "boolean" ? value : fallback;
 
 const readNumber = (value: unknown, fallback: number) => {
   const parsed = Number(value);
@@ -59,81 +60,99 @@ export default function SellerCouponsPage() {
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery<SettingRow[]>({
-    queryKey: ['seller-coupons-settings'],
+    queryKey: ["seller-coupons-settings"],
     queryFn: async () => {
-      const res = await api.get<SettingRow[]>('/settings');
+      const res = await api.get<SettingRow[]>("/settings");
       return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const [policy, setPolicy] = useState<CouponPolicy>(DEFAULT_POLICY);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    if (!hydrated && settingsQuery.data) {
-      const byKey = new Map(settingsQuery.data.map((s) => [s.key, s.value] as const));
-      setPolicy({
-        enabled: readBoolean(byKey.get('campaigns.coupons.enabled'), DEFAULT_POLICY.enabled),
-        allowStacking: readBoolean(
-          byKey.get('campaigns.coupons.allowStacking'),
-          DEFAULT_POLICY.allowStacking,
-        ),
-        defaultMaxDiscountCents: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.coupons.defaultMaxDiscountCents'),
-              DEFAULT_POLICY.defaultMaxDiscountCents,
-            ),
-          ),
-        ),
-        defaultMinOrderCents: Math.max(
-          0,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.coupons.defaultMinOrderCents'),
-              DEFAULT_POLICY.defaultMinOrderCents,
-            ),
-          ),
-        ),
-        defaultValidityDays: Math.max(
-          1,
-          Math.floor(
-            readNumber(
-              byKey.get('campaigns.coupons.defaultValidityDays'),
-              DEFAULT_POLICY.defaultValidityDays,
-            ),
-          ),
-        ),
-      });
-      setHydrated(true);
+  const initialPolicy = useMemo<CouponPolicy>(() => {
+    if (!settingsQuery.data) {
+      return DEFAULT_POLICY;
     }
-  }, [hydrated, settingsQuery.data]);
+
+    const byKey = new Map(
+      settingsQuery.data.map(
+        (setting) => [setting.key, setting.value] as const,
+      ),
+    );
+    return {
+      enabled: readBoolean(
+        byKey.get("campaigns.coupons.enabled"),
+        DEFAULT_POLICY.enabled,
+      ),
+      allowStacking: readBoolean(
+        byKey.get("campaigns.coupons.allowStacking"),
+        DEFAULT_POLICY.allowStacking,
+      ),
+      defaultMaxDiscountCents: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.coupons.defaultMaxDiscountCents"),
+            DEFAULT_POLICY.defaultMaxDiscountCents,
+          ),
+        ),
+      ),
+      defaultMinOrderCents: Math.max(
+        0,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.coupons.defaultMinOrderCents"),
+            DEFAULT_POLICY.defaultMinOrderCents,
+          ),
+        ),
+      ),
+      defaultValidityDays: Math.max(
+        1,
+        Math.floor(
+          readNumber(
+            byKey.get("campaigns.coupons.defaultValidityDays"),
+            DEFAULT_POLICY.defaultValidityDays,
+          ),
+        ),
+      ),
+    };
+  }, [settingsQuery.data]);
+
+  const {
+    value: policy,
+    reset: resetPolicy,
+    setDraft: setPolicy,
+  } = useDraftState<CouponPolicy>(initialPolicy);
 
   const saveMutation = useMutation({
     mutationFn: async (nextPolicy: CouponPolicy) => {
       await Promise.all([
-        api.post('/settings/campaigns.coupons.enabled', { value: nextPolicy.enabled }),
-        api.post('/settings/campaigns.coupons.allowStacking', {
+        api.post("/settings/campaigns.coupons.enabled", {
+          value: nextPolicy.enabled,
+        }),
+        api.post("/settings/campaigns.coupons.allowStacking", {
           value: nextPolicy.allowStacking,
         }),
-        api.post('/settings/campaigns.coupons.defaultMaxDiscountCents', {
+        api.post("/settings/campaigns.coupons.defaultMaxDiscountCents", {
           value: nextPolicy.defaultMaxDiscountCents,
         }),
-        api.post('/settings/campaigns.coupons.defaultMinOrderCents', {
+        api.post("/settings/campaigns.coupons.defaultMinOrderCents", {
           value: nextPolicy.defaultMinOrderCents,
         }),
-        api.post('/settings/campaigns.coupons.defaultValidityDays', {
+        api.post("/settings/campaigns.coupons.defaultValidityDays", {
           value: nextPolicy.defaultValidityDays,
         }),
       ]);
     },
     onSuccess: async () => {
-      toast.success('Kupon politikası kaydedildi.');
-      await queryClient.invalidateQueries({ queryKey: ['seller-coupons-settings'] });
+      toast.success("Kupon politikası kaydedildi.");
+      await queryClient.invalidateQueries({
+        queryKey: ["seller-coupons-settings"],
+      });
+      resetPolicy();
     },
     onError: (error: unknown) => {
-      toast.error(resolveApiErrorMessage(error, 'Kupon politikası kaydedilemedi.'));
+      toast.error(
+        resolveApiErrorMessage(error, "Kupon politikası kaydedilemedi."),
+      );
     },
   });
 
@@ -145,9 +164,12 @@ export default function SellerCouponsPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
               Satıcı
             </p>
-            <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Kupon politikası</h1>
+            <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+              Kupon politikası
+            </h1>
             <p className="mt-2 text-sm text-[var(--neutral-600)]">
-              Kupon kullanım kurallarını yönetin. Kupon kodu checkout sırasında uygulanır.
+              Kupon kullanım kurallarını yönetin. Kupon kodu checkout sırasında
+              uygulanır.
             </p>
           </div>
           <Link
@@ -180,7 +202,7 @@ export default function SellerCouponsPage() {
                 Kupon sistemi
               </p>
               <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">
-                {policy.enabled ? 'Açık' : 'Kapalı'}
+                {policy.enabled ? "Açık" : "Kapalı"}
               </p>
             </div>
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-5">
@@ -204,14 +226,21 @@ export default function SellerCouponsPage() {
           </div>
 
           <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-            <h2 className="text-xl font-serif text-[var(--primary-800)]">Kural ayarları</h2>
+            <h2 className="text-xl font-serif text-[var(--primary-800)]">
+              Kural ayarları
+            </h2>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3 py-3 text-sm text-[var(--primary-800)]">
                 <input
                   type="checkbox"
                   checked={policy.enabled}
-                  onChange={(e) => setPolicy((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  onChange={(e) =>
+                    setPolicy((prev) => ({
+                      ...prev,
+                      enabled: e.target.checked,
+                    }))
+                  }
                 />
                 Kupon sistemi aktif
               </label>
@@ -221,7 +250,10 @@ export default function SellerCouponsPage() {
                   type="checkbox"
                   checked={policy.allowStacking}
                   onChange={(e) =>
-                    setPolicy((prev) => ({ ...prev, allowStacking: e.target.checked }))
+                    setPolicy((prev) => ({
+                      ...prev,
+                      allowStacking: e.target.checked,
+                    }))
                   }
                 />
                 Aynı siparişte kupon birikimi
@@ -239,7 +271,10 @@ export default function SellerCouponsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      defaultMinOrderCents: Math.max(0, Number(e.target.value) || 0),
+                      defaultMinOrderCents: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -258,7 +293,10 @@ export default function SellerCouponsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      defaultMaxDiscountCents: Math.max(0, Number(e.target.value) || 0),
+                      defaultMaxDiscountCents: Math.max(
+                        0,
+                        Number(e.target.value) || 0,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -277,7 +315,10 @@ export default function SellerCouponsPage() {
                   onChange={(e) =>
                     setPolicy((prev) => ({
                       ...prev,
-                      defaultValidityDays: Math.max(1, Number(e.target.value) || 1),
+                      defaultValidityDays: Math.max(
+                        1,
+                        Number(e.target.value) || 1,
+                      ),
                     }))
                   }
                   className="mt-2 h-11 w-full rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -291,7 +332,9 @@ export default function SellerCouponsPage() {
               disabled={saveMutation.isPending}
               className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[var(--primary-800)] px-6 text-[11px] font-semibold uppercase tracking-[0.25em] text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saveMutation.isPending ? 'Kaydediliyor...' : 'Kupon politikasını kaydet'}
+              {saveMutation.isPending
+                ? "Kaydediliyor..."
+                : "Kupon politikasını kaydet"}
             </button>
           </div>
         </>

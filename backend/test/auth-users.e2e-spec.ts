@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { loginAndGetToken } from './helpers/auth-helpers';
@@ -28,6 +29,7 @@ describe('Auth & Users (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     await app.init();
 
     prisma = app.get(PrismaService);
@@ -72,6 +74,45 @@ describe('Auth & Users (e2e)', () => {
   });
 
   describe('/auth/profile', () => {
+    it('login sets auth cookies and cookie session can load profile', async () => {
+      const before = await prisma.user.findUnique({
+        where: { id: adminUser.id },
+        select: { lastLoginAt: true },
+      });
+
+      const agent = request.agent(app.getHttpServer());
+      const loginRes = await agent
+        .post('/auth/login')
+        .send({ phone: ADMIN_PHONE, password: 'password123' })
+        .expect(201);
+
+      const setCookie = loginRes.headers['set-cookie'] ?? [];
+      expect(
+        setCookie.some((value) => value.startsWith('nutopiano_access=')),
+      ).toBe(true);
+      expect(
+        setCookie.some((value) => value.startsWith('nutopiano_refresh=')),
+      ).toBe(true);
+
+      const profileRes = await agent.get('/auth/profile').expect(200);
+      expect(profileRes.body).toMatchObject({
+        role: 'ADMIN',
+        phone: ADMIN_PHONE,
+      });
+
+      const after = await prisma.user.findUnique({
+        where: { id: adminUser.id },
+        select: { lastLoginAt: true },
+      });
+
+      expect(after?.lastLoginAt).toBeTruthy();
+      if (before?.lastLoginAt && after?.lastLoginAt) {
+        expect(after.lastLoginAt.getTime()).toBeGreaterThanOrEqual(
+          before.lastLoginAt.getTime(),
+        );
+      }
+    });
+
     it('ADMIN can see own profile', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/profile')
@@ -204,4 +245,3 @@ describe('Auth & Users (e2e)', () => {
     });
   });
 });
-

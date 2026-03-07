@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { CreditCard, FileText, RefreshCcw } from 'lucide-react';
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { CreditCard, FileText, RefreshCcw } from "lucide-react";
 
-import api from '@/services/api';
-import Spinner from '@/components/common/Spinner';
-import { formatPrice } from '@/lib/format';
+import api from "@/services/api";
+import Spinner from "@/components/common/Spinner";
+import { useDraftState } from "@/hooks/useDraftState";
+import { formatPrice } from "@/lib/format";
 
 interface SettingRow {
   id: number;
@@ -28,9 +29,9 @@ interface SellerReportsSummary {
 
 interface SubscriptionCurrent {
   planName: string;
-  interval: 'MONTHLY' | 'YEARLY';
+  interval: "MONTHLY" | "YEARLY";
   priceCents: number;
-  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'TRIAL';
+  status: "ACTIVE" | "PAST_DUE" | "CANCELLED" | "TRIAL";
   renewAt: string;
 }
 
@@ -41,36 +42,36 @@ interface SubscriptionBilling {
 }
 
 const DEFAULT_CURRENT: SubscriptionCurrent = {
-  planName: 'Starter',
-  interval: 'MONTHLY',
+  planName: "Starter",
+  interval: "MONTHLY",
   priceCents: 0,
-  status: 'ACTIVE',
-  renewAt: '',
+  status: "ACTIVE",
+  renewAt: "",
 };
 
 const DEFAULT_BILLING: SubscriptionBilling = {
-  invoiceEmail: '',
-  companyName: '',
-  taxNumber: '',
+  invoiceEmail: "",
+  companyName: "",
+  taxNumber: "",
 };
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
+  if (!error || typeof error !== "object") return fallback;
+  if (!("response" in error)) return fallback;
   const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
+  if (!response || typeof response !== "object") return fallback;
+  if (!("data" in response)) return fallback;
   const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
+  if (!data || typeof data !== "object") return fallback;
+  if (!("message" in data)) return fallback;
   const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) return message.map(String).join(', ');
-  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) return message.map(String).join(", ");
+  if (typeof message === "string") return message;
   return fallback;
 };
 
-const readString = (value: unknown, fallback = '') =>
-  typeof value === 'string' ? value : fallback;
+const readString = (value: unknown, fallback = "") =>
+  typeof value === "string" ? value : fallback;
 
 const readNumber = (value: unknown, fallback: number) => {
   const parsed = Number(value);
@@ -78,25 +79,33 @@ const readNumber = (value: unknown, fallback: number) => {
 };
 
 const readCurrent = (value: unknown): SubscriptionCurrent => {
-  if (!value || typeof value !== 'object') return DEFAULT_CURRENT;
+  if (!value || typeof value !== "object") return DEFAULT_CURRENT;
   const row = value as Record<string, unknown>;
-  const interval = readString(row.interval, 'MONTHLY').toUpperCase() === 'YEARLY' ? 'YEARLY' : 'MONTHLY';
-  const statusRaw = readString(row.status, 'ACTIVE').toUpperCase();
-  const status: SubscriptionCurrent['status'] =
-    statusRaw === 'PAST_DUE' || statusRaw === 'CANCELLED' || statusRaw === 'TRIAL'
-      ? (statusRaw as SubscriptionCurrent['status'])
-      : 'ACTIVE';
+  const interval =
+    readString(row.interval, "MONTHLY").toUpperCase() === "YEARLY"
+      ? "YEARLY"
+      : "MONTHLY";
+  const statusRaw = readString(row.status, "ACTIVE").toUpperCase();
+  const status: SubscriptionCurrent["status"] =
+    statusRaw === "PAST_DUE" ||
+    statusRaw === "CANCELLED" ||
+    statusRaw === "TRIAL"
+      ? (statusRaw as SubscriptionCurrent["status"])
+      : "ACTIVE";
   return {
     planName: readString(row.planName, DEFAULT_CURRENT.planName),
     interval,
-    priceCents: Math.max(0, Math.floor(readNumber(row.priceCents, DEFAULT_CURRENT.priceCents))),
+    priceCents: Math.max(
+      0,
+      Math.floor(readNumber(row.priceCents, DEFAULT_CURRENT.priceCents)),
+    ),
     status,
     renewAt: readString(row.renewAt),
   };
 };
 
 const readBilling = (value: unknown): SubscriptionBilling => {
-  if (!value || typeof value !== 'object') return DEFAULT_BILLING;
+  if (!value || typeof value !== "object") return DEFAULT_BILLING;
   const row = value as Record<string, unknown>;
   return {
     invoiceEmail: readString(row.invoiceEmail),
@@ -109,57 +118,93 @@ export default function SellerSubscriptionPage() {
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery<SettingRow[]>({
-    queryKey: ['seller-subscription-settings'],
+    queryKey: ["seller-subscription-settings"],
     queryFn: async () => {
-      const res = await api.get<SettingRow[]>('/settings');
+      const res = await api.get<SettingRow[]>("/settings");
       return Array.isArray(res.data) ? res.data : [];
     },
   });
 
   const reportsQuery = useQuery<SellerReportsSummary>({
-    queryKey: ['seller-subscription-reports'],
+    queryKey: ["seller-subscription-reports"],
     queryFn: async () => {
-      const res = await api.get<SellerReportsSummary>('/dashboard/reports/summary');
+      const res = await api.get<SellerReportsSummary>(
+        "/dashboard/reports/summary",
+      );
       return res.data;
     },
   });
 
-  const [current, setCurrent] = useState<SubscriptionCurrent>(DEFAULT_CURRENT);
-  const [billing, setBilling] = useState<SubscriptionBilling>(DEFAULT_BILLING);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    if (!hydrated && settingsQuery.data) {
-      const byKey = new Map(settingsQuery.data.map((s) => [s.key, s.value] as const));
-      setCurrent(readCurrent(byKey.get('subscription.current')));
-      setBilling(readBilling(byKey.get('subscription.billing')));
-      setHydrated(true);
+  const initialCurrent = useMemo<SubscriptionCurrent>(() => {
+    if (!settingsQuery.data) {
+      return DEFAULT_CURRENT;
     }
-  }, [hydrated, settingsQuery.data]);
+
+    const byKey = new Map(
+      settingsQuery.data.map(
+        (setting) => [setting.key, setting.value] as const,
+      ),
+    );
+    return readCurrent(byKey.get("subscription.current"));
+  }, [settingsQuery.data]);
+
+  const initialBilling = useMemo<SubscriptionBilling>(() => {
+    if (!settingsQuery.data) {
+      return DEFAULT_BILLING;
+    }
+
+    const byKey = new Map(
+      settingsQuery.data.map(
+        (setting) => [setting.key, setting.value] as const,
+      ),
+    );
+    return readBilling(byKey.get("subscription.billing"));
+  }, [settingsQuery.data]);
+
+  const {
+    value: current,
+    reset: resetCurrent,
+    setDraft: setCurrent,
+  } = useDraftState<SubscriptionCurrent>(initialCurrent);
+  const {
+    value: billing,
+    reset: resetBilling,
+    setDraft: setBilling,
+  } = useDraftState<SubscriptionBilling>(initialBilling);
 
   const saveCurrentMutation = useMutation({
     mutationFn: async (nextCurrent: SubscriptionCurrent) => {
-      await api.post('/settings/subscription.current', { value: nextCurrent });
+      await api.post("/settings/subscription.current", { value: nextCurrent });
     },
     onSuccess: async () => {
-      toast.success('Abonelik bilgisi kaydedildi.');
-      await queryClient.invalidateQueries({ queryKey: ['seller-subscription-settings'] });
+      toast.success("Abonelik bilgisi kaydedildi.");
+      await queryClient.invalidateQueries({
+        queryKey: ["seller-subscription-settings"],
+      });
+      resetCurrent();
     },
     onError: (error: unknown) => {
-      toast.error(resolveApiErrorMessage(error, 'Abonelik bilgisi kaydedilemedi.'));
+      toast.error(
+        resolveApiErrorMessage(error, "Abonelik bilgisi kaydedilemedi."),
+      );
     },
   });
 
   const saveBillingMutation = useMutation({
     mutationFn: async (nextBilling: SubscriptionBilling) => {
-      await api.post('/settings/subscription.billing', { value: nextBilling });
+      await api.post("/settings/subscription.billing", { value: nextBilling });
     },
     onSuccess: async () => {
-      toast.success('Fatura bilgisi kaydedildi.');
-      await queryClient.invalidateQueries({ queryKey: ['seller-subscription-settings'] });
+      toast.success("Fatura bilgisi kaydedildi.");
+      await queryClient.invalidateQueries({
+        queryKey: ["seller-subscription-settings"],
+      });
+      resetBilling();
     },
     onError: (error: unknown) => {
-      toast.error(resolveApiErrorMessage(error, 'Fatura bilgisi kaydedilemedi.'));
+      toast.error(
+        resolveApiErrorMessage(error, "Fatura bilgisi kaydedilemedi."),
+      );
     },
   });
 
@@ -177,7 +222,9 @@ export default function SellerSubscriptionPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
           Satıcı
         </p>
-        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">Abonelik</h1>
+        <h1 className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
+          Abonelik
+        </h1>
         <p className="mt-2 text-sm text-[var(--neutral-600)]">
           Plan özetinizi ve fatura bilgilerinizi yönetin.
         </p>
@@ -203,7 +250,9 @@ export default function SellerSubscriptionPage() {
               <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--neutral-500)]">
                 Plan
               </p>
-              <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">{current.planName}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">
+                {current.planName}
+              </p>
             </div>
 
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-5">
@@ -212,7 +261,9 @@ export default function SellerSubscriptionPage() {
                 Yenileme
               </p>
               <p className="mt-2 text-sm font-semibold text-[var(--primary-800)]">
-                {current.renewAt ? new Date(current.renewAt).toLocaleDateString('tr-TR') : '-'}
+                {current.renewAt
+                  ? new Date(current.renewAt).toLocaleDateString("tr-TR")
+                  : "-"}
               </p>
             </div>
 
@@ -229,11 +280,18 @@ export default function SellerSubscriptionPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <h2 className="text-xl font-serif text-[var(--primary-800)]">Plan bilgisi</h2>
+              <h2 className="text-xl font-serif text-[var(--primary-800)]">
+                Plan bilgisi
+              </h2>
               <div className="mt-4 grid gap-3">
                 <input
                   value={current.planName}
-                  onChange={(e) => setCurrent((prev) => ({ ...prev, planName: e.target.value }))}
+                  onChange={(e) =>
+                    setCurrent((prev) => ({
+                      ...prev,
+                      planName: e.target.value,
+                    }))
+                  }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
                   placeholder="Plan adı"
                 />
@@ -242,7 +300,8 @@ export default function SellerSubscriptionPage() {
                   onChange={(e) =>
                     setCurrent((prev) => ({
                       ...prev,
-                      interval: e.target.value === 'YEARLY' ? 'YEARLY' : 'MONTHLY',
+                      interval:
+                        e.target.value === "YEARLY" ? "YEARLY" : "MONTHLY",
                     }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -269,7 +328,7 @@ export default function SellerSubscriptionPage() {
                   onChange={(e) =>
                     setCurrent((prev) => ({
                       ...prev,
-                      status: e.target.value as SubscriptionCurrent['status'],
+                      status: e.target.value as SubscriptionCurrent["status"],
                     }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -281,11 +340,13 @@ export default function SellerSubscriptionPage() {
                 </select>
                 <input
                   type="date"
-                  value={current.renewAt ? current.renewAt.slice(0, 10) : ''}
+                  value={current.renewAt ? current.renewAt.slice(0, 10) : ""}
                   onChange={(e) =>
                     setCurrent((prev) => ({
                       ...prev,
-                      renewAt: e.target.value ? `${e.target.value}T00:00:00.000Z` : '',
+                      renewAt: e.target.value
+                        ? `${e.target.value}T00:00:00.000Z`
+                        : "",
                     }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
@@ -297,18 +358,25 @@ export default function SellerSubscriptionPage() {
                 disabled={saveCurrentMutation.isPending}
                 className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[var(--primary-800)] px-6 text-[11px] font-semibold uppercase tracking-[0.25em] text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saveCurrentMutation.isPending ? 'Kaydediliyor...' : 'Planı kaydet'}
+                {saveCurrentMutation.isPending
+                  ? "Kaydediliyor..."
+                  : "Planı kaydet"}
               </button>
             </div>
 
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-6 py-6">
-              <h2 className="text-xl font-serif text-[var(--primary-800)]">Fatura bilgisi</h2>
+              <h2 className="text-xl font-serif text-[var(--primary-800)]">
+                Fatura bilgisi
+              </h2>
               <div className="mt-4 grid gap-3">
                 <input
                   type="email"
                   value={billing.invoiceEmail}
                   onChange={(e) =>
-                    setBilling((prev) => ({ ...prev, invoiceEmail: e.target.value }))
+                    setBilling((prev) => ({
+                      ...prev,
+                      invoiceEmail: e.target.value,
+                    }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
                   placeholder="fatura e-posta"
@@ -316,7 +384,10 @@ export default function SellerSubscriptionPage() {
                 <input
                   value={billing.companyName}
                   onChange={(e) =>
-                    setBilling((prev) => ({ ...prev, companyName: e.target.value }))
+                    setBilling((prev) => ({
+                      ...prev,
+                      companyName: e.target.value,
+                    }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
                   placeholder="Şirket adı"
@@ -324,7 +395,10 @@ export default function SellerSubscriptionPage() {
                 <input
                   value={billing.taxNumber}
                   onChange={(e) =>
-                    setBilling((prev) => ({ ...prev, taxNumber: e.target.value }))
+                    setBilling((prev) => ({
+                      ...prev,
+                      taxNumber: e.target.value,
+                    }))
                   }
                   className="h-11 rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white px-3 text-sm text-[var(--primary-800)]"
                   placeholder="Vergi no / TCKN"
@@ -336,7 +410,9 @@ export default function SellerSubscriptionPage() {
                 disabled={saveBillingMutation.isPending}
                 className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[var(--primary-800)] px-6 text-[11px] font-semibold uppercase tracking-[0.25em] text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saveBillingMutation.isPending ? 'Kaydediliyor...' : 'Fatura bilgisini kaydet'}
+                {saveBillingMutation.isPending
+                  ? "Kaydediliyor..."
+                  : "Fatura bilgisini kaydet"}
               </button>
             </div>
           </div>

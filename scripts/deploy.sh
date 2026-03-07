@@ -29,6 +29,8 @@ ECOSYSTEM_FILE="${ECOSYSTEM_FILE:-$DEFAULT_ECOSYSTEM_FILE}"
 FRONTEND_BUILD_WORKER="${FRONTEND_BUILD_WORKER:-1}"
 FRONTEND_BUILD_NODE_OPTIONS="${FRONTEND_BUILD_NODE_OPTIONS:---max-old-space-size=4096}"
 FRONTEND_BUILD_MODE="${FRONTEND_BUILD_MODE:-webpack}"
+AUTH_SMOKE_BASE_URL="${AUTH_SMOKE_BASE_URL:-$FRONTEND_API_URL}"
+AUTH_SMOKE_REQUIRED="${AUTH_SMOKE_REQUIRED:-true}"
 FRONTEND_STATIC_BACKUP_DIR=""
 
 log() {
@@ -97,6 +99,91 @@ restart_pm2() {
   return 1
 }
 
+run_auth_smoke() {
+  local required_flag="${AUTH_SMOKE_REQUIRED,,}"
+  local base_url="${AUTH_SMOKE_BASE_URL%/}"
+
+  if [[ -z "${AUTH_SMOKE_PHONE:-}" || -z "${AUTH_SMOKE_PASSWORD:-}" ]]; then
+    if [[ "$required_flag" == "true" ]]; then
+      echo "Missing AUTH_SMOKE_PHONE or AUTH_SMOKE_PASSWORD"
+      return 1
+    fi
+
+    log "Auth smoke skipped (credentials not configured)"
+    return 0
+  fi
+
+  local cookie_jar login_headers login_body profile_body
+  local request_id login_status profile_status
+
+  cookie_jar="$(mktemp /tmp/nutopiano-auth-smoke-cookie.XXXXXX)"
+  login_headers="$(mktemp /tmp/nutopiano-auth-smoke-login-headers.XXXXXX)"
+  login_body="$(mktemp /tmp/nutopiano-auth-smoke-login-body.XXXXXX)"
+  profile_body="$(mktemp /tmp/nutopiano-auth-smoke-profile-body.XXXXXX)"
+  request_id="deploy-smoke-$(date +%s)"
+
+  login_status="$(
+    curl -sS \
+      -o "$login_body" \
+      -D "$login_headers" \
+      -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -H "X-Request-Id: $request_id" \
+      -c "$cookie_jar" \
+      -b "$cookie_jar" \
+      --data "{\"phone\":\"${AUTH_SMOKE_PHONE}\",\"password\":\"${AUTH_SMOKE_PASSWORD}\"}" \
+      "$base_url/auth/login"
+  )"
+
+  if [[ "$login_status" != "200" && "$login_status" != "201" ]]; then
+    echo "Auth smoke login failed with status $login_status"
+    cat "$login_body"
+    rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+    return 1
+  fi
+
+  if ! grep -qi '^set-cookie: nutopiano_access=' "$login_headers"; then
+    echo "Auth smoke login did not set nutopiano_access cookie"
+    cat "$login_headers"
+    rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+    return 1
+  fi
+
+  if ! grep -qi '^set-cookie: nutopiano_refresh=' "$login_headers"; then
+    echo "Auth smoke login did not set nutopiano_refresh cookie"
+    cat "$login_headers"
+    rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+    return 1
+  fi
+
+  profile_status="$(
+    curl -sS \
+      -o "$profile_body" \
+      -w "%{http_code}" \
+      -H "Accept: application/json" \
+      -H "X-Request-Id: $request_id-profile" \
+      -c "$cookie_jar" \
+      -b "$cookie_jar" \
+      "$base_url/auth/profile"
+  )"
+
+  if [[ "$profile_status" != "200" ]]; then
+    echo "Auth smoke profile failed with status $profile_status"
+    cat "$profile_body"
+    rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+    return 1
+  fi
+
+  if ! grep -q '"userId"' "$profile_body"; then
+    echo "Auth smoke profile response did not include userId"
+    cat "$profile_body"
+    rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+    return 1
+  fi
+
+  rm -f "$cookie_jar" "$login_headers" "$login_body" "$profile_body"
+}
+
 ensure_pm2_apps() {
   local ecosystem="$APP_DIR/$ECOSYSTEM_FILE"
   if [[ ! -f "$ecosystem" ]]; then
@@ -134,6 +221,8 @@ if [[ -f prisma/schema.prisma ]]; then
   log "Prisma: resolve failed migrations (if any)"
   npx prisma migrate resolve --rolled-back 20260221202318_product_image --schema prisma/schema.prisma
   npx prisma migrate deploy
+  log "Prisma: verify migration status"
+  npm run prisma:migrate:status
 fi
 
 npm run build
@@ -167,6 +256,9 @@ if restart_pm2 "$FRONTEND_PM2_NAME"; then restarted=true; fi
 if [[ "$restarted" == "false" ]]; then
   pm2 restart all
 fi
+
+log "Post-deploy auth smoke"
+run_auth_smoke
 
 log "Done"
 pm2 status

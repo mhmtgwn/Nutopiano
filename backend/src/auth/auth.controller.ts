@@ -19,7 +19,6 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
-import type { CookieOptions } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -31,20 +30,11 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-
-const ACCESS_COOKIE = 'nutopiano_access';
-const REFRESH_COOKIE = 'nutopiano_refresh';
-
-const buildCookieOptions = (): CookieOptions => {
-  const isProd = process.env.NODE_ENV === 'production';
-  return {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
-    path: '/',
-    domain: isProd ? '.nutopiano.com' : undefined,
-  };
-};
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  buildAuthCookieOptions,
+} from './auth-cookie.util';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -78,7 +68,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.login(body);
-    const opts = buildCookieOptions();
+    const opts = buildAuthCookieOptions();
     res.cookie(ACCESS_COOKIE, result.accessToken, {
       ...opts,
       maxAge: 1000 * 60 * 15,
@@ -94,7 +84,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout', description: 'Clears auth cookies.' })
   @ApiOkResponse({ description: 'OK' })
   async logout(@Req() req: unknown, @Res({ passthrough: true }) res: Response) {
-    const opts = buildCookieOptions();
+    const opts = buildAuthCookieOptions();
 
     const refreshToken = this.getCookie(req, REFRESH_COOKIE);
     if (typeof refreshToken === 'string' && refreshToken.trim().length > 0) {
@@ -126,7 +116,7 @@ export class AuthController {
     }
 
     const result = await this.authService.refresh(refreshToken);
-    const opts = buildCookieOptions();
+    const opts = buildAuthCookieOptions();
     res.cookie(ACCESS_COOKIE, result.accessToken, {
       ...opts,
       maxAge: 1000 * 60 * 15,
@@ -153,7 +143,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.register(body);
-    const opts = buildCookieOptions();
+    const opts = buildAuthCookieOptions();
     res.cookie(ACCESS_COOKIE, result.accessToken, {
       ...opts,
       maxAge: 1000 * 60 * 15,

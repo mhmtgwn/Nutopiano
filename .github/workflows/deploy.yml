@@ -47,7 +47,7 @@ jobs:
       - name: Deploy to staging
         run: |
           ssh "${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}" \
-            "bash -lc 'APP_DIR=${{ secrets.STAGING_APP_DIR }} BRANCH=main DEPLOY_ENV=staging ECOSYSTEM_FILE=ecosystem.staging.config.cjs FRONTEND_API_URL=${{ secrets.STAGING_FRONTEND_API_URL }} bash ${{ secrets.STAGING_DEPLOY_SCRIPT_PATH }}'"
+            "bash -lc 'APP_DIR=${{ secrets.STAGING_APP_DIR }} BRANCH=main DEPLOY_ENV=staging ECOSYSTEM_FILE=ecosystem.staging.config.cjs FRONTEND_API_URL=${{ secrets.STAGING_FRONTEND_API_URL }} AUTH_SMOKE_REQUIRED=true AUTH_SMOKE_BASE_URL=${{ secrets.STAGING_AUTH_SMOKE_BASE_URL }} AUTH_SMOKE_PHONE=${{ secrets.STAGING_AUTH_SMOKE_PHONE }} AUTH_SMOKE_PASSWORD=${{ secrets.STAGING_AUTH_SMOKE_PASSWORD }} bash ${{ secrets.STAGING_DEPLOY_SCRIPT_PATH }}'"
 
   deploy-production:
     name: Deploy Production
@@ -76,4 +76,4 @@ jobs:
       - name: Deploy to production
         run: |
           ssh "${{ secrets.PRODUCTION_SSH_USER }}@${{ secrets.PRODUCTION_SSH_HOST }}" \
-            "bash -lc 'APP_DIR=${{ secrets.PRODUCTION_APP_DIR }} BRANCH=main DEPLOY_ENV=production ECOSYSTEM_FILE=ecosystem.config.cjs FRONTEND_API_URL=${{ secrets.PRODUCTION_FRONTEND_API_URL }} bash ${{ secrets.PRODUCTION_DEPLOY_SCRIPT_PATH }}'"
+            "bash -lc 'APP_DIR=${{ secrets.PRODUCTION_APP_DIR }} BRANCH=main DEPLOY_ENV=production ECOSYSTEM_FILE=ecosystem.config.cjs FRONTEND_API_URL=${{ secrets.PRODUCTION_FRONTEND_API_URL }} AUTH_SMOKE_REQUIRED=true AUTH_SMOKE_BASE_URL=${{ secrets.PRODUCTION_AUTH_SMOKE_BASE_URL }} AUTH_SMOKE_PHONE=${{ secrets.PRODUCTION_AUTH_SMOKE_PHONE }} AUTH_SMOKE_PASSWORD=${{ secrets.PRODUCTION_AUTH_SMOKE_PASSWORD }} bash ${{ secrets.PRODUCTION_DEPLOY_SCRIPT_PATH }}'"

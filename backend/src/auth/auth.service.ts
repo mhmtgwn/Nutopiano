@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -11,6 +16,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { JsonLoggerService } from '../common/logger/json-logger.service';
 import { EmailService } from '../email/email.service';
 import {
   isAdminRole,
@@ -41,12 +47,35 @@ const BCRYPT_SALT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new JsonLoggerService(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly permissionGroupService: PermissionGroupService,
-  ) { }
+  ) {}
+
+  private logAuthStage(
+    stage: string,
+    data: Record<string, unknown>,
+    level: 'log' | 'warn' | 'error' = 'log',
+    trace?: string,
+  ) {
+    const payload = { stage, ...data };
+
+    if (level === 'error') {
+      this.logger.error(payload, trace, AuthService.name);
+      return;
+    }
+
+    if (level === 'warn') {
+      this.logger.warn(payload, AuthService.name);
+      return;
+    }
+
+    this.logger.log(payload, AuthService.name);
+  }
 
   private hashToken(token: string) {
     return crypto.createHash('sha256').update(token).digest('hex');
@@ -68,44 +97,85 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '15m' });
   }
 
-  private async createAndStoreRefreshToken(user: { id: number; businessId: number }) {
-    const jti = crypto.randomUUID();
-    const refreshPayload: RefreshJwtPayload = {
-      userId: user.id.toString(),
-      type: 'refresh',
-      jti,
-    };
-
-    const refreshToken = this.jwtService.sign(refreshPayload, { expiresIn: '7d' });
-    const tokenHash = this.hashToken(refreshToken);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
-
-    const record = await (this.prisma as any).refreshToken.create({
-      data: {
-        businessId: user.businessId,
-        userId: user.id,
+  private async createAndStoreRefreshToken(
+    user: { id: number; businessId: number },
+    context: string,
+  ) {
+    try {
+      const jti = crypto.randomUUID();
+      const refreshPayload: RefreshJwtPayload = {
+        userId: user.id.toString(),
+        type: 'refresh',
         jti,
-        tokenHash,
-        expiresAt,
-      },
-      select: { id: true },
-    });
+      };
 
-    return { refreshToken, refreshTokenId: record.id as number };
+      const refreshToken = this.jwtService.sign(refreshPayload, {
+        expiresIn: '7d',
+      });
+      const tokenHash = this.hashToken(refreshToken);
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+
+      const record = await (this.prisma as any).refreshToken.create({
+        data: {
+          businessId: user.businessId,
+          userId: user.id,
+          jti,
+          tokenHash,
+          expiresAt,
+        },
+        select: { id: true },
+      });
+
+      return { refreshToken, refreshTokenId: record.id as number };
+    } catch (error) {
+      this.logAuthStage(
+        `${context}.refresh_token_create`,
+        {
+          userId: user.id,
+          businessId: user.businessId,
+        },
+        'error',
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
   }
 
-  private async createAuthTokensForUser(user: {
-    id: number;
-    phone: string | null;
-    role: JwtPayload['role'];
-    businessId: number;
-  }) {
+  private async createAuthTokensForUser(
+    user: {
+      id: number;
+      phone: string | null;
+      role: JwtPayload['role'];
+      businessId: number;
+    },
+    refreshTokenContext: string,
+  ) {
     const accessToken = this.createAccessToken(user);
-    const refresh = await this.createAndStoreRefreshToken({
-      id: user.id,
-      businessId: user.businessId,
-    });
+    const refresh = await this.createAndStoreRefreshToken(
+      {
+        id: user.id,
+        businessId: user.businessId,
+      },
+      refreshTokenContext,
+    );
     return { accessToken, refreshToken: refresh.refreshToken };
+  }
+
+  private async markSuccessfulLogin(userId: number) {
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastLoginAt: new Date() },
+        select: { id: true },
+      });
+    } catch (error) {
+      this.logAuthStage(
+        'login.last_login_update',
+        { userId },
+        'error',
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   private createResetToken() {
@@ -115,7 +185,10 @@ export class AuthService {
   }
 
   private buildResetUrl(token: string) {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? 'http://localhost:3002';
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      process.env.SITE_URL ??
+      'http://localhost:3002';
     return `${siteUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
   }
 
@@ -152,8 +225,12 @@ export class AuthService {
       push(`0${national10}`);
       push(`90${national10}`);
       push(`+90${national10}`);
-      push(`+90 ${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`);
-      push(`0${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`);
+      push(
+        `+90 ${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`,
+      );
+      push(
+        `0${national10.slice(0, 3)} ${national10.slice(3, 6)} ${national10.slice(6, 8)} ${national10.slice(8)}`,
+      );
     }
 
     return Array.from(candidates);
@@ -212,10 +289,13 @@ export class AuthService {
   }
 
   private async getOrCreateDefaultBusiness() {
-    const first = await this.prisma.business.findFirst({ orderBy: { id: 'asc' } });
+    const first = await this.prisma.business.findFirst({
+      orderBy: { id: 'asc' },
+    });
     if (first) return first;
 
-    const name = process.env.BUSINESS_NAME ?? process.env.SITE_NAME ?? 'Nutopiano';
+    const name =
+      process.env.BUSINESS_NAME ?? process.env.SITE_NAME ?? 'Nutopiano';
     return this.prisma.business.create({ data: { name } });
   }
 
@@ -267,7 +347,10 @@ export class AuthService {
     return ['CUSTOMER'];
   }
 
-  private resolvePanelHome(role: RoleType, allowedPanels: AccessPanel[]): string {
+  private resolvePanelHome(
+    role: RoleType,
+    allowedPanels: AccessPanel[],
+  ): string {
     if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) return '/admin';
     if (role === ROLES.SELLER) return '/dashboard';
     if (role === ROLES.CUSTOMER) return '/account/orders';
@@ -287,7 +370,11 @@ export class AuthService {
         { key: 'platform.api_keys', status: 'ACTIVE' },
         { key: 'platform.audit_outbox', status: 'ACTIVE' },
         { key: 'platform.finance_all', status: 'ACTIVE' },
-        { key: 'platform.report_exports', status: 'PLANNED', note: 'Ek export modulleri faz-2.' },
+        {
+          key: 'platform.report_exports',
+          status: 'PLANNED',
+          note: 'Ek export modulleri faz-2.',
+        },
       ];
     }
 
@@ -297,7 +384,11 @@ export class AuthService {
         { key: 'seller.management', status: 'ACTIVE' },
         { key: 'finance.payouts', status: 'ACTIVE' },
         { key: 'audit.read', status: 'ACTIVE' },
-        { key: 'platform.superadmin_only', status: 'BLOCKED', note: 'Sadece SUPER_ADMIN.' },
+        {
+          key: 'platform.superadmin_only',
+          status: 'BLOCKED',
+          note: 'Sadece SUPER_ADMIN.',
+        },
       ];
     }
 
@@ -308,7 +399,11 @@ export class AuthService {
         { key: 'seller.customers', status: 'ACTIVE' },
         { key: 'seller.pos', status: 'ACTIVE' },
         { key: 'seller.finance_own', status: 'ACTIVE' },
-        { key: 'seller.advanced_modules', status: 'PLANNED', note: 'Dokumanda olan ek moduller.' },
+        {
+          key: 'seller.advanced_modules',
+          status: 'PLANNED',
+          note: 'Dokumanda olan ek moduller.',
+        },
       ];
     }
 
@@ -317,9 +412,10 @@ export class AuthService {
         {
           key: 'staff.assigned_permissions',
           status: permissions.length > 0 ? 'ACTIVE' : 'BLOCKED',
-          note: permissions.length > 0
-            ? 'Atanan yetki gruplari aktif.'
-            : 'Atanmamis yetki grubu bulunuyor.',
+          note:
+            permissions.length > 0
+              ? 'Atanan yetki gruplari aktif.'
+              : 'Atanmamis yetki grubu bulunuyor.',
         },
         {
           key: 'staff.out_of_scope',
@@ -335,7 +431,11 @@ export class AuthService {
       { key: 'customer.orders', status: 'ACTIVE' },
       { key: 'customer.favorites', status: 'ACTIVE' },
       { key: 'customer.reviews', status: 'ACTIVE' },
-      { key: 'customer.backoffice', status: 'BLOCKED', note: 'Backoffice panellerine erisim yok.' },
+      {
+        key: 'customer.backoffice',
+        status: 'BLOCKED',
+        note: 'Backoffice panellerine erisim yok.',
+      },
     ];
   }
 
@@ -343,27 +443,74 @@ export class AuthService {
     const identifier = credentials.phone.trim();
     const isEmailLogin = identifier.includes('@');
 
-    const user = await this.findUserByLoginIdentifier(identifier, isEmailLogin);
+    let user;
+    try {
+      user = await this.findUserByLoginIdentifier(identifier, isEmailLogin);
+    } catch (error) {
+      this.logAuthStage(
+        'login.user_lookup',
+        {
+          identifierType: isEmailLogin ? 'email' : 'phone',
+        },
+        'error',
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
 
     if (!user || !user.isActive) {
+      this.logAuthStage(
+        'login.user_lookup',
+        {
+          identifierType: isEmailLogin ? 'email' : 'phone',
+          reason: !user ? 'user_not_found' : 'inactive_user',
+        },
+        'warn',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.passwordHash) {
+      this.logAuthStage(
+        'login.password_verify',
+        {
+          userId: user.id,
+          businessId: user.businessId,
+          reason: 'password_hash_missing',
+        },
+        'warn',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isValidPassword = await bcrypt.compare(credentials.password, user.passwordHash);
+    const isValidPassword = await bcrypt.compare(
+      credentials.password,
+      user.passwordHash,
+    );
     if (!isValidPassword) {
+      this.logAuthStage(
+        'login.password_verify',
+        {
+          userId: user.id,
+          businessId: user.businessId,
+          reason: 'invalid_password',
+        },
+        'warn',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.createAuthTokensForUser({
-      id: user.id,
-      phone: user.phone,
-      role: user.role,
-      businessId: user.businessId,
-    });
+    const tokens = await this.createAuthTokensForUser(
+      {
+        id: user.id,
+        phone: user.phone,
+        role: user.role,
+        businessId: user.businessId,
+      },
+      'login',
+    );
+    await this.markSuccessfulLogin(user.id);
+    return tokens;
   }
 
   async register(payload: RegisterDto) {
@@ -376,12 +523,15 @@ export class AuthService {
     }
 
     const businessIdFromEnv = Number(process.env.PUBLIC_BUSINESS_ID);
-    const requestedBusinessId = payload.businessId ? Number(payload.businessId) : NaN;
-    const businessId = Number.isFinite(requestedBusinessId) && requestedBusinessId > 0
-      ? requestedBusinessId
-      : Number.isFinite(businessIdFromEnv) && businessIdFromEnv > 0
-        ? businessIdFromEnv
-        : NaN;
+    const requestedBusinessId = payload.businessId
+      ? Number(payload.businessId)
+      : NaN;
+    const businessId =
+      Number.isFinite(requestedBusinessId) && requestedBusinessId > 0
+        ? requestedBusinessId
+        : Number.isFinite(businessIdFromEnv) && businessIdFromEnv > 0
+          ? businessIdFromEnv
+          : NaN;
 
     const business = Number.isFinite(businessId)
       ? await this.prisma.business.findUnique({ where: { id: businessId } })
@@ -403,7 +553,10 @@ export class AuthService {
       throw new BadRequestException('Bu telefon numarası zaten kayıtlı.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.password, BCRYPT_SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(
+      payload.password,
+      BCRYPT_SALT_ROUNDS,
+    );
 
     try {
       const user = await this.prisma.user.create({
@@ -433,15 +586,23 @@ export class AuthService {
         businessId: String(user.businessId),
       };
 
-      const accessToken = this.jwtService.sign(jwtPayload, { expiresIn: '15m' });
-      const refresh = await this.createAndStoreRefreshToken({
-        id: user.id,
-        businessId: user.businessId,
+      const accessToken = this.jwtService.sign(jwtPayload, {
+        expiresIn: '15m',
       });
+      const refresh = await this.createAndStoreRefreshToken(
+        {
+          id: user.id,
+          businessId: user.businessId,
+        },
+        'register',
+      );
 
       return { accessToken, refreshToken: refresh.refreshToken };
     } catch (error: unknown) {
-      const prismaError = error as { code?: string; meta?: { target?: string[] } } | null;
+      const prismaError = error as {
+        code?: string;
+        meta?: { target?: string[] };
+      } | null;
       // Handle Prisma unique constraint errors
       if (prismaError?.code === 'P2002') {
         const target = prismaError?.meta?.target?.[0];
@@ -464,7 +625,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    if (!decoded || decoded.type !== 'refresh' || !decoded.userId || !decoded.jti) {
+    if (
+      !decoded ||
+      decoded.type !== 'refresh' ||
+      !decoded.userId ||
+      !decoded.jti
+    ) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -494,7 +660,10 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expired');
     }
 
-    if (String(tokenRecord.userId) !== decoded.userId || tokenRecord.jti !== decoded.jti) {
+    if (
+      String(tokenRecord.userId) !== decoded.userId ||
+      tokenRecord.jti !== decoded.jti
+    ) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -513,10 +682,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const rotated = await this.createAndStoreRefreshToken({
-      id: user.id,
-      businessId: user.businessId,
-    });
+    const rotated = await this.createAndStoreRefreshToken(
+      {
+        id: user.id,
+        businessId: user.businessId,
+      },
+      'refresh',
+    );
 
     await (this.prisma as any).refreshToken.update({
       where: { id: tokenRecord.id },
@@ -586,7 +758,10 @@ export class AuthService {
   }
 
   async resetPassword(payload: ResetPasswordDto) {
-    const tokenHash = crypto.createHash('sha256').update(payload.token).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(payload.token)
+      .digest('hex');
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -615,7 +790,10 @@ export class AuthService {
       throw new BadRequestException('Geçersiz veya süresi dolmuş token.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.password, BCRYPT_SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(
+      payload.password,
+      BCRYPT_SALT_ROUNDS,
+    );
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -639,7 +817,8 @@ export class AuthService {
 
     if (payload.name !== undefined) data.name = payload.name.trim();
     if (payload.phone !== undefined) data.phone = payload.phone.trim();
-    if (payload.email !== undefined) data.email = payload.email.trim().toLowerCase();
+    if (payload.email !== undefined)
+      data.email = payload.email.trim().toLowerCase();
 
     try {
       const updated = await this.prisma.user.update({
@@ -684,7 +863,10 @@ export class AuthService {
       throw new BadRequestException('Mevcut şifre yanlış.');
     }
 
-    const passwordHash = await bcrypt.hash(payload.newPassword, BCRYPT_SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(
+      payload.newPassword,
+      BCRYPT_SALT_ROUNDS,
+    );
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash },
@@ -718,7 +900,27 @@ export class AuthService {
 
     const role = this.getVisibleRole(user.role);
     const effectiveRole = toEffectiveRole(role) ?? role;
-    const permissions = await this.permissionGroupService.resolveForUser(user.id);
+    let permissions = Array.isArray(payload.resolvedPermissions)
+      ? payload.resolvedPermissions
+      : [];
+
+    if (!permissions.length) {
+      try {
+        permissions = await this.permissionGroupService.resolveForUser(user.id);
+      } catch (error) {
+        this.logAuthStage(
+          'profile.permission_resolve',
+          {
+            userId: user.id,
+            businessId: user.businessId,
+          },
+          'error',
+          error instanceof Error ? error.stack : undefined,
+        );
+        throw error;
+      }
+    }
+
     const allowedPanels = this.resolveAllowedPanels(role, permissions);
     const panelHome = this.resolvePanelHome(role, allowedPanels);
     const featureStatuses = this.buildFeatureStatuses(role, permissions);

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import type { ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Archive,
   BarChart3,
@@ -34,13 +34,17 @@ import {
   Users,
   Wallet,
   X,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAppSelector, useAppDispatch } from '@/store';
-import { getPanelLabelByRole } from '@/lib/role-routing';
-import { hasAllCapabilities, hasAnyCapability, type AppCapability } from '@/lib/capabilities';
-import api from '@/services/api';
-import { logout } from '@/store/userSlice';
+} from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAppSelector, useAppDispatch } from "@/store";
+import { getPanelLabelByRole } from "@/lib/role-routing";
+import {
+  hasAllCapabilities,
+  hasAnyCapability,
+  type AppCapability,
+} from "@/lib/capabilities";
+import api from "@/services/api";
+import { logout } from "@/store/userSlice";
 
 interface AdminShellProps {
   children: ReactNode;
@@ -66,81 +70,191 @@ type NavSection = {
 const createNavSections = (basePath: string): NavSection[] => {
   return [
     {
-      title: 'Paneller',
+      title: "Paneller",
       items: [
-        { label: 'Admin Panel', href: '/admin', icon: LayoutDashboard },
-        { label: 'Platform Panel', href: '/platform', icon: LayoutDashboard },
-        { label: 'Satıcı Panel', href: '/dashboard', icon: Store },
-        { label: 'POS Panel', href: '/pos', icon: CreditCard },
-        { label: 'Hesabım', href: '/account/profile', icon: UserCheck },
+        { label: "Admin Panel", href: "/admin", icon: LayoutDashboard },
+        { label: "Satıcı Panel", href: "/dashboard", icon: Store },
+        { label: "POS Panel", href: "/pos", icon: CreditCard },
+        { label: "Hesabım", href: "/account/profile", icon: UserCheck },
       ],
     },
     {
-      title: 'Business Operations',
+      title: "Business Operations",
       icon: Boxes,
       collapsible: true,
       items: [
-        { label: 'Genel Bakış', href: `${basePath}`, icon: Home },
-        { label: 'Satıcılar', href: `${basePath}/sellers`, icon: Store, requiredCapabilities: ['MANAGE_SELLERS'] },
-        { label: 'Satıcı Başvuruları', href: `${basePath}/sellers/applications`, icon: ClipboardList, requiredCapabilities: ['MANAGE_SELLERS'] },
-        { label: 'Satıcı Kullanıcıları', href: `${basePath}/sellers/staff`, icon: Users, requiredCapabilities: ['MANAGE_SELLERS'] },
-        { label: 'Ürünler', href: `${basePath}/products`, icon: ClipboardList },
-        { label: 'Kategoriler', href: `${basePath}/categories`, icon: BookOpen },
-        { label: 'Katalog', href: `${basePath}/catalog`, icon: Boxes },
-        { label: 'Siparişler', href: `${basePath}/orders`, icon: ClipboardList },
-        { label: 'Müşteriler', href: `${basePath}/customers`, icon: Users },
+        { label: "Genel Bakış", href: `${basePath}`, icon: Home },
+        {
+          label: "Satıcılar",
+          href: `${basePath}/sellers`,
+          icon: Store,
+          requiredCapabilities: ["MANAGE_SELLERS"],
+        },
+        {
+          label: "Satıcı Başvuruları",
+          href: `${basePath}/sellers/applications`,
+          icon: ClipboardList,
+          requiredCapabilities: ["MANAGE_SELLERS"],
+        },
+        {
+          label: "Satıcı Kullanıcıları",
+          href: `${basePath}/sellers/staff`,
+          icon: Users,
+          requiredCapabilities: ["MANAGE_SELLERS"],
+        },
+        { label: "Ürünler", href: `${basePath}/products`, icon: ClipboardList },
+        {
+          label: "Kategoriler",
+          href: `${basePath}/categories`,
+          icon: BookOpen,
+        },
+        { label: "Katalog", href: `${basePath}/catalog`, icon: Boxes },
+        {
+          label: "Siparişler",
+          href: `${basePath}/orders`,
+          icon: ClipboardList,
+        },
+        { label: "Müşteriler", href: `${basePath}/customers`, icon: Users },
       ],
     },
     {
-      title: 'Financial Control',
+      title: "Financial Control",
       icon: Wallet,
       collapsible: true,
       items: [
-        { label: 'Finans Özeti', href: `${basePath}/finance`, icon: CreditCard, requiredCapabilities: ['VIEW_FINANCE'] },
-        { label: 'Ledger', href: `${basePath}/finance/ledger`, icon: BookOpen, requiredCapabilities: ['VIEW_FINANCE'] },
-        { label: 'Cüzdanlar', href: `${basePath}/finance/wallets`, icon: Wallet, requiredCapabilities: ['VIEW_FINANCE'] },
-        { label: 'Payout Talepleri', href: `${basePath}/finance/payouts`, icon: CreditCard, requiredCapabilities: ['MANAGE_PAYOUT'] },
-        { label: 'İadeler', href: `${basePath}/finance/refunds`, icon: TrendingDown, requiredCapabilities: ['VIEW_FINANCE'] },
-        { label: 'Uyumsuzluk', href: `${basePath}/finance/mismatch-monitor`, icon: Shield, requiredCapabilities: ['VIEW_FINANCE'] },
+        {
+          label: "Finans Özeti",
+          href: `${basePath}/finance`,
+          icon: CreditCard,
+          requiredCapabilities: ["VIEW_FINANCE"],
+        },
+        {
+          label: "Ledger",
+          href: `${basePath}/finance/ledger`,
+          icon: BookOpen,
+          requiredCapabilities: ["VIEW_FINANCE"],
+        },
+        {
+          label: "Cüzdanlar",
+          href: `${basePath}/finance/wallets`,
+          icon: Wallet,
+          requiredCapabilities: ["VIEW_FINANCE"],
+        },
+        {
+          label: "Payout Talepleri",
+          href: `${basePath}/finance/payouts`,
+          icon: CreditCard,
+          requiredCapabilities: ["MANAGE_PAYOUT"],
+        },
+        {
+          label: "İadeler",
+          href: `${basePath}/finance/refunds`,
+          icon: TrendingDown,
+          requiredCapabilities: ["VIEW_FINANCE"],
+        },
+        {
+          label: "Uyumsuzluk",
+          href: `${basePath}/finance/mismatch-monitor`,
+          icon: Shield,
+          requiredCapabilities: ["VIEW_FINANCE"],
+        },
       ],
     },
     {
-      title: 'Platform Governance',
+      title: "Platform Governance",
       icon: ShieldCheck,
       collapsible: true,
       items: [
-        { label: 'Kullanıcılar', href: `${basePath}/users`, icon: Users },
-        { label: 'Roller & Yetkiler', href: `${basePath}/roles`, icon: ShieldCheck },
-        { label: 'Yetki Grupları', href: `${basePath}/permission-groups`, icon: KeyRound },
-        { label: 'Bildirimler', href: `${basePath}/notifications`, icon: Bell },
-        { label: 'Feature Flags', href: `${basePath}/settings/feature-flags`, icon: Flag },
-        { label: 'Audit Log', href: `${basePath}/audit`, icon: BookOpen, requiredCapabilities: ['VIEW_AUDIT'] },
-        { label: 'Outbox', href: `${basePath}/audit/outbox`, icon: BookOpen, requiredCapabilities: ['VIEW_AUDIT'] },
-        { label: 'Risk Kontrol', href: `${basePath}/risk-control`, icon: Shield, requiredCapabilities: ['VIEW_AUDIT'] },
-        { label: 'Güvenlik Dashboard', href: `${basePath}/security`, icon: ShieldCheck, requiredCapabilities: ['VIEW_AUDIT'] },
-        { label: 'Mail Sunucu', href: `${basePath}/smtp`, icon: Mail },
-        { label: 'E-posta Şablonları', href: `${basePath}/smtp/templates`, icon: Mail },
-        { label: 'SMS Ayarları', href: `${basePath}/sms`, icon: MessageSquare },
-        { label: 'SMS Şablonları', href: `${basePath}/sms/templates`, icon: MessageSquare },
-        { label: 'API Keys', href: `${basePath}/settings/api-keys`, icon: FileKey },
-        { label: 'Config Snapshots', href: `${basePath}/settings/config-snapshots`, icon: Archive },
-        { label: 'Planlar', href: `${basePath}/plans`, icon: BarChart3 },
-        { label: 'Raporlar', href: `${basePath}/reports`, icon: BarChart3, requiredCapabilities: ['VIEW_REPORTS'] },
-        { label: 'Ayarlar', href: `${basePath}/settings`, icon: Settings },
+        { label: "Kullanıcılar", href: `${basePath}/users`, icon: Users },
+        {
+          label: "Roller & Yetkiler",
+          href: `${basePath}/roles`,
+          icon: ShieldCheck,
+        },
+        {
+          label: "Yetki Grupları",
+          href: `${basePath}/permission-groups`,
+          icon: KeyRound,
+        },
+        { label: "Bildirimler", href: `${basePath}/notifications`, icon: Bell },
+        {
+          label: "Feature Flags",
+          href: `${basePath}/settings/feature-flags`,
+          icon: Flag,
+        },
+        {
+          label: "Audit Log",
+          href: `${basePath}/audit`,
+          icon: BookOpen,
+          requiredCapabilities: ["VIEW_AUDIT"],
+        },
+        {
+          label: "Outbox",
+          href: `${basePath}/audit/outbox`,
+          icon: BookOpen,
+          requiredCapabilities: ["VIEW_AUDIT"],
+        },
+        {
+          label: "Risk Kontrol",
+          href: `${basePath}/risk-control`,
+          icon: Shield,
+          requiredCapabilities: ["VIEW_AUDIT"],
+        },
+        {
+          label: "Güvenlik Dashboard",
+          href: `${basePath}/security`,
+          icon: ShieldCheck,
+          requiredCapabilities: ["VIEW_AUDIT"],
+        },
+        { label: "Mail Sunucu", href: `${basePath}/smtp`, icon: Mail },
+        {
+          label: "E-posta Şablonları",
+          href: `${basePath}/smtp/templates`,
+          icon: Mail,
+        },
+        { label: "SMS Ayarları", href: `${basePath}/sms`, icon: MessageSquare },
+        {
+          label: "SMS Şablonları",
+          href: `${basePath}/sms/templates`,
+          icon: MessageSquare,
+        },
+        {
+          label: "API Keys",
+          href: `${basePath}/settings/api-keys`,
+          icon: FileKey,
+        },
+        {
+          label: "Config Snapshots",
+          href: `${basePath}/settings/config-snapshots`,
+          icon: Archive,
+        },
+        { label: "Planlar", href: `${basePath}/plans`, icon: BarChart3 },
+        {
+          label: "Raporlar",
+          href: `${basePath}/reports`,
+          icon: BarChart3,
+          requiredCapabilities: ["VIEW_REPORTS"],
+        },
+        { label: "Ayarlar", href: `${basePath}/settings`, icon: Settings },
       ],
     },
   ];
 };
 
-export default function AdminShell({ children, basePath = '/admin' }: AdminShellProps) {
+export default function AdminShell({
+  children,
+  basePath = "/admin",
+}: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.user.user);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [collapsedSections, setCollapsedSections] = useState<
+    Record<string, boolean>
+  >({});
 
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const panelLabel = getPanelLabelByRole(user?.role);
 
   const navSections = useMemo(() => {
@@ -149,8 +263,16 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
-          if (item.requiredCapabilities && !hasAllCapabilities(user?.role, item.requiredCapabilities)) return false;
-          if (item.requireAnyCapabilities && !hasAnyCapability(user?.role, item.requireAnyCapabilities)) return false;
+          if (
+            item.requiredCapabilities &&
+            !hasAllCapabilities(user?.role, item.requiredCapabilities)
+          )
+            return false;
+          if (
+            item.requireAnyCapabilities &&
+            !hasAnyCapability(user?.role, item.requireAnyCapabilities)
+          )
+            return false;
           return true;
         }),
       }))
@@ -165,28 +287,32 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
   };
 
   const handleLogout = async () => {
-    try { await api.post('/auth/logout'); } catch { /* ignore */ }
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      /* ignore */
+    }
     dispatch(logout());
-    router.push('/login');
+    router.push("/login");
   };
 
   const handleNavClick = () => setMobileOpen(false);
 
-  const sidebarHighlight = '#f4f4f3';
+  const sidebarHighlight = "#f4f4f3";
 
   const renderSidebarNav = () => (
     <div className="flex h-full flex-col bg-white">
       <div className="flex items-center gap-3 border-b border-[var(--neutral-200)] px-5 py-5">
-        <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--primary-800)] text-sm font-bold text-white"
-        >
-          {user?.name?.charAt(0)?.toUpperCase() ?? 'N'}
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--primary-800)] text-sm font-bold text-white">
+          {user?.name?.charAt(0)?.toUpperCase() ?? "N"}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-none text-[var(--primary-800)]">
-            {user?.name ?? 'Nutopiano Kullanıcı'}
+            {user?.name ?? "Nutopiano Kullanıcı"}
           </p>
-          <p className="mt-1 truncate text-xs text-[var(--neutral-600)]">{panelLabel}</p>
+          <p className="mt-1 truncate text-xs text-[var(--neutral-600)]">
+            {panelLabel}
+          </p>
         </div>
       </div>
 
@@ -194,7 +320,9 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
         {navSections.map((section) => {
           const isCollapsed = collapsedSections[section.title] ?? false;
           const SectionIcon = section.icon;
-          const hasActiveItem = section.items.some((item) => isActive(item.href));
+          const hasActiveItem = section.items.some((item) =>
+            isActive(item.href),
+          );
 
           return (
             <div key={section.title}>
@@ -205,18 +333,22 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                   className={`
                     flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.15em]
                     transition-colors duration-150
-                    ${hasActiveItem
-                      ? 'text-[var(--primary-700)]'
-                      : 'text-[var(--neutral-500)] hover:text-[var(--neutral-700)]'
+                    ${
+                      hasActiveItem
+                        ? "text-[var(--primary-700)]"
+                        : "text-[var(--neutral-500)] hover:text-[var(--neutral-700)]"
                     }
                   `}
                 >
-                  {SectionIcon && <SectionIcon className="h-3.5 w-3.5 flex-shrink-0" />}
+                  {SectionIcon && (
+                    <SectionIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                  )}
                   <span className="flex-1 text-left">{section.title}</span>
-                  {isCollapsed
-                    ? <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-60" />
-                    : <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" />
-                  }
+                  {isCollapsed ? (
+                    <ChevronRight className="h-3 w-3 flex-shrink-0 opacity-60" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" />
+                  )}
                 </button>
               ) : (
                 <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
@@ -237,12 +369,17 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                         className={`
                           flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium
                           transition-colors duration-150
-                          ${active
-                            ? 'text-[var(--primary-800)]'
-                            : 'text-[var(--neutral-700)] hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]'
+                          ${
+                            active
+                              ? "text-[var(--primary-800)]"
+                              : "text-[var(--neutral-700)] hover:bg-[var(--neutral-100)] hover:text-[var(--primary-800)]"
                           }
                         `}
-                        style={active ? { backgroundColor: sidebarHighlight } : undefined}
+                        style={
+                          active
+                            ? { backgroundColor: sidebarHighlight }
+                            : undefined
+                        }
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
                         <span className="flex-1 truncate">{item.label}</span>
@@ -296,7 +433,9 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
           </button>
 
           <Link href={basePath} className="flex items-center gap-3">
-            <span className="text-4xl font-serif font-semibold leading-none text-[var(--accent-900)]">Nutopiano</span>
+            <span className="text-4xl font-serif font-semibold leading-none text-[var(--accent-900)]">
+              Nutopiano
+            </span>
             <span className="hidden border-l border-[var(--neutral-300)] pl-3 text-sm font-semibold text-[var(--neutral-700)] sm:block">
               {panelLabel}
             </span>
@@ -305,7 +444,9 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
           <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-[var(--neutral-500)]">
             <span>Yönetim</span>
             <span className="h-1 w-1 rounded-full bg-[var(--neutral-400)]" />
-            <span>{isSuperAdmin ? 'Platform Kontrol' : 'Operasyon Kontrol'}</span>
+            <span>
+              {isSuperAdmin ? "Platform Kontrol" : "Operasyon Kontrol"}
+            </span>
           </div>
 
           <div className="flex-1" />
@@ -331,11 +472,15 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
             {user && (
               <div className="ml-1 flex items-center gap-2.5 rounded-full border border-[var(--neutral-200)] bg-white px-2 py-1">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-800)] text-xs font-bold text-white">
-                  {user.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                  {user.name?.charAt(0)?.toUpperCase() ?? "U"}
                 </div>
                 <div className="hidden md:block">
-                  <p className="leading-none text-[13px] font-semibold text-[var(--primary-800)]">{user.name}</p>
-                  <p className="mt-0.5 text-[11px] text-[var(--neutral-600)]">{user.role}</p>
+                  <p className="leading-none text-[13px] font-semibold text-[var(--primary-800)]">
+                    {user.name}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[var(--neutral-600)]">
+                    {user.role}
+                  </p>
                 </div>
               </div>
             )}
@@ -352,9 +497,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
       </header>
 
       <div className="flex min-h-[calc(100vh-4rem)] overflow-hidden">
-        <aside
-          className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[260px] flex-shrink-0 overflow-hidden border-r border-[var(--neutral-200)] lg:flex lg:flex-col"
-        >
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[260px] flex-shrink-0 overflow-hidden border-r border-[var(--neutral-200)] lg:flex lg:flex-col">
           {renderSidebarNav()}
         </aside>
 
@@ -373,13 +516,15 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
-          <aside
-            className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden border-r border-[var(--neutral-200)] bg-white shadow-2xl"
-          >
+          <aside className="absolute left-0 top-0 flex h-full w-72 flex-col overflow-hidden border-r border-[var(--neutral-200)] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[var(--neutral-200)] px-4 py-4">
               <div className="flex items-center gap-2">
-                <span className="text-lg font-serif font-semibold text-[var(--accent-900)]">Nutopiano</span>
-                <span className="text-[12px] font-medium text-[var(--neutral-600)]">{panelLabel}</span>
+                <span className="text-lg font-serif font-semibold text-[var(--accent-900)]">
+                  Nutopiano
+                </span>
+                <span className="text-[12px] font-medium text-[var(--neutral-600)]">
+                  {panelLabel}
+                </span>
               </div>
               <button
                 type="button"
@@ -390,9 +535,7 @@ export default function AdminShell({ children, basePath = '/admin' }: AdminShell
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-hidden">
-              {renderSidebarNav()}
-            </div>
+            <div className="flex-1 overflow-hidden">{renderSidebarNav()}</div>
           </aside>
         </div>
       )}
@@ -416,10 +559,11 @@ function NotificationBell({ basePath }: { basePath: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   const { data: notifs } = useQuery<{ data: NotifRow[] }>({
-    queryKey: ['admin-notif-bell'],
+    queryKey: ["admin-notif-bell"],
     queryFn: async () => {
       try {
-        return (await api.get('/notifications', { params: { pageSize: 8 } })).data;
+        return (await api.get("/notifications", { params: { pageSize: 8 } }))
+          .data;
       } catch {
         return { data: [] };
       }
@@ -428,8 +572,9 @@ function NotificationBell({ basePath }: { basePath: string }) {
   });
 
   const markAllRead = useMutation({
-    mutationFn: async () => api.put('/notifications/read-all'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-notif-bell'] }),
+    mutationFn: async () => api.put("/notifications/read-all"),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin-notif-bell"] }),
   });
 
   const rows = notifs?.data ?? [];
@@ -437,16 +582,17 @@ function NotificationBell({ basePath }: { basePath: string }) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const typeColor: Record<string, string> = {
-    critical: 'bg-red-500',
-    warning: 'bg-amber-500',
-    info: 'bg-blue-500',
+    critical: "bg-red-500",
+    warning: "bg-amber-500",
+    info: "bg-blue-500",
   };
 
   return (
@@ -460,7 +606,7 @@ function NotificationBell({ basePath }: { basePath: string }) {
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
@@ -468,7 +614,9 @@ function NotificationBell({ basePath }: { basePath: string }) {
       {open && (
         <div className="absolute right-0 top-11 z-50 w-80 rounded-xl border border-[var(--neutral-200)] bg-white shadow-xl animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center justify-between border-b border-[var(--neutral-100)] px-4 py-3">
-            <h4 className="text-sm font-semibold text-[var(--primary-800)]">Bildirimler</h4>
+            <h4 className="text-sm font-semibold text-[var(--primary-800)]">
+              Bildirimler
+            </h4>
             {unreadCount > 0 && (
               <button
                 type="button"
@@ -489,16 +637,27 @@ function NotificationBell({ basePath }: { basePath: string }) {
               rows.map((n) => (
                 <div
                   key={n.id}
-                  className={`flex items-start gap-3 px-4 py-3 transition ${!n.isRead ? 'bg-blue-50/40' : 'hover:bg-[var(--neutral-50)]'}`}
+                  className={`flex items-start gap-3 px-4 py-3 transition ${!n.isRead ? "bg-blue-50/40" : "hover:bg-[var(--neutral-50)]"}`}
                 >
-                  <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${typeColor[n.type] ?? 'bg-gray-400'}`} />
+                  <span
+                    className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${typeColor[n.type] ?? "bg-gray-400"}`}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className={`text-[13px] leading-snug ${!n.isRead ? 'font-semibold text-[var(--primary-800)]' : 'font-medium text-[var(--neutral-700)]'}`}>
+                    <p
+                      className={`text-[13px] leading-snug ${!n.isRead ? "font-semibold text-[var(--primary-800)]" : "font-medium text-[var(--neutral-700)]"}`}
+                    >
                       {n.title}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-[var(--neutral-500)] line-clamp-1">{n.message}</p>
+                    <p className="mt-0.5 text-[11px] text-[var(--neutral-500)] line-clamp-1">
+                      {n.message}
+                    </p>
                     <p className="mt-1 text-[10px] text-[var(--neutral-400)]">
-                      {new Date(n.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(n.createdAt).toLocaleDateString("tr-TR", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 </div>
