@@ -291,6 +291,7 @@ fi
 
 ensure_frontend_env
 backup_previous_frontend_static
+rm -rf "$FRONTEND_DIR/.next"
 
 if [[ "$FRONTEND_BUILD_MODE" == "webpack" ]]; then
   NEXT_PRIVATE_BUILD_WORKER="$FRONTEND_BUILD_WORKER" NODE_OPTIONS="$FRONTEND_BUILD_NODE_OPTIONS" npx next build --webpack
