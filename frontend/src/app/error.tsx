@@ -1,18 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-
-const CHUNK_RELOAD_KEY = '__nutopiano_chunk_reload_once__';
-
-const isChunkLoadError = (error: Error | null | undefined) => {
-  if (!error) return false;
-  const text = `${error.name} ${error.message}`.toLowerCase();
-  return (
-    text.includes('chunkloaderror') ||
-    text.includes('loading chunk') ||
-    text.includes('failed to fetch dynamically imported module')
-  );
-};
+import {
+  clearChunkRecoveryMarkers,
+  isChunkLoadErrorText,
+  recoverFromChunkError,
+} from '@/lib/chunk-recovery';
 
 export default function GlobalError({
   error,
@@ -22,23 +15,15 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error('Global error boundary:', error);
 
     if (typeof window === 'undefined') return;
-    if (!isChunkLoadError(error)) return;
+    if (!isChunkLoadErrorText(`${error.name} ${error.message}`)) return;
 
-    const alreadyReloaded = window.sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1';
-    if (alreadyReloaded) {
-      window.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-      return;
-    }
-
-    window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-    window.location.reload();
+    void recoverFromChunkError();
   }, [error]);
 
-  const chunkError = isChunkLoadError(error);
+  const chunkError = isChunkLoadErrorText(`${error.name} ${error.message}`);
 
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-6xl flex-col items-start justify-center gap-4 px-4 py-10 md:px-6">
@@ -54,10 +39,8 @@ export default function GlobalError({
         type="button"
         onClick={() => {
           if (chunkError) {
-            if (typeof window !== 'undefined') {
-              window.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-            }
-            window.location.reload();
+            clearChunkRecoveryMarkers();
+            void recoverFromChunkError();
             return;
           }
           reset();
