@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import Button from '@/components/common/Button';

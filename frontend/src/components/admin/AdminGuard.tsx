@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Spinner from '@/components/common/Spinner';
-import api from '@/services/api';
+import { canAccessAdminRoute, createPanelAccessManifest } from '@/lib/panel-access';
+import { fetchProfileResponse } from '@/lib/profile-api';
+import { isUserSessionIncomplete, mapProfileToUser } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { isAdminRole, isSuperAdminRole } from '@/lib/role-routing';
-import type { ProfileResponse } from '@/types/profile';
+import { logout, setAuthError, setCredentials } from '@/store/userSlice';
+import { isSuperAdminRole } from '@/lib/role-routing';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -39,18 +40,21 @@ export default function AdminGuard({
 }: AdminGuardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, status } = useAppSelector((state) => state.user);
+  const { user } = useAppSelector((state) => state.user);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const isLoading = isLoadingProfile || status === 'authenticating';
-  const hasAccess = (role?: string) =>
-    requireSuperAdmin ? isSuperAdminRole(role) : isAdminRole(role);
+  const stableUser = user && !isUserSessionIncomplete(user) ? user : null;
+  const isLoading = isLoadingProfile;
+  const manifest = useMemo(() => createPanelAccessManifest(stableUser), [stableUser]);
+  const hasAccess = requireSuperAdmin
+    ? isSuperAdminRole(stableUser?.role)
+    : canAccessAdminRoute(manifest);
   const deniedMessage = requireSuperAdmin
     ? 'Bu sayfaya erişim için super admin yetkisi gerekli.'
     : 'Bu sayfaya erişim için admin yetkisi gerekli.';
 
   useEffect(() => {
-    if (user) {
-      if (!hasAccess(user.role)) {
+    if (stableUser) {
+      if (!hasAccess) {
         router.replace('/forbidden');
         toast.error(deniedMessage);
       }
@@ -61,31 +65,20 @@ export default function AdminGuard({
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
-        dispatch(startAuth());
 
-        const response = await api.get<ProfileResponse>('/auth/profile');
-        const profile = response.data;
+        const nextUser = mapProfileToUser(await fetchProfileResponse());
 
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              effectiveRole: profile.effectiveRole,
-              permissions: profile.permissions,
-              panelHome: profile.panelHome,
-              allowedPanels: profile.allowedPanels,
-              featureStatuses: profile.featureStatuses,
-              businessId: profile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
 
-        if (!hasAccess(profile.role)) {
+        if (
+          (requireSuperAdmin && !isSuperAdminRole(nextUser.role)) ||
+          (!requireSuperAdmin && !canAccessAdminRoute(createPanelAccessManifest(nextUser)))
+        ) {
           router.replace('/forbidden');
           toast.error(deniedMessage);
         }
@@ -100,10 +93,10 @@ export default function AdminGuard({
       }
     };
 
-    fetchProfile();
-  }, [user, dispatch, router, requireSuperAdmin]);
+    void fetchProfile();
+  }, [stableUser, dispatch, router, requireSuperAdmin, deniedMessage, hasAccess]);
 
-  if (isLoading && !user) {
+  if (isLoading && !stableUser) {
     return (
       <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
@@ -113,7 +106,7 @@ export default function AdminGuard({
     );
   }
 
-  if (!user || !hasAccess(user.role)) {
+  if (!stableUser || !hasAccess) {
     return (
       <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">

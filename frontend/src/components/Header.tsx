@@ -5,32 +5,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ClipboardList,
-  CreditCard,
-  Heart,
-  LayoutDashboard,
   LogOut,
-  MapPin,
-  MessageSquare,
-  Package,
   Search,
-  Settings,
   ShoppingBag,
   Store,
-  User,
   UserCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/store';
+import {
+  createPanelAccessManifest,
+  getAccountCommerceLinks,
+  getAccountCoreLinks,
+  getBackofficePanelEntries,
+} from '@/lib/panel-access';
+import toast from 'react-hot-toast';
 import { logout } from '@/store/userSlice';
 import api from '@/services/api';
-import { resolveUserPanelHome } from '@/lib/profile-session';
-import toast from 'react-hot-toast';
-import {
-  getPanelLabelByRole,
-  isPosRoleAllowed,
-  normalizeRole,
-} from '@/lib/role-routing';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 
 export default function Header() {
   const router = useRouter();
@@ -61,12 +53,11 @@ export default function Header() {
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const sellerMenuRef = useRef<HTMLDivElement | null>(null);
+  const manifest = useMemo(() => createPanelAccessManifest(user), [user]);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
-  const panelHref = user ? resolveUserPanelHome(user) : '/login';
   const panelLabel = getPanelLabelByRole(user?.role);
-  const isCustomer = normalizeRole(user?.role) === 'CUSTOMER';
-  const normalizedUserRole = normalizeRole(user?.role);
+  const isCustomer = manifest.customerPanelEnabled;
 
   type BackofficeMenuLink = {
     href: string;
@@ -94,62 +85,25 @@ export default function Header() {
     };
   };
 
-  const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(() => {
-    switch (normalizedUserRole) {
-      case 'SUPER_ADMIN':
-      case 'ADMIN':
-        return [
-          { href: '/admin/users', label: 'Kullanıcılar', icon: User },
-          { href: '/admin/sellers', label: 'Satıcılar', icon: Store },
-          { href: '/admin/plans', label: 'Planlar', icon: CreditCard },
-          { href: '/admin/orders', label: 'Siparişler', icon: ClipboardList },
-          { href: '/admin/products', label: 'Ürünler', icon: Package },
-          { href: '/admin/customers', label: 'Müşteriler', icon: User },
-          { href: '/admin/finance', label: 'Finans', icon: CreditCard },
-          ...(isPosRoleAllowed(user?.role)
-            ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }]
-            : []),
-        ];
-      case 'SELLER':
-        return [
-          { href: '/pos', label: 'POS', icon: LayoutDashboard },
-          { href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList },
-          { href: '/dashboard/products', label: 'Ürünler', icon: Package },
-          { href: '/dashboard/finance', label: 'Finans', icon: CreditCard },
-          { href: '/dashboard/customers', label: 'Müşteriler', icon: User },
-        ];
-      case 'SELLER_STAFF':
-        {
-          const permissionSet = new Set(
-            Array.isArray(user?.permissions)
-              ? user.permissions.map((permission) =>
-                  String(permission ?? '').trim().toLowerCase(),
-                )
-              : [],
-          );
-          const canPos = ['pos.sales', 'pos.orders', 'pos.reports'].some((permission) =>
-            permissionSet.has(permission),
-          );
-          const canOrders = [
-            'orders.view',
-            'orders.create',
-            'orders.edit',
-            'orders.status_update',
-            'orders.cancel',
-            'orders.return.process',
-          ].some((permission) => permissionSet.has(permission));
-
-          return [
-            ...(canPos ? [{ href: '/pos', label: 'POS', icon: LayoutDashboard }] : []),
-            ...(canOrders
-              ? [{ href: '/dashboard/orders', label: 'Siparişler', icon: ClipboardList }]
-              : []),
-          ];
-        }
-      default:
-        return [];
-    }
-  }, [normalizedUserRole, user?.permissions, user?.role]);
+  const coreLinks = useMemo(() => getAccountCoreLinks(manifest), [manifest]);
+  const backofficeMenuLinks = useMemo<BackofficeMenuLink[]>(
+    () =>
+      getBackofficePanelEntries(manifest).map((entry) => ({
+        href: entry.href,
+        label: entry.label,
+        icon: entry.icon,
+      })),
+    [manifest],
+  );
+  const customerLinks = useMemo(
+    () =>
+      getAccountCommerceLinks(manifest).map((entry) => ({
+        href: entry.href,
+        label: entry.label,
+        icon: entry.icon,
+      })),
+    [manifest],
+  );
 
   const navigationLinks = [
     { href: '/categories', label: 'Kategoriler' },
@@ -487,22 +441,20 @@ export default function Header() {
                         </p>
                       </div>
                       <div className="space-y-1 p-2">
-                        <Link
-                          href={panelHref}
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <LayoutDashboard className="h-4 w-4" />
-                          {panelLabel}
-                        </Link>
-                        <Link
-                          href="/account/profile"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <User className="h-4 w-4" />
-                          Profil
-                        </Link>
+                        {coreLinks.map((link) => {
+                          const Icon = link.icon;
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                              onClick={() => setIsUserMenuOpen(false)}
+                            >
+                              <Icon className="h-4 w-4" />
+                              {link.label}
+                            </Link>
+                          );
+                        })}
                         {!isCustomer && backofficeMenuLinks.length > 0 ? (
                           <div className="my-1 border-t border-[var(--neutral-200)] pt-1">
                             {backofficeMenuLinks.map((link) => {
@@ -521,50 +473,24 @@ export default function Header() {
                             })}
                           </div>
                         ) : null}
-                        {isCustomer && (
+                        {isCustomer && customerLinks.length > 0 ? (
                           <>
-                            <Link
-                              href="/account/orders"
-                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <ShoppingBag className="h-4 w-4" />
-                              Siparişlerim
-                            </Link>
-                            <Link
-                              href="/account/favorites"
-                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <Heart className="h-4 w-4" />
-                              Favorilerim
-                            </Link>
-                            <Link
-                              href="/account/reviews"
-                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                              Yorumlarım
-                            </Link>
-                            <Link
-                              href="/account/addresses"
-                              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <MapPin className="h-4 w-4" />
-                              Adreslerim
-                            </Link>
+                            {customerLinks.map((link) => {
+                              const Icon = link.icon;
+                              return (
+                                <Link
+                                  key={link.href}
+                                  href={link.href}
+                                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
+                                  onClick={() => setIsUserMenuOpen(false)}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                  {link.label}
+                                </Link>
+                              );
+                            })}
                           </>
-                        )}
-                        <Link
-                          href="/account/settings"
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--primary-800)] hover:bg-[var(--neutral-100)]"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <Settings className="h-4 w-4" />
-                          Ayarlar
-                        </Link>
+                        ) : null}
                         <button
                           onClick={handleLogout}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--error-600)] hover:bg-[var(--error-100)]"

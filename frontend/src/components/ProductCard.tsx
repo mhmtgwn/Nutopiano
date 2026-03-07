@@ -1,12 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ShoppingBag, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '@/store';
-import { useAppSelector } from '@/store';
 import { addItem } from '@/store/cartSlice';
 import { formatPrice, truncate } from '@/utils/helpers';
 
@@ -23,14 +21,12 @@ export interface ProductCardProps {
   };
   categoryId?: string;
   variant?: 'default' | 'compact';
-  showHoverActions?: boolean;
 }
 
 export default function ProductCard({
   product,
   categoryId,
   variant = 'default',
-  showHoverActions = false,
 }: ProductCardProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -52,6 +48,7 @@ export default function ProductCard({
   const imageSrc =
     product.imageUrl || `https://picsum.photos/seed/nutopiano-${placeholderId}/800/800`;
   const isPlaceholderImage = !product.imageUrl;
+  const isCompact = variant === 'compact';
 
   const handleAddToCart = () => {
     dispatch(
@@ -77,7 +74,9 @@ export default function ProductCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter') router.push(productHref);
       }}
-      className="group relative h-full cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-sm)] transition-[transform,shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]"
+      className={`group relative h-full cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-white shadow-[var(--shadow-sm)] transition-[transform,shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)] ${
+        isCompact ? 'rounded-[var(--radius-xl)]' : ''
+      }`}
     >
       <div className="relative z-0">
         <div className="relative aspect-square w-full overflow-hidden bg-[var(--neutral-50)]">
@@ -105,24 +104,24 @@ export default function ProductCard({
           )}
         </div>
 
-        <div className="relative px-4 pb-4 pt-4">
-          <p className="text-sm font-semibold text-[var(--primary-800)]">
-            {truncate(product.name, 44)}
+        <div className={`relative px-4 ${isCompact ? 'pb-3 pt-3' : 'pb-4 pt-4'}`}>
+          <p className={`${isCompact ? 'text-[13px]' : 'text-sm'} font-semibold text-[var(--primary-800)]`}>
+            {truncate(product.name, isCompact ? 34 : 44)}
           </p>
           <p
-            className={`mt-1 text-xs text-[var(--neutral-600)] ${
+            className={`mt-1 ${isCompact ? 'text-[11px]' : 'text-xs'} text-[var(--neutral-600)] ${
               product.subtitle ? '' : 'invisible'
             }`}
           >
-            {truncate(product.subtitle ?? ' ', 54)}
+            {truncate(product.subtitle ?? ' ', isCompact ? 42 : 54)}
           </p>
-          <div className="mt-3 flex items-center justify-between gap-3">
+          <div className={`flex items-center justify-between gap-3 ${isCompact ? 'mt-2.5' : 'mt-3'}`}>
             <div className="flex items-center gap-1 text-[var(--accent-600)]">
               <Star className="h-4 w-4 fill-current" />
               <span className="text-xs font-semibold text-[var(--neutral-700)]">0.0</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-base font-semibold text-[var(--primary-800)]">
+              <span className={`${isCompact ? 'text-sm' : 'text-base'} font-semibold text-[var(--primary-800)]`}>
                 {formatPrice(product.price)}
               </span>
               <button
@@ -133,7 +132,9 @@ export default function ProductCard({
                   handleAddToCart();
                 }}
                 disabled={isOutOfStock}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] hover:shadow-[var(--shadow-sm)] active:scale-95 disabled:cursor-not-allowed disabled:text-[var(--neutral-400)] disabled:opacity-70"
+                className={`inline-flex items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--primary-800)] transition hover:border-[var(--neutral-200)] hover:bg-[var(--neutral-50)] hover:shadow-[var(--shadow-sm)] active:scale-95 disabled:cursor-not-allowed disabled:text-[var(--neutral-400)] disabled:opacity-70 ${
+                  isCompact ? 'h-9 w-9' : 'h-10 w-10'
+                }`}
                 aria-label="Sepete ekle"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />

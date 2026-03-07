@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
+import { fetchProfileResponse } from '@/lib/profile-api';
 import { mapProfileToUser, resolveProfilePanelHome } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
-import type { ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -69,8 +69,7 @@ export default function LoginPage() {
 
       const token = loginResponse.data.accessToken;
 
-      const profileResponse = await api.get<ProfileResponse>('/auth/profile');
-      const profile = profileResponse.data;
+      const profile = await fetchProfileResponse();
 
       dispatch(
         setCredentials({

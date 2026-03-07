@@ -11,16 +11,16 @@ import {
 } from '@/lib/capabilities';
 
 export const useCapabilities = () => {
-  const role = useAppSelector((state) => state.user.user?.role);
+  const user = useAppSelector((state) => state.user.user);
 
   return useMemo(
     () => ({
-      role,
-      capabilities: getCapabilitiesForRole(role),
-      can: (capability: AppCapability) => hasCapability(role, capability),
-      canAll: (required: AppCapability[]) => hasAllCapabilities(role, required),
-      canAny: (required: AppCapability[]) => hasAnyCapability(role, required),
+      role: user?.role,
+      capabilities: getCapabilitiesForRole(user),
+      can: (capability: AppCapability) => hasCapability(user, capability),
+      canAll: (required: AppCapability[]) => hasAllCapabilities(user, required),
+      canAny: (required: AppCapability[]) => hasAnyCapability(user, required),
     }),
-    [role],
+    [user],
   );
 };

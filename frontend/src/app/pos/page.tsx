@@ -16,11 +16,11 @@ import {
   isRateLimitError,
   resolveApiErrorMessage,
 } from '@/lib/api-errors';
+import { fetchProfileResponse } from '@/lib/profile-api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import api from '@/services/api';
-import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { isPosRoleAllowed, isSellerStaffRole } from '@/lib/role-routing';
-import type { ProfileResponse } from '@/types/profile';
+import { logout, setAuthError, setCredentials } from '@/store/userSlice';
+import { isSellerStaffRole } from '@/lib/role-routing';
 import {
   filterAllowedPosTabs,
   hasPosPermission,
@@ -46,6 +46,8 @@ import {
   type PosOrderQueueItem,
   type PosOrderQueuePayload,
 } from '@/lib/offline/pos-order-queue';
+import { canAccessPosRoute, createPanelAccessManifest } from '@/lib/panel-access';
+import { isUserSessionIncomplete, mapProfileToUser } from '@/lib/profile-session';
 
 type PosPermissionsResponse = {
   userId: string;
@@ -346,6 +348,12 @@ const createIdempotencyKey = (prefix: string) => {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const stripIdempotencyKey = (payload: PosOrderQueuePayload) => {
+  const nextPayload = { ...payload };
+  delete nextPayload.idempotencyKey;
+  return nextPayload;
 };
 
 const flattenCategoryTree = (
@@ -746,48 +754,45 @@ const buildA4InvoiceHtml = (invoice: PosInvoicePayload) => {
 export default function PosPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, status } = useAppSelector((state) => state.user);
-  const isAuthed = !!user;
+  const { user } = useAppSelector((state) => state.user);
+  const stableUser = user && !isUserSessionIncomplete(user) ? user : null;
+  const isAuthed = Boolean(stableUser);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const isCheckingAccess = isLoadingProfile || status === 'authenticating';
+  const isCheckingAccess = isLoadingProfile;
+  const manifest = useMemo(() => createPanelAccessManifest(stableUser), [stableUser]);
+  const userId = stableUser?.id;
+  const userRole = stableUser?.role;
+  const hasPosAccess = manifest.posPanelEnabled;
 
   useEffect(() => {
-    if (user) {
-      if (!isPosRoleAllowed(user.role)) {
+    const activeUser = user && !isUserSessionIncomplete(user) ? user : null;
+
+    if (activeUser) {
+      if (!canAccessPosRoute(createPanelAccessManifest(activeUser))) {
         router.replace('/forbidden');
         toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
       }
       return;
     }
 
+    let isCancelled = false;
+
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
-        dispatch(startAuth());
 
-        const response = await api.get<ProfileResponse>('/auth/profile');
-        const profile = response.data;
+        const nextUser = mapProfileToUser(await fetchProfileResponse());
+
+        if (isCancelled) return;
 
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              effectiveRole: profile.effectiveRole,
-              permissions: profile.permissions,
-              panelHome: profile.panelHome,
-              allowedPanels: profile.allowedPanels,
-              featureStatuses: profile.featureStatuses,
-              businessId: profile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
 
-        if (!isPosRoleAllowed(profile.role)) {
+        if (!canAccessPosRoute(createPanelAccessManifest(nextUser))) {
           router.replace('/forbidden');
           toast.error('Bu sayfaya erişim için POS yetkisi gerekli.');
         }
@@ -800,24 +805,30 @@ export default function PosPage() {
         loginUrl.searchParams.set('next', '/pos');
         router.replace(loginUrl.pathname + loginUrl.search);
       } finally {
-        setIsLoadingProfile(false);
+        if (!isCancelled) {
+          setIsLoadingProfile(false);
+        }
       }
     };
 
-    fetchProfile();
+    void fetchProfile();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [user, dispatch, router]);
 
   const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'customers' | 'finance' | 'orders' | 'settings'>('home');
   const [posPermissions, setPosPermissions] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!user || !isPosRoleAllowed(user.role)) {
+    if (!userId || !userRole || !hasPosAccess) {
       setPosPermissions([]);
       return;
     }
 
     let isMounted = true;
-    const fallback = fallbackPosPermissionsByRole(user.role);
+    const fallback = fallbackPosPermissionsByRole(userRole);
     setPosPermissions((current) => (current.length > 0 ? current : fallback));
 
     const loadPermissions = async () => {
@@ -840,7 +851,7 @@ export default function PosPage() {
     return () => {
       isMounted = false;
     };
-  }, [user?.id, user?.role]);
+  }, [hasPosAccess, userId, userRole]);
 
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState('');
@@ -892,7 +903,7 @@ export default function PosPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [recentSyncedCount, setRecentSyncedCount] = useState<number | null>(null);
+  const [, setRecentSyncedCount] = useState<number | null>(null);
   const [showSyncSuccessBanner, setShowSyncSuccessBanner] = useState(false);
   const [queueItems, setQueueItems] = useState<PosOrderQueueItem[]>([]);
   const [queueActionItemId, setQueueActionItemId] = useState<string | null>(null);
@@ -970,7 +981,7 @@ export default function PosPage() {
             item.payload.idempotencyKey ?? `pos-queue-${item.id}`;
 
           // idempotencyKey is frontend-only — strip it from the body before sending
-          const { idempotencyKey: _ik, ...bodyWithoutKey } = item.payload;
+          const bodyWithoutKey = stripIdempotencyKey(item.payload);
           await api.post('/orders', bodyWithoutKey, {
             headers: {
               'Idempotency-Key': queueIdempotencyKey,
@@ -1453,7 +1464,7 @@ export default function PosPage() {
   }, [activeTab, allowedTabIds]);
 
   const isCheckingAccessView = isCheckingAccess && !user;
-  const isUnauthorizedView = !isCheckingAccessView && (!user || !isPosRoleAllowed(user.role));
+  const isUnauthorizedView = !isCheckingAccessView && (!user || !canAccessPosRoute(manifest));
   const parsedQuantityInput = Number(quantity);
   const parsedUnitPriceInput = Number(unitPriceCents);
   const parsedItemDiscountInput = Number(itemDiscountCents);
@@ -2618,7 +2629,7 @@ export default function PosPage() {
       }
 
       // idempotencyKey is frontend-only — strip it from the body before sending
-      const { idempotencyKey: _idk, ...orderBody } = payload;
+      const orderBody = stripIdempotencyKey(payload);
       const res = await api.post<{
         id: number;
         customerId?: number;

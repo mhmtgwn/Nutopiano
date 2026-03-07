@@ -13,15 +13,19 @@ import {
 import Button from '@/components/common/Button';
 import StatusBadge from '@/components/common/StatusBadge';
 import {
+  createPanelAccessManifest,
+  getBackofficePanelEntries,
+} from '@/lib/panel-access';
+import { fetchProfileResponse } from '@/lib/profile-api';
+import {
   isUserSessionIncomplete,
   mapProfileToUser,
-  resolveUserPanelHome,
 } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { setAuthError, setCredentials } from '@/store/userSlice';
 import api from '@/services/api';
 import { getPanelLabelByRole } from '@/lib/role-routing';
-import type { FeatureStatusCode, ProfileResponse } from '@/types/profile';
+import type { FeatureStatusCode } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -57,7 +61,7 @@ type MenuItem = {
 };
 
 export default function ProfilePage() {
-  const { user, status } = useAppSelector((state) => state.user);
+  const { user } = useAppSelector((state) => state.user);
   const dispatch = useAppDispatch();
   const router = useRouter();
 
@@ -82,10 +86,8 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
-        dispatch(startAuth());
 
-        const response = await api.get<ProfileResponse>('/auth/profile');
-        const nextUser = mapProfileToUser(response.data);
+        const nextUser = mapProfileToUser(await fetchProfileResponse());
 
         if (isCancelled) return;
 
@@ -121,7 +123,7 @@ export default function ProfilePage() {
     setEmail(user.email ?? '');
   }, [user]);
 
-  const isLoading = isLoadingProfile || status === 'authenticating';
+  const isLoading = isLoadingProfile;
   const hasStableUser = Boolean(user && !isUserSessionIncomplete(user));
 
   if (isLoading && !hasStableUser) {
@@ -136,14 +138,15 @@ export default function ProfilePage() {
     return null;
   }
 
-  const hasBackofficePanel = user.role !== 'CUSTOMER';
+  const manifest = createPanelAccessManifest(user);
+  const hasBackofficePanel = manifest.hasBackofficePanels;
+  const panelEntries = getBackofficePanelEntries(manifest);
 
   const handleSaveProfile = async () => {
     const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ').trim();
 
     try {
       setIsSavingProfile(true);
-      dispatch(startAuth());
 
       await api.patch('/auth/profile', {
         name: fullName || undefined,
@@ -151,8 +154,7 @@ export default function ProfilePage() {
         email: email.trim() || undefined,
       });
 
-      const refreshed = await api.get<ProfileResponse>('/auth/profile');
-      const nextUser = mapProfileToUser(refreshed.data);
+      const nextUser = mapProfileToUser(await fetchProfileResponse());
 
       dispatch(
         setCredentials({
@@ -203,7 +205,6 @@ export default function ProfilePage() {
 
     try {
       setIsChangingPassword(true);
-      dispatch(startAuth());
       await api.post('/auth/change-password', {
         currentPassword: trimmedCurrent,
         newPassword: trimmedNew,
@@ -330,7 +331,7 @@ export default function ProfilePage() {
                   <div className="space-y-1 text-sm">
                     <span className="text-[#6b7280]">Panel Home</span>
                     <p className="font-medium text-[#111827]">
-                      {resolveUserPanelHome(user)}
+                      {manifest.panelHome}
                     </p>
                   </div>
                 </div>
@@ -442,15 +443,42 @@ export default function ProfilePage() {
           {activeTab === 'admin' && hasBackofficePanel && (
             <div className="space-y-3">
               <p className="text-sm text-[#6b7280]">
-                Rolunuze ait operasyon arayuzune gecis yapabilirsiniz.
+                Erisebildiginiz operasyon panelleri asagida listelenir.
               </p>
-              <Button
-                type="button"
-                onClick={() => router.push(resolveUserPanelHome(user))}
-                className="h-11 min-w-[160px]"
-              >
-                Panele Git
-              </Button>
+              <div className="grid gap-3 md:grid-cols-2">
+                {panelEntries.map((entry) => {
+                  const Icon = entry.icon;
+                  return (
+                    <button
+                      key={entry.href}
+                      type="button"
+                      onClick={() => router.push(entry.href)}
+                      className="flex items-start gap-3 rounded-xl border border-[#e5e7eb] bg-white px-4 py-4 text-left transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
+                    >
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#f3f4f6] text-[#111827]">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-[#111827]">
+                          {entry.label}
+                        </span>
+                        <span className="mt-1 block text-xs text-[#6b7280]">
+                          {entry.description}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {manifest.hasMultiplePanels ? (
+                <Button
+                  type="button"
+                  onClick={() => router.push('/panel')}
+                  className="h-11 min-w-[160px]"
+                >
+                  Panel Secici
+                </Button>
+              ) : null}
             </div>
           )}
         </section>

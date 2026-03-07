@@ -7,10 +7,10 @@ export interface User {
   email?: string;
   role: string;
   effectiveRole?: string;
-  permissions?: string[];
-  panelHome?: string;
-  allowedPanels?: string[];
-  featureStatuses?: Array<{
+  permissions: string[];
+  panelHome: string;
+  allowedPanels: string[];
+  featureStatuses: Array<{
     key: string;
     status: 'ACTIVE' | 'PLANNED' | 'BLOCKED';
     note?: string;

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import api from '@/services/api';
+import { fetchProfileResponse } from '@/lib/profile-api';
 import { mapProfileToUser } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setCredentials } from '@/store/userSlice';
-import type { ProfileResponse } from '@/types/profile';
 
 export default function AuthBootstrap() {
   const dispatch = useAppDispatch();
@@ -23,10 +22,8 @@ export default function AuthBootstrap() {
 
     const bootstrapSession = async () => {
       try {
-        const response = await api.get<ProfileResponse>('/auth/profile');
+        const profile = await fetchProfileResponse();
         if (isCancelled) return;
-
-        const profile = response.data;
         dispatch(
           setCredentials({
             user: mapProfileToUser(profile),

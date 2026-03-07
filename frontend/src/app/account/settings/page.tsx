@@ -6,16 +6,20 @@ import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
 import {
+  createPanelAccessManifest,
+  getAccountCommerceLinks,
+  getBackofficePanelEntries,
+} from '@/lib/panel-access';
+import { fetchProfileResponse } from '@/lib/profile-api';
+import {
   isUserSessionIncomplete,
   mapProfileToUser,
-  resolveUserPanelHome,
 } from '@/lib/profile-session';
 import { resolveApiErrorMessage } from '@/lib/api-errors';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
+import { logout, setAuthError, setCredentials } from '@/store/userSlice';
 import api from '@/services/api';
 import { getPanelLabelByRole } from '@/lib/role-routing';
-import type { ProfileResponse } from '@/types/profile';
 
 interface CustomerPreferencesResponse {
   allowSms: boolean;
@@ -28,7 +32,7 @@ interface CustomerPreferencesResponse {
 }
 
 export default function AccountSettingsPage() {
-  const { user, status } = useAppSelector((state) => state.user);
+  const { user } = useAppSelector((state) => state.user);
   const dispatch = useAppDispatch();
   const router = useRouter();
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
@@ -45,10 +49,8 @@ export default function AccountSettingsPage() {
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
-        dispatch(startAuth());
 
-        const response = await api.get<ProfileResponse>('/auth/profile');
-        const nextUser = mapProfileToUser(response.data);
+        const nextUser = mapProfileToUser(await fetchProfileResponse());
 
         if (isCancelled) return;
 
@@ -107,7 +109,7 @@ export default function AccountSettingsPage() {
     }
   };
 
-  const isLoading = isLoadingProfile || status === 'authenticating';
+  const isLoading = isLoadingProfile;
   const hasStableUser = Boolean(user && !isUserSessionIncomplete(user));
 
   if (isLoading && !hasStableUser) {
@@ -134,8 +136,11 @@ export default function AccountSettingsPage() {
     return null;
   }
 
-  const isCustomer = user.role === 'CUSTOMER';
-  const hasBackofficePanel = !isCustomer;
+  const manifest = createPanelAccessManifest(user);
+  const isCustomer = manifest.customerPanelEnabled;
+  const hasBackofficePanel = manifest.hasBackofficePanels;
+  const commerceLinks = getAccountCommerceLinks(manifest);
+  const panelLinks = getBackofficePanelEntries(manifest);
 
   const canEditPreferences = isCustomer;
 
@@ -191,35 +196,43 @@ export default function AccountSettingsPage() {
             <p className="mt-2 text-sm text-[var(--neutral-600)]">Ad, telefon, e-posta ve şifre işlemleri.</p>
           </button>
 
-          <button
-            type="button"
-            onClick={() => router.push('/account/orders')}
-            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Siparişler</p>
-            <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Siparişlerimi görüntüle</p>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">Geçmiş siparişler ve detaylar.</p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push('/account/addresses')}
-            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Adresler</p>
-            <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Adres defterim</p>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">Kargo ve fatura adresleri.</p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push('/account/reviews')}
-            className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">Yorumlar</p>
-            <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">Yorumlarımı yönet</p>
-            <p className="mt-2 text-sm text-[var(--neutral-600)]">Değerlendirme ve yorumlar.</p>
-          </button>
+          {isCustomer
+            ? commerceLinks.slice(0, 3).map((link) => (
+                <button
+                  key={link.href}
+                  type="button"
+                  onClick={() => router.push(link.href)}
+                  className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    {link.label}
+                  </p>
+                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                    {link.label}
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--neutral-600)]">
+                    Musteri hesabiniza ait hizli erisim baglantisi.
+                  </p>
+                </button>
+              ))
+            : panelLinks.slice(0, 3).map((link) => (
+                <button
+                  key={link.href}
+                  type="button"
+                  onClick={() => router.push(link.href)}
+                  className="surface-panel-muted p-5 text-left transition hover:-translate-y-0.5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--neutral-500)]">
+                    Panel
+                  </p>
+                  <p className="mt-2 text-lg font-serif text-[var(--primary-800)]">
+                    {link.label}
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--neutral-600)]">
+                    Yetkili oldugunuz operasyon yuzeyine gecis yapin.
+                  </p>
+                </button>
+              ))}
         </section>
 
         <section className="surface-panel p-5 md:p-6">
@@ -355,8 +368,8 @@ export default function AccountSettingsPage() {
               Rolünüze ait operasyon arayüzüne geçiş yapın.
             </p>
             <div className="mt-4">
-              <Button type="button" onClick={() => router.push(resolveUserPanelHome(user))}>
-                Panele Git
+              <Button type="button" onClick={() => router.push(manifest.panelSwitcherHref)}>
+                {manifest.hasMultiplePanels ? 'Panel Secici' : 'Panele Git'}
               </Button>
             </div>
           </section>

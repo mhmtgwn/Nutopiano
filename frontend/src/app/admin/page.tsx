@@ -21,6 +21,8 @@ import Spinner from '@/components/common/Spinner';
 import { formatPrice } from '@/lib/format';
 import api from '@/services/api';
 
+const PANEL_QUERY_TIMEOUT_MS = 12000;
+
 interface DashboardSummary {
   activeProducts: number;
   lowStockProducts: number;
@@ -128,26 +130,50 @@ function KpiRow({ title, value, note }: KpiRowProps) {
 export default function AdminOverviewPage() {
   const summaryQ = useQuery<DashboardSummary>({
     queryKey: ['seller-panel-summary'],
-    queryFn: async () => (await api.get<DashboardSummary>('/dashboard/summary')).data,
+    queryFn: async () =>
+      (
+        await api.get<DashboardSummary>('/dashboard/summary', {
+          timeout: PANEL_QUERY_TIMEOUT_MS,
+        })
+      ).data,
+    retry: 1,
   });
 
   const reportsQ = useQuery<DashboardReportsSummary>({
     queryKey: ['seller-panel-reports'],
-    queryFn: async () => (await api.get<DashboardReportsSummary>('/dashboard/reports/summary')).data,
+    queryFn: async () =>
+      (
+        await api.get<DashboardReportsSummary>('/dashboard/reports/summary', {
+          timeout: PANEL_QUERY_TIMEOUT_MS,
+        })
+      ).data,
+    retry: 1,
   });
 
   const customersQ = useQuery<SellerCustomersResponse>({
     queryKey: ['seller-panel-customers'],
-    queryFn: async () => (await api.get<SellerCustomersResponse>('/seller/customers?page=1&pageSize=1')).data,
+    queryFn: async () =>
+      (
+        await api.get<SellerCustomersResponse>('/seller/customers?page=1&pageSize=1', {
+          timeout: PANEL_QUERY_TIMEOUT_MS,
+        })
+      ).data,
+    retry: 1,
   });
 
   const ordersQ = useQuery<OrderListResponse>({
     queryKey: ['seller-panel-orders'],
-    queryFn: async () => (await api.get<OrderListResponse>('/orders?page=1&pageSize=8')).data,
+    queryFn: async () =>
+      (
+        await api.get<OrderListResponse>('/orders?page=1&pageSize=8', {
+          timeout: PANEL_QUERY_TIMEOUT_MS,
+        })
+      ).data,
+    retry: 1,
   });
 
   const isLoading = summaryQ.isLoading || reportsQ.isLoading || ordersQ.isLoading || customersQ.isLoading;
-  const isError = summaryQ.isError || reportsQ.isError || ordersQ.isError || customersQ.isError;
+  const isError = summaryQ.isError && reportsQ.isError && ordersQ.isError && customersQ.isError;
 
   const summary = summaryQ.data;
   const reports = reportsQ.data;
@@ -204,7 +230,7 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-8">
-      {isLoading && <Spinner label="Panel verileri yükleniyor..." />}
+      {isLoading && <Spinner label="Panel verileri yukleniyor..." />}
 
       {isError && (
         <div className="flex items-center gap-2 border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -213,7 +239,7 @@ export default function AdminOverviewPage() {
         </div>
       )}
 
-      {!isLoading && !isError && (
+      {!isError && (
         <>
           <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
             {kpis.map((item) => (

@@ -6,16 +6,17 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
+import { createPanelAccessManifest, getPanelSwitcherEntries } from '@/lib/panel-access';
+import { fetchProfileResponse } from '@/lib/profile-api';
 import {
   isUserSessionIncomplete,
   mapProfileToUser,
   mapUserToProfile,
 } from '@/lib/profile-session';
-import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { getPanelLabelByRole, normalizeRole } from '@/lib/role-routing';
-import type { PanelKey, ProfileResponse } from '@/types/profile';
+import { logout, setAuthError, setCredentials } from '@/store/userSlice';
+import { getPanelLabelByRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -32,70 +33,17 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const PANEL_META: Record<PanelKey, { title: string; href: string; note: string }> = {
-  ADMIN: {
-    title: 'Admin Paneli',
-    href: '/admin',
-    note: 'Platform ve business operasyonlarini yonetin.',
-  },
-  SELLER: {
-    title: 'Satıcı Paneli',
-    href: '/dashboard',
-    note: 'Siparis, urun, musteri ve magaza akislarini yonetin.',
-  },
-  POS: {
-    title: 'POS Paneli',
-    href: '/pos',
-    note: 'Kasa, vardiya ve satis islemlerini yonetin.',
-  },
-  CUSTOMER: {
-    title: 'Musteri Paneli',
-    href: '/account/orders',
-    note: 'Siparis, profil ve adres akislarina erisin.',
-  },
-};
-
-const fallbackAllowedPanels = (role?: string | null): PanelKey[] => {
-  const normalized = normalizeRole(role);
-  switch (normalized) {
-    case 'SUPER_ADMIN':
-    case 'ADMIN':
-      return ['ADMIN', 'SELLER', 'POS', 'CUSTOMER'];
-    case 'SELLER':
-      return ['SELLER', 'POS'];
-    case 'SELLER_STAFF':
-      return [];
-    case 'CUSTOMER':
-      return ['CUSTOMER'];
-    default:
-      return [];
-  }
-};
-
-const normalizeAllowedPanels = (
-  allowedPanels: string[] | undefined,
-  role?: string | null,
-): PanelKey[] => {
-  const direct = Array.isArray(allowedPanels)
-    ? allowedPanels.filter((value): value is PanelKey =>
-        value === 'ADMIN' || value === 'SELLER' || value === 'POS' || value === 'CUSTOMER',
-      )
-    : [];
-
-  if (direct.length > 0) {
-    return Array.from(new Set(direct));
-  }
-
-  return fallbackAllowedPanels(role);
-};
-
 export default function PanelGatewayPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, status } = useAppSelector((state) => state.user);
+  const { user } = useAppSelector((state) => state.user);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const hasRequestedFreshProfileRef = useRef(false);
+  const manifest = useMemo(
+    () => createPanelAccessManifest(profile ?? user ?? undefined),
+    [profile, user],
+  );
 
   useEffect(() => {
     const activeUser = user && !isUserSessionIncomplete(user) ? user : null;
@@ -105,10 +53,7 @@ export default function PanelGatewayPage() {
       return;
     }
 
-    if (hasRequestedFreshProfileRef.current && user) {
-      setProfile(mapUserToProfile(user));
-      return;
-    }
+    if (hasRequestedFreshProfileRef.current) return;
 
     hasRequestedFreshProfileRef.current = true;
     let isCancelled = false;
@@ -116,10 +61,8 @@ export default function PanelGatewayPage() {
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
-        dispatch(startAuth());
 
-        const response = await api.get<ProfileResponse>('/auth/profile');
-        const nextUser = mapProfileToUser(response.data);
+        const nextUser = mapProfileToUser(await fetchProfileResponse());
 
         if (isCancelled) return;
 
@@ -149,11 +92,17 @@ export default function PanelGatewayPage() {
     };
   }, [dispatch, router, user]);
 
-  const isLoading = isLoadingProfile || status === 'authenticating';
-  const allowedPanels = useMemo(
-    () => normalizeAllowedPanels(profile?.allowedPanels, profile?.role),
-    [profile?.allowedPanels, profile?.role],
-  );
+  useEffect(() => {
+    if (!profile) return;
+    if (manifest.visiblePanels.length !== 1) return;
+    const target = manifest.visiblePanels[0]?.href;
+    if (target) {
+      router.replace(target);
+    }
+  }, [manifest.visiblePanels, profile, router]);
+
+  const isLoading = isLoadingProfile;
+  const panelEntries = getPanelSwitcherEntries(manifest);
 
   if (isLoading && !profile) {
     return (
@@ -172,7 +121,7 @@ export default function PanelGatewayPage() {
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <section className="rounded-2xl border border-[var(--neutral-200)] bg-gradient-to-br from-[#F7F1E5] via-white to-[#ECF6F3] px-6 py-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--neutral-500)]">
-            Panel Kapisi
+            Panel Switcher
           </p>
           <h1 className="mt-2 text-3xl font-serif text-[var(--primary-800)] md:text-4xl">
             {profile.name ?? 'Nutopiano Kullanici'}
@@ -181,40 +130,76 @@ export default function PanelGatewayPage() {
             Rol: <span className="font-semibold">{getPanelLabelByRole(profile.role)}</span>
             {profile.effectiveRole ? ` | Effective: ${profile.effectiveRole}` : ''}
           </p>
+          <p className="mt-3 max-w-2xl text-sm text-[var(--neutral-600)]">
+            Erisilebilir panel sayisi {manifest.visiblePanels.length}. Tek panel varsa otomatik
+            yonlendirme yapilir, birden fazla panel varsa buradan secim yapabilirsiniz.
+          </p>
         </section>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-2">
-          {allowedPanels.map((panel) => {
-            const item = PANEL_META[panel];
-            return (
-              <Link
-                key={panel}
-                href={item.href}
-                className="group rounded-2xl border border-[var(--neutral-200)] bg-white px-5 py-5 transition hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                      {panel}
-                    </p>
-                    <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
-                      {item.title}
-                    </h2>
-                    <p className="mt-2 text-sm text-[var(--neutral-600)]">{item.note}</p>
-                  </div>
-                  <LayoutDashboard className="h-5 w-5 text-[var(--neutral-400)]" />
-                </div>
-                <p className="mt-4 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary-700)]">
-                  Panele Git <ArrowRight className="h-3.5 w-3.5" />
-                </p>
-              </Link>
-            );
-          })}
-        </section>
-
-        {allowedPanels.length === 0 ? (
+        {manifest.visiblePanels.length === 0 ? (
           <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700">
             Bu hesap icin aktif panel erisimi bulunmuyor.
+          </section>
+        ) : null}
+
+        {manifest.visiblePanels.length > 1 ? (
+          <section className="mt-6 grid gap-4 md:grid-cols-2">
+            {panelEntries.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group rounded-2xl border border-[var(--neutral-200)] bg-white px-5 py-5 transition hover:border-[var(--primary-300)] hover:bg-[var(--neutral-50)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
+                        Panel
+                      </p>
+                      <h2 className="mt-2 text-lg font-semibold text-[var(--primary-800)]">
+                        {item.label}
+                      </h2>
+                      <p className="mt-2 text-sm text-[var(--neutral-600)]">
+                        {item.description}
+                      </p>
+                    </div>
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--neutral-100)] text-[var(--primary-800)]">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                  </div>
+                  <p className="mt-4 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary-700)]">
+                    Ac <ArrowRight className="h-3.5 w-3.5" />
+                  </p>
+                </Link>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {manifest.primaryPanel ? (
+          <section className="mt-6 rounded-2xl border border-[var(--neutral-200)] bg-white px-5 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--neutral-100)] text-[var(--primary-800)]">
+                  <LayoutDashboard className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--primary-800)]">
+                    Ana Panel
+                  </p>
+                  <p className="text-sm text-[var(--neutral-600)]">
+                    {manifest.primaryPanel.label}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={manifest.primaryPanel.href}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--neutral-200)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary-800)] hover:bg-[var(--neutral-50)]"
+              >
+                Panele Git <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
           </section>
         ) : null}
       </div>

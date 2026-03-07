@@ -5,24 +5,22 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
-  LayoutDashboard,
   LogOut,
   Search,
-  Settings,
   ShoppingBag,
   Store,
-  User,
   UserCircle2,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import {
-  getBackofficeMenuLinks,
-  getCustomerMenuLinks,
-} from '@/lib/account-menu';
+  createPanelAccessManifest,
+  getAccountCommerceLinks,
+  getAccountCoreLinks,
+  getBackofficePanelEntries,
+} from '@/lib/panel-access';
 import { getPanelLabelByRole } from '@/lib/role-routing';
-import { resolveUserPanelHome } from '@/lib/profile-session';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
@@ -42,13 +40,31 @@ export default function MobileBottomNav() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const manifest = useMemo(() => createPanelAccessManifest(user), [user]);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
-  const accountHref = user ? resolveUserPanelHome(user) : '/login';
+  const accountHref = user ? manifest.panelSwitcherHref : '/login';
   const accountLabel = user?.role === 'CUSTOMER' ? 'Hesap' : 'Panel';
   const panelLabel = getPanelLabelByRole(user?.role);
-  const backofficeLinks = useMemo(() => getBackofficeMenuLinks(user), [user]);
-  const customerLinks = useMemo(() => getCustomerMenuLinks(), []);
+  const coreLinks = useMemo(() => getAccountCoreLinks(manifest), [manifest]);
+  const backofficeLinks = useMemo(
+    () =>
+      getBackofficePanelEntries(manifest).map((entry) => ({
+        href: entry.href,
+        icon: entry.icon,
+        label: entry.label,
+      })),
+    [manifest],
+  );
+  const customerLinks = useMemo(
+    () =>
+      getAccountCommerceLinks(manifest).map((entry) => ({
+        href: entry.href,
+        icon: entry.icon,
+        label: entry.label,
+      })),
+    [manifest],
+  );
   const isAccountRoute = Boolean(
     pathname &&
       (pathname.startsWith('/account') ||
@@ -98,29 +114,18 @@ export default function MobileBottomNav() {
   };
 
   const coreAccountLinks = user
-    ? [
-        {
-          href: accountHref,
-          icon: LayoutDashboard,
-          label: panelLabel,
-          description:
-            user.role === 'CUSTOMER'
-              ? 'Siparişlerinizi ve hesap detaylarınızı yönetin.'
-              : 'Yetkili olduğunuz çalışma alanına doğrudan geçin.',
-        },
-        {
-          href: '/account/profile',
-          icon: User,
-          label: 'Profil',
-          description: 'İletişim ve hesap bilgilerinizi düzenleyin.',
-        },
-        {
-          href: '/account/settings',
-          icon: Settings,
-          label: 'Ayarlar',
-          description: 'Bildirim ve güvenlik tercihlerinizi yönetin.',
-        },
-      ]
+    ? coreLinks.map((link) => ({
+        href: link.href,
+        icon: link.icon,
+        label: link.label,
+        description:
+          link.description ??
+          (link.href === '/account/profile'
+            ? 'Iletisim ve hesap bilgilerinizi duzenleyin.'
+            : link.href === '/account/settings'
+              ? 'Bildirim ve guvenlik tercihlerini yonetin.'
+              : 'Yetkili oldugunuz calisma alanina gidin.'),
+      }))
     : [];
 
   const navItems = [
@@ -212,7 +217,7 @@ export default function MobileBottomNav() {
                 </div>
               ) : null}
 
-              {user.role === 'CUSTOMER' && customerLinks.length > 0 ? (
+              {manifest.customerPanelEnabled && customerLinks.length > 0 ? (
                 <div className="mt-5">
                   <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--neutral-500)]">
                     Hesap Kısayolları

@@ -8,6 +8,8 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 import StatusBadge from '@/components/common/StatusBadge';
+import { APP_ROLES, type AppRole } from '@/lib/role-routing';
+import { ROLE_FEATURE_PRESETS } from '@/lib/panel-access';
 
 type FeatureStatusCode = 'ACTIVE' | 'PLANNED' | 'BLOCKED';
 type RoleFeatureStatus = {
@@ -22,82 +24,21 @@ const featureStatusVariant = (status: FeatureStatusCode) => {
     return 'error' as const;
 };
 
-/* ── Static Roles ── */
-const ROLES = [
-    {
-        key: 'SUPER_ADMIN',
-        label: 'Süper Admin',
-        description: 'Platform yöneticisi — tam erişim',
-        variant: 'error' as const,
-        permissionScope: 'Tüm yetkiler',
-        features: [
-            { key: 'platform.settings', status: 'ACTIVE' },
-            { key: 'platform.feature_flags', status: 'ACTIVE' },
-            { key: 'platform.api_keys', status: 'ACTIVE' },
-            { key: 'platform.audit_outbox', status: 'ACTIVE' },
-            { key: 'platform.finance_all', status: 'ACTIVE' },
-            { key: 'platform.report_exports', status: 'PLANNED', note: 'Ek export modulleri faz-2.' },
-        ] as RoleFeatureStatus[],
-    },
-    {
-        key: 'ADMIN',
-        label: 'Admin',
-        description: 'İşletme yöneticisi — kendi işletmesinde tam erişim',
-        variant: 'purple' as const,
-        permissionScope: 'Rol atama ve impersonation hariç tüm yetkiler',
-        features: [
-            { key: 'business.operations', status: 'ACTIVE' },
-            { key: 'seller.management', status: 'ACTIVE' },
-            { key: 'finance.payouts', status: 'ACTIVE' },
-            { key: 'audit.read', status: 'ACTIVE' },
-            { key: 'platform.superadmin_only', status: 'BLOCKED', note: 'Sadece SUPER_ADMIN.' },
-        ] as RoleFeatureStatus[],
-    },
-    {
-        key: 'SELLER',
-        label: 'Satıcı',
-        description: 'Satıcı — kendi mağazasını yönetir',
-        variant: 'info' as const,
-        permissionScope: 'Kendi ürün/sipariş/müşteri/finans yetkileri',
-        features: [
-            { key: 'seller.products', status: 'ACTIVE' },
-            { key: 'seller.orders', status: 'ACTIVE' },
-            { key: 'seller.customers', status: 'ACTIVE' },
-            { key: 'seller.pos', status: 'ACTIVE' },
-            { key: 'seller.finance_own', status: 'ACTIVE' },
-            { key: 'seller.advanced_modules', status: 'PLANNED', note: 'Dokumanda olan ek moduller.' },
-        ] as RoleFeatureStatus[],
-    },
-    {
-        key: 'SELLER_STAFF',
-        label: 'Satıcı Personeli',
-        description: 'Satıcı personelidir — Yetki Gruplarıyla kontrol edilir (legacy USER alias desteklenir)',
-        variant: 'warning' as const,
-        permissionScope: 'Varsayılan yok — atanmış yetki grubu belirler',
-        features: [
-            { key: 'staff.assigned_permissions', status: 'ACTIVE', note: 'Atanan yetki grubuna gore degisir.' },
-            { key: 'staff.out_of_scope', status: 'BLOCKED', note: 'Yetki grubu disindaki islemler kapali.' },
-        ] as RoleFeatureStatus[],
-    },
-    {
-        key: 'CUSTOMER',
-        label: 'Müşteri',
-        description: 'Son kullanıcı — sadece mağaza ve sipariş işlemleri',
-        variant: 'neutral' as const,
-        permissionScope: 'Sipariş verme, profil yönetimi',
-        features: [
-            { key: 'customer.profile', status: 'ACTIVE' },
-            { key: 'customer.addresses', status: 'ACTIVE' },
-            { key: 'customer.orders', status: 'ACTIVE' },
-            { key: 'customer.favorites', status: 'ACTIVE' },
-            { key: 'customer.reviews', status: 'ACTIVE' },
-            { key: 'customer.backoffice', status: 'BLOCKED', note: 'Backoffice panellerine erisim yok.' },
-        ] as RoleFeatureStatus[],
-    },
-];
+const ROLES = APP_ROLES.map((role) => {
+    const preset = ROLE_FEATURE_PRESETS[role];
+
+    return {
+        key: role,
+        label: preset.label,
+        description: preset.description,
+        variant: preset.variant,
+        permissionScope: preset.permissionScope,
+        features: preset.features as RoleFeatureStatus[],
+    };
+});
 
 /* ── Permission Matrix ── */
-const permissionMatrix: Record<string, Record<string, string[]>> = {
+const permissionMatrix: Record<AppRole, Record<string, string[]>> = {
     SUPER_ADMIN: {
         'Kullanıcı Yönetimi': ['users.view', 'users.create', 'users.edit', 'users.delete', 'users.role.assign', 'users.activate', 'users.2fa.manage', 'users.impersonate'],
         'Satıcı Yönetimi': ['sellers.view', 'sellers.create', 'sellers.edit', 'sellers.activate', 'sellers.applications.view', 'sellers.applications.approve', 'sellers.team.view', 'sellers.team.manage', 'sellers.impersonate'],

@@ -7,8 +7,8 @@ import { useAppDispatch } from '@/store';
 import { setCredentials, startAuth, setAuthError } from '@/store/userSlice';
 import api from '@/services/api';
 import Button from '@/components/common/Button';
+import { fetchProfileResponse } from '@/lib/profile-api';
 import { mapProfileToUser } from '@/lib/profile-session';
-import type { ProfileResponse } from '@/types/profile';
 
 type AuthScreen = 'login' | 'register' | 'forgot';
 
@@ -84,8 +84,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
       void loginResponse.data.accessToken;
 
-      const profileResponse = await api.get<ProfileResponse>('/auth/profile');
-      const profile = profileResponse.data;
+      const profile = await fetchProfileResponse();
 
       dispatch(
         setCredentials({
@@ -156,8 +155,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
       void registerResponse.data.accessToken;
 
-      const profileResponse = await api.get<ProfileResponse>('/auth/profile');
-      const profile = profileResponse.data;
+      const profile = await fetchProfileResponse();
 
       dispatch(
         setCredentials({

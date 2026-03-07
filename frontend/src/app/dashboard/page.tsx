@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 
 import Spinner from '@/components/common/Spinner';
-import api from '@/services/api';
 import { formatDateTime, formatPrice } from '@/lib/format';
+import api from '@/services/api';
 import { useAppSelector } from '@/store';
 
 interface SellerDashboardSummary {
@@ -53,6 +53,8 @@ interface PaginatedPayouts {
   meta: PaginationMeta;
 }
 
+const PANEL_QUERY_TIMEOUT_MS = 12000;
+
 const statusBadgeClassName = (status: string) => {
   const key = String(status ?? '').trim().toUpperCase();
   if (key === 'REQUESTED' || key === 'PENDING') return 'bg-[#FFF7E6] text-[#7A4B00]';
@@ -69,18 +71,24 @@ export default function SellerDashboardPage() {
   const summaryQuery = useQuery<SellerDashboardSummary>({
     queryKey: ['seller-dashboard-summary-v2'],
     queryFn: async () => {
-      const res = await api.get<SellerDashboardSummary>('/dashboard/summary');
+      const res = await api.get<SellerDashboardSummary>('/dashboard/summary', {
+        timeout: PANEL_QUERY_TIMEOUT_MS,
+      });
       return res.data;
     },
+    retry: 1,
   });
 
   const payoutabilityQuery = useQuery<SellerPayoutability>({
     queryKey: ['seller-payoutability-dashboard'],
     enabled: isSeller,
     queryFn: async () => {
-      const res = await api.get<SellerPayoutability>('/seller/finance/payoutability');
+      const res = await api.get<SellerPayoutability>('/seller/finance/payoutability', {
+        timeout: PANEL_QUERY_TIMEOUT_MS,
+      });
       return res.data;
     },
+    retry: 1,
   });
 
   const latestOrdersQuery = useQuery<PaginatedOrders>({
@@ -88,9 +96,11 @@ export default function SellerDashboardPage() {
     queryFn: async () => {
       const res = await api.get<PaginatedOrders>('/orders', {
         params: { page: 1, pageSize: 10 },
+        timeout: PANEL_QUERY_TIMEOUT_MS,
       });
       return res.data;
     },
+    retry: 1,
   });
 
   const latestPayoutQuery = useQuery<PaginatedPayouts>({
@@ -99,21 +109,17 @@ export default function SellerDashboardPage() {
     queryFn: async () => {
       const res = await api.get<PaginatedPayouts>('/seller/finance/payouts', {
         params: { page: 1, pageSize: 1 },
+        timeout: PANEL_QUERY_TIMEOUT_MS,
       });
       return res.data;
     },
+    retry: 1,
   });
 
-  const isLoading =
-    summaryQuery.isLoading ||
-    latestOrdersQuery.isLoading ||
-    (isSeller && payoutabilityQuery.isLoading) ||
-    (isSeller && latestPayoutQuery.isLoading);
-
-  const isError = summaryQuery.isError || latestOrdersQuery.isError;
   const latestOrders = latestOrdersQuery.data?.data ?? [];
   const mismatchCount = latestOrders.filter((row) => Boolean(row.priceMismatch)).length;
   const latestPayout = latestPayoutQuery.data?.data?.[0];
+  const hasCriticalError = summaryQuery.isError && latestOrdersQuery.isError;
 
   return (
     <div className="space-y-6">
@@ -127,15 +133,17 @@ export default function SellerDashboardPage() {
         </p>
       </section>
 
-      {isLoading ? <Spinner fullscreen label="Dashboard yukleniyor..." /> : null}
+      {summaryQuery.isLoading || latestOrdersQuery.isLoading ? (
+        <Spinner label="Dashboard verileri yukleniyor..." />
+      ) : null}
 
-      {isError ? (
+      {hasCriticalError ? (
         <section className="rounded-[var(--radius-xl)] border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
           Dashboard verileri alinamadi.
         </section>
       ) : null}
 
-      {!isLoading && !isError ? (
+      {!hasCriticalError ? (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
@@ -143,7 +151,7 @@ export default function SellerDashboardPage() {
                 Today Sales
               </p>
               <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {formatPrice(summaryQuery.data?.revenueTodayCents ?? 0)}
+                {summaryQuery.data ? formatPrice(summaryQuery.data.revenueTodayCents) : '—'}
               </p>
             </div>
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
@@ -151,7 +159,7 @@ export default function SellerDashboardPage() {
                 Today Orders
               </p>
               <p className="mt-2 text-2xl font-serif text-[var(--primary-800)]">
-                {summaryQuery.data?.ordersToday ?? 0}
+                {summaryQuery.data?.ordersToday ?? '—'}
               </p>
             </div>
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
@@ -159,7 +167,9 @@ export default function SellerDashboardPage() {
                 Pending Balance
               </p>
               <p className="mt-2 text-2xl font-serif text-[#7A4B00]">
-                {formatPrice(payoutabilityQuery.data?.pendingBalanceCents ?? 0)}
+                {payoutabilityQuery.data
+                  ? formatPrice(payoutabilityQuery.data.pendingBalanceCents)
+                  : '—'}
               </p>
             </div>
             <div className="rounded-[var(--radius-xl)] border border-[var(--neutral-200)] bg-white px-5 py-5">
@@ -167,7 +177,9 @@ export default function SellerDashboardPage() {
                 Available Balance
               </p>
               <p className="mt-2 text-2xl font-serif text-[#0F5132]">
-                {formatPrice(payoutabilityQuery.data?.availableBalanceCents ?? 0)}
+                {payoutabilityQuery.data
+                  ? formatPrice(payoutabilityQuery.data.availableBalanceCents)
+                  : '—'}
               </p>
             </div>
           </section>
@@ -183,57 +195,65 @@ export default function SellerDashboardPage() {
                 Mismatch {mismatchCount}
               </span>
             </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--neutral-200)] text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
-                    <th className="py-3 pr-4">Order</th>
-                    <th className="py-3 pr-4">Channel</th>
-                    <th className="py-3 pr-4">Status</th>
-                    <th className="py-3 pr-4">Total</th>
-                    <th className="py-3 pr-4">Commission</th>
-                    <th className="py-3 pr-4">Seller Net</th>
-                    <th className="py-3 pr-4">Mismatch</th>
-                    <th className="py-3">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {latestOrders.map((row) => (
-                    <tr key={row.id} className="border-b border-[var(--neutral-100)]">
-                      <td className="py-3 pr-4 font-semibold text-[var(--primary-800)]">#{row.id}</td>
-                      <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.source}</td>
-                      <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.statusKey}</td>
-                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
-                        {formatPrice(row.totalAmountCents)}
-                      </td>
-                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
-                        {formatPrice(row.commissionAmountCents ?? 0)}
-                      </td>
-                      <td className="py-3 pr-4 text-[var(--neutral-700)]">
-                        {formatPrice(row.sellerNetAmountCents ?? 0)}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${
-                            row.priceMismatch ? 'bg-[#FDECEC] text-[#9B1C1C]' : 'bg-[#E6FBF2] text-[#0F5132]'
-                          }`}
-                        >
-                          {row.priceMismatch ? 'Flag' : 'OK'}
-                        </span>
-                      </td>
-                      <td className="py-3 text-[var(--neutral-600)]">{formatDateTime(row.createdAt)}</td>
+            {latestOrdersQuery.isError ? (
+              <div className="mt-4 rounded-[var(--radius-lg)] border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+                Siparis listesi alinamadi.
+              </div>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--neutral-200)] text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--neutral-500)]">
+                      <th className="py-3 pr-4">Order</th>
+                      <th className="py-3 pr-4">Channel</th>
+                      <th className="py-3 pr-4">Status</th>
+                      <th className="py-3 pr-4">Total</th>
+                      <th className="py-3 pr-4">Commission</th>
+                      <th className="py-3 pr-4">Seller Net</th>
+                      <th className="py-3 pr-4">Mismatch</th>
+                      <th className="py-3">Created</th>
                     </tr>
-                  ))}
-                  {latestOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-5 text-center text-sm text-[var(--neutral-600)]">
-                        Siparis kaydi bulunamadi.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {latestOrders.map((row) => (
+                      <tr key={row.id} className="border-b border-[var(--neutral-100)]">
+                        <td className="py-3 pr-4 font-semibold text-[var(--primary-800)]">#{row.id}</td>
+                        <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.source}</td>
+                        <td className="py-3 pr-4 text-[var(--neutral-700)]">{row.statusKey}</td>
+                        <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                          {formatPrice(row.totalAmountCents)}
+                        </td>
+                        <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                          {formatPrice(row.commissionAmountCents ?? 0)}
+                        </td>
+                        <td className="py-3 pr-4 text-[var(--neutral-700)]">
+                          {formatPrice(row.sellerNetAmountCents ?? 0)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] ${
+                              row.priceMismatch ? 'bg-[#FDECEC] text-[#9B1C1C]' : 'bg-[#E6FBF2] text-[#0F5132]'
+                            }`}
+                          >
+                            {row.priceMismatch ? 'Flag' : 'OK'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-[var(--neutral-600)]">
+                          {formatDateTime(row.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                    {latestOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-5 text-center text-sm text-[var(--neutral-600)]">
+                          Siparis kaydi bulunamadi.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <Link
               href="/dashboard/orders"
               className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary-800)] hover:underline"
@@ -248,11 +268,15 @@ export default function SellerDashboardPage() {
               <p className="mt-3 text-sm text-[var(--neutral-600)]">
                 Bu alan sadece SELLER hesabinda aktif.
               </p>
+            ) : latestPayoutQuery.isError ? (
+              <p className="mt-3 text-sm text-red-700">Payout verisi alinamadi.</p>
             ) : latestPayout ? (
               <div className="mt-3 flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-4 py-3">
                 <div>
                   <p className="text-sm font-semibold text-[var(--primary-800)]">#{latestPayout.id}</p>
-                  <p className="text-xs text-[var(--neutral-600)]">{formatDateTime(latestPayout.requestedAt)}</p>
+                  <p className="text-xs text-[var(--neutral-600)]">
+                    {formatDateTime(latestPayout.requestedAt)}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-[var(--primary-800)]">

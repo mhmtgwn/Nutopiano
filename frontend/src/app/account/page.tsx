@@ -4,20 +4,19 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
-  ClipboardList,
-  Heart,
-  LayoutDashboard,
-  MapPin,
-  MessageSquare,
-  Settings,
-  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
 import { formatPrice } from '@/lib/format';
-import { resolveProfilePanelHome } from '@/lib/profile-session';
-import { getPanelLabelByRole, isPosRoleAllowed } from '@/lib/role-routing';
+import { fetchProfileResponse } from '@/lib/profile-api';
+import {
+  createPanelAccessManifest,
+  getAccountCommerceLinks,
+  getAccountCoreLinks,
+  getBackofficePanelEntries,
+} from '@/lib/panel-access';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 import api from '@/services/api';
 import type { ProfileResponse } from '@/types/profile';
 
@@ -80,10 +79,7 @@ const resolveApiErrorMessage = (error: unknown, fallback: string) => {
 export default function AccountHomePage() {
   const profileQuery = useQuery<ProfileResponse>({
     queryKey: ['account-home-profile'],
-    queryFn: async () => {
-      const res = await api.get<ProfileResponse>('/auth/profile');
-      return res.data;
-    },
+    queryFn: fetchProfileResponse,
   });
 
   const role = profileQuery.data?.role;
@@ -160,7 +156,7 @@ export default function AccountHomePage() {
   }
 
   const profile = profileQuery.data;
-  const panelHref = resolveProfilePanelHome(profile);
+  const manifest = createPanelAccessManifest(profile);
   const panelLabel = getPanelLabelByRole(profile.role);
   const orders = ordersQuery.data?.data ?? [];
   const latestOrder = orders[0];
@@ -172,20 +168,22 @@ export default function AccountHomePage() {
     orderTotal > 0 || favoriteTotal > 0 || addressTotal > 0 || reviewTotal > 0;
 
   const quickLinks: QuickLink[] = isCustomer
-    ? [
-        { href: '/account/orders', label: 'Siparişlerim', icon: ShoppingBag },
-        { href: '/account/addresses', label: 'Adres Defterim', icon: MapPin },
-        { href: '/account/favorites', label: 'Favorilerim', icon: Heart },
-        { href: '/account/reviews', label: 'Yorumlarım', icon: MessageSquare },
-        { href: '/account/settings', label: 'Ayarlar', icon: Settings },
-      ]
+    ? getAccountCommerceLinks(manifest).map((item) => ({
+        href: item.href,
+        label: item.label,
+        icon: item.icon,
+      }))
     : [
-        { href: panelHref, label: panelLabel, icon: LayoutDashboard },
-        { href: '/account/profile', label: 'Profil', icon: ClipboardList },
-        { href: '/account/settings', label: 'Ayarlar', icon: Settings },
-        ...(isPosRoleAllowed(profile.role)
-          ? [{ href: '/pos', label: 'POS Ekranı', icon: ShoppingBag }]
-          : []),
+        ...getAccountCoreLinks(manifest).map((item) => ({
+          href: item.href,
+          label: item.label,
+          icon: item.icon,
+        })),
+        ...getBackofficePanelEntries(manifest).map((item) => ({
+          href: item.href,
+          label: item.label,
+          icon: item.icon,
+        })),
       ];
 
   return (
