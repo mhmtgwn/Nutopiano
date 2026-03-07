@@ -122,6 +122,8 @@ run_auth_smoke() {
   local required_flag="${AUTH_SMOKE_REQUIRED,,}"
   local base_url="${AUTH_SMOKE_BASE_URL%/}"
   local health_url="${base_url}/health"
+  local max_attempts=10
+  local retry_sleep_seconds=2
 
   if [[ -z "${AUTH_SMOKE_PHONE:-}" || -z "${AUTH_SMOKE_PASSWORD:-}" ]]; then
     if [[ "$required_flag" == "true" ]]; then
@@ -147,18 +149,32 @@ run_auth_smoke() {
   profile_body="$(mktemp /tmp/nutopiano-auth-smoke-profile-body.XXXXXX)"
   request_id="deploy-smoke-$(date +%s)"
 
-  login_status="$(
-    curl -sS \
-      -o "$login_body" \
-      -D "$login_headers" \
-      -w "%{http_code}" \
-      -H "Content-Type: application/json" \
-      -H "X-Request-Id: $request_id" \
-      -c "$cookie_jar" \
-      -b "$cookie_jar" \
-      --data "{\"phone\":\"${AUTH_SMOKE_PHONE}\",\"password\":\"${AUTH_SMOKE_PASSWORD}\"}" \
-      "$base_url/auth/login"
-  )"
+  for ((attempt=1; attempt<=max_attempts; attempt+=1)); do
+    : > "$login_headers"
+    : > "$login_body"
+    login_status="$(
+      curl -sS \
+        -o "$login_body" \
+        -D "$login_headers" \
+        -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -H "X-Request-Id: $request_id" \
+        -c "$cookie_jar" \
+        -b "$cookie_jar" \
+        --data "{\"phone\":\"${AUTH_SMOKE_PHONE}\",\"password\":\"${AUTH_SMOKE_PASSWORD}\"}" \
+        "$base_url/auth/login"
+    )"
+
+    if [[ "$login_status" == "200" || "$login_status" == "201" ]]; then
+      break
+    fi
+
+    if [[ "$login_status" != "000" && "$login_status" != "502" && "$login_status" != "503" && "$login_status" != "504" ]]; then
+      break
+    fi
+
+    sleep "$retry_sleep_seconds"
+  done
 
   if [[ "$login_status" != "200" && "$login_status" != "201" ]]; then
     echo "Auth smoke login failed with status $login_status"
@@ -181,16 +197,29 @@ run_auth_smoke() {
     return 1
   fi
 
-  profile_status="$(
-    curl -sS \
-      -o "$profile_body" \
-      -w "%{http_code}" \
-      -H "Accept: application/json" \
-      -H "X-Request-Id: $request_id-profile" \
-      -c "$cookie_jar" \
-      -b "$cookie_jar" \
-      "$base_url/auth/profile"
-  )"
+  for ((attempt=1; attempt<=max_attempts; attempt+=1)); do
+    : > "$profile_body"
+    profile_status="$(
+      curl -sS \
+        -o "$profile_body" \
+        -w "%{http_code}" \
+        -H "Accept: application/json" \
+        -H "X-Request-Id: $request_id-profile" \
+        -c "$cookie_jar" \
+        -b "$cookie_jar" \
+        "$base_url/auth/profile"
+    )"
+
+    if [[ "$profile_status" == "200" ]]; then
+      break
+    fi
+
+    if [[ "$profile_status" != "000" && "$profile_status" != "502" && "$profile_status" != "503" && "$profile_status" != "504" ]]; then
+      break
+    fi
+
+    sleep "$retry_sleep_seconds"
+  done
 
   if [[ "$profile_status" != "200" ]]; then
     echo "Auth smoke profile failed with status $profile_status"
