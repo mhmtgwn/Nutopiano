@@ -7,21 +7,14 @@ import { useAppDispatch } from '@/store';
 import { setCredentials, startAuth, setAuthError } from '@/store/userSlice';
 import api from '@/services/api';
 import Button from '@/components/common/Button';
+import { mapProfileToUser } from '@/lib/profile-session';
+import type { ProfileResponse } from '@/types/profile';
 
 type AuthScreen = 'login' | 'register' | 'forgot';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
 }
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
@@ -89,21 +82,14 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         { phone: trimmedPhone, password: trimmedPassword },
       );
 
-      const token = loginResponse.data.accessToken;
+      void loginResponse.data.accessToken;
 
       const profileResponse = await api.get<ProfileResponse>('/auth/profile');
       const profile = profileResponse.data;
 
       dispatch(
         setCredentials({
-          user: {
-            id: profile.userId,
-            name: profile.name,
-            phone: profile.phone,
-            email: profile.email,
-            role: profile.role,
-            businessId: profile.businessId,
-          },
+          user: mapProfileToUser(profile),
           token: null,
         }),
       );
@@ -175,14 +161,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
       dispatch(
         setCredentials({
-          user: {
-            id: profile.userId,
-            name: profile.name,
-            phone: profile.phone,
-            email: profile.email,
-            role: profile.role,
-            businessId: profile.businessId,
-          },
+          user: mapProfileToUser(profile),
           token: null,
         }),
       );

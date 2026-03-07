@@ -24,6 +24,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout } from '@/store/userSlice';
 import api from '@/services/api';
+import { resolveUserPanelHome } from '@/lib/profile-session';
 import toast from 'react-hot-toast';
 import {
   getPanelLabelByRole,
@@ -62,9 +63,9 @@ export default function Header() {
   const sellerMenuRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedQuery = useMemo(() => searchValue.trim(), [searchValue]);
-  const panelHref = user ? '/panel' : '/login';
+  const panelHref = user ? resolveUserPanelHome(user) : '/login';
   const panelLabel = getPanelLabelByRole(user?.role);
-  const isCustomer = user?.role === 'CUSTOMER';
+  const isCustomer = normalizeRole(user?.role) === 'CUSTOMER';
   const normalizedUserRole = normalizeRole(user?.role);
 
   type BackofficeMenuLink = {

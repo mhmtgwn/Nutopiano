@@ -12,10 +12,15 @@ import {
 
 import Button from '@/components/common/Button';
 import StatusBadge from '@/components/common/StatusBadge';
+import {
+  isUserSessionIncomplete,
+  mapProfileToUser,
+  resolveUserPanelHome,
+} from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
-import { getPanelHomePathByRole, getPanelLabelByRole } from '@/lib/role-routing';
+import { getPanelLabelByRole } from '@/lib/role-routing';
 import type { FeatureStatusCode, ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
@@ -70,7 +75,9 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
-    if (user) return;
+    if (user && !isUserSessionIncomplete(user)) return;
+
+    let isCancelled = false;
 
     const fetchProfile = async () => {
       try {
@@ -78,23 +85,13 @@ export default function ProfilePage() {
         dispatch(startAuth());
 
         const response = await api.get<ProfileResponse>('/auth/profile');
-        const profile = response.data;
+        const nextUser = mapProfileToUser(response.data);
+
+        if (isCancelled) return;
 
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              effectiveRole: profile.effectiveRole,
-              permissions: profile.permissions,
-              panelHome: profile.panelHome,
-              allowedPanels: profile.allowedPanels,
-              featureStatuses: profile.featureStatuses,
-              businessId: profile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
@@ -103,11 +100,16 @@ export default function ProfilePage() {
         dispatch(setAuthError(message));
         toast.error(message);
       } finally {
-        setIsLoadingProfile(false);
+        if (!isCancelled) {
+          setIsLoadingProfile(false);
+        }
       }
     };
 
     void fetchProfile();
+    return () => {
+      isCancelled = true;
+    };
   }, [user, dispatch]);
 
   useEffect(() => {
@@ -120,8 +122,9 @@ export default function ProfilePage() {
   }, [user]);
 
   const isLoading = isLoadingProfile || status === 'authenticating';
+  const hasStableUser = Boolean(user && !isUserSessionIncomplete(user));
 
-  if (isLoading && !user) {
+  if (isLoading && !hasStableUser) {
     return (
       <div className="p-2">
         <p className="text-sm text-[#6b7280]">Profil bilgileri yukleniyor...</p>
@@ -129,7 +132,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!user) {
+  if (!hasStableUser || !user) {
     return null;
   }
 
@@ -149,23 +152,11 @@ export default function ProfilePage() {
       });
 
       const refreshed = await api.get<ProfileResponse>('/auth/profile');
-      const profile = refreshed.data;
+      const nextUser = mapProfileToUser(refreshed.data);
 
       dispatch(
         setCredentials({
-          user: {
-            id: profile.userId,
-            name: profile.name,
-            phone: profile.phone,
-            email: profile.email,
-            role: profile.role,
-            effectiveRole: profile.effectiveRole,
-            permissions: profile.permissions,
-            panelHome: profile.panelHome,
-            allowedPanels: profile.allowedPanels,
-            featureStatuses: profile.featureStatuses,
-            businessId: profile.businessId,
-          },
+          user: nextUser,
           token: null,
         }),
       );
@@ -339,7 +330,7 @@ export default function ProfilePage() {
                   <div className="space-y-1 text-sm">
                     <span className="text-[#6b7280]">Panel Home</span>
                     <p className="font-medium text-[#111827]">
-                      {user.panelHome ?? getPanelHomePathByRole(user.role)}
+                      {resolveUserPanelHome(user)}
                     </p>
                   </div>
                 </div>
@@ -455,7 +446,7 @@ export default function ProfilePage() {
               </p>
               <Button
                 type="button"
-                onClick={() => router.push(getPanelHomePathByRole(user.role))}
+                onClick={() => router.push(resolveUserPanelHome(user))}
                 className="h-11 min-w-[160px]"
               >
                 Panele Git

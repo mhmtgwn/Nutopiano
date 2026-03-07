@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import HomeClient from './HomeClient';
+import { fetchHomeCatalog } from '@/lib/home-catalog';
 import { getSiteUrl } from '@/utils/site';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function HomePage() {
   const siteUrl = await getSiteUrl();
   const ogImage = buildOgImage(siteUrl);
+  const { products, categories } = await fetchHomeCatalog();
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -71,7 +73,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
       />
-      <HomeClient />
+      <HomeClient initialProducts={products} initialCategories={categories} />
     </>
   );
 }

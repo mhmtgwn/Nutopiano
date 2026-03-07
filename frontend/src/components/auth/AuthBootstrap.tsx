@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import api from '@/services/api';
+import { mapProfileToUser } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setCredentials } from '@/store/userSlice';
 import type { ProfileResponse } from '@/types/profile';
@@ -28,19 +29,7 @@ export default function AuthBootstrap() {
         const profile = response.data;
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              effectiveRole: profile.effectiveRole,
-              permissions: profile.permissions,
-              panelHome: profile.panelHome,
-              allowedPanels: profile.allowedPanels,
-              featureStatuses: profile.featureStatuses,
-              businessId: profile.businessId,
-            },
+            user: mapProfileToUser(profile),
             token: null,
           }),
         );

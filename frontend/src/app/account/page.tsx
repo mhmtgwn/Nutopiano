@@ -16,17 +16,10 @@ import {
 
 import Spinner from '@/components/common/Spinner';
 import { formatPrice } from '@/lib/format';
-import { getPanelHomePathByRole, getPanelLabelByRole, isPosRoleAllowed } from '@/lib/role-routing';
+import { resolveProfilePanelHome } from '@/lib/profile-session';
+import { getPanelLabelByRole, isPosRoleAllowed } from '@/lib/role-routing';
 import api from '@/services/api';
-
-type ProfileResponse = {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-};
+import type { ProfileResponse } from '@/types/profile';
 
 type OrderSummary = {
   id: number;
@@ -167,7 +160,7 @@ export default function AccountHomePage() {
   }
 
   const profile = profileQuery.data;
-  const panelHref = getPanelHomePathByRole(profile.role);
+  const panelHref = resolveProfilePanelHome(profile);
   const panelLabel = getPanelLabelByRole(profile.role);
   const orders = ordersQuery.data?.data ?? [];
   const latestOrder = orders[0];

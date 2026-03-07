@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Spinner from '@/components/common/Spinner';
+import { isUserSessionIncomplete, mapProfileToUser } from '@/lib/profile-session';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
@@ -71,16 +72,19 @@ export default function SellerGuard({ children }: SellerGuardProps) {
   const { user, status } = useAppSelector((state) => state.user);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const isLoading = isLoadingProfile || status === 'authenticating';
+  const hasStableUser = Boolean(user && !isUserSessionIncomplete(user));
 
   useEffect(() => {
-    if (user) {
-      if (!isSellerPanelRole(user.role)) {
+    const activeUser = user && !isUserSessionIncomplete(user) ? user : null;
+
+    if (activeUser) {
+      if (!isSellerPanelRole(activeUser.role)) {
         router.replace('/forbidden');
         toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
         return;
       }
-      if (isSellerStaffRole(user.role)) {
-        const staffAccess = resolveStaffPanelAccess(user.permissions);
+      if (isSellerStaffRole(activeUser.role)) {
+        const staffAccess = resolveStaffPanelAccess(activeUser.permissions);
         if (!staffAccess.canDashboardOrders && !staffAccess.canPos) {
           router.replace('/forbidden');
           toast.error('Bu hesap icin seller panel yetkisi atanmis degil.');
@@ -103,40 +107,32 @@ export default function SellerGuard({ children }: SellerGuardProps) {
       return;
     }
 
+    let isCancelled = false;
+
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true);
         dispatch(startAuth());
 
         const response = await api.get<ProfileResponse>('/auth/profile');
-        const profile = response.data;
+        const nextUser = mapProfileToUser(response.data);
+
+        if (isCancelled) return;
 
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              effectiveRole: profile.effectiveRole,
-              permissions: profile.permissions,
-              panelHome: profile.panelHome,
-              allowedPanels: profile.allowedPanels,
-              featureStatuses: profile.featureStatuses,
-              businessId: profile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
 
-        if (!isSellerPanelRole(profile.role)) {
+        if (!isSellerPanelRole(nextUser.role)) {
           router.replace('/forbidden');
           toast.error('Bu sayfaya erişim için panel yetkisi gerekli.');
           return;
         }
-        if (isSellerStaffRole(profile.role)) {
-          const staffAccess = resolveStaffPanelAccess(profile.permissions);
+        if (isSellerStaffRole(nextUser.role)) {
+          const staffAccess = resolveStaffPanelAccess(nextUser.permissions);
           if (!staffAccess.canDashboardOrders && !staffAccess.canPos) {
             router.replace('/forbidden');
             toast.error('Bu hesap icin seller panel yetkisi atanmis degil.');
@@ -162,14 +158,19 @@ export default function SellerGuard({ children }: SellerGuardProps) {
         dispatch(logout());
         router.replace('/login');
       } finally {
-        setIsLoadingProfile(false);
+        if (!isCancelled) {
+          setIsLoadingProfile(false);
+        }
       }
     };
 
-    fetchProfile();
+    void fetchProfile();
+    return () => {
+      isCancelled = true;
+    };
   }, [user, dispatch, router, pathname]);
 
-  if (isLoading && !user) {
+  if (isLoading || !hasStableUser) {
     return (
       <div className="min-h-[calc(100vh-140px)] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">

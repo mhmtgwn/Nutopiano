@@ -5,36 +5,17 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
+import {
+  isUserSessionIncomplete,
+  mapProfileToUser,
+  resolveUserPanelHome,
+} from '@/lib/profile-session';
+import { resolveApiErrorMessage } from '@/lib/api-errors';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
 import api from '@/services/api';
-import { getPanelHomePathByRole, getPanelLabelByRole } from '@/lib/role-routing';
-
-const resolveApiErrorMessage = (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
-  if (!('response' in error)) return fallback;
-  const response = (error as { response?: unknown }).response;
-  if (!response || typeof response !== 'object') return fallback;
-  if (!('data' in response)) return fallback;
-  const data = (response as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (!('message' in data)) return fallback;
-  const message = (data as { message?: unknown }).message;
-  if (Array.isArray(message)) {
-    return message.map(String).join(', ');
-  }
-  if (typeof message === 'string') return message;
-  return fallback;
-};
-
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
-}
+import { getPanelLabelByRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 
 interface CustomerPreferencesResponse {
   allowSms: boolean;
@@ -57,7 +38,9 @@ export default function AccountSettingsPage() {
   const [preferences, setPreferences] = useState<CustomerPreferencesResponse | null>(null);
 
   useEffect(() => {
-    if (user) return;
+    if (user && !isUserSessionIncomplete(user)) return;
+
+    let isCancelled = false;
 
     const fetchProfile = async () => {
       try {
@@ -65,18 +48,13 @@ export default function AccountSettingsPage() {
         dispatch(startAuth());
 
         const response = await api.get<ProfileResponse>('/auth/profile');
-        const profile = response.data;
+        const nextUser = mapProfileToUser(response.data);
+
+        if (isCancelled) return;
 
         dispatch(
           setCredentials({
-            user: {
-              id: profile.userId,
-              name: profile.name,
-              phone: profile.phone,
-              email: profile.email,
-              role: profile.role,
-              businessId: profile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
@@ -85,11 +63,16 @@ export default function AccountSettingsPage() {
         dispatch(setAuthError(message));
         toast.error(message);
       } finally {
-        setIsLoadingProfile(false);
+        if (!isCancelled) {
+          setIsLoadingProfile(false);
+        }
       }
     };
 
-    fetchProfile();
+    void fetchProfile();
+    return () => {
+      isCancelled = true;
+    };
   }, [user, dispatch]);
 
   useEffect(() => {
@@ -125,8 +108,9 @@ export default function AccountSettingsPage() {
   };
 
   const isLoading = isLoadingProfile || status === 'authenticating';
+  const hasStableUser = Boolean(user && !isUserSessionIncomplete(user));
 
-  if (isLoading && !user) {
+  if (isLoading && !hasStableUser) {
     return (
       <div className="min-h-[calc(100vh-140px)] bg-transparent">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
@@ -146,7 +130,7 @@ export default function AccountSettingsPage() {
     );
   }
 
-  if (!user) {
+  if (!hasStableUser || !user) {
     return null;
   }
 
@@ -371,7 +355,7 @@ export default function AccountSettingsPage() {
               Rolünüze ait operasyon arayüzüne geçiş yapın.
             </p>
             <div className="mt-4">
-              <Button type="button" onClick={() => router.push(getPanelHomePathByRole(user.role))}>
+              <Button type="button" onClick={() => router.push(resolveUserPanelHome(user))}>
                 Panele Git
               </Button>
             </div>

@@ -6,9 +6,10 @@ import toast from 'react-hot-toast';
 
 import Button from '@/components/common/Button';
 import api from '@/services/api';
+import { mapProfileToUser, resolveProfilePanelHome } from '@/lib/profile-session';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setAuthError, setCredentials, startAuth } from '@/store/userSlice';
-import { getPanelHomePathByRole } from '@/lib/role-routing';
+import type { ProfileResponse } from '@/types/profile';
 
 const resolveApiErrorMessage = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -34,15 +35,6 @@ const isSafeInternalPath = (value: string | null): value is string =>
 
 interface RegisterResponse {
   accessToken: string;
-}
-
-interface ProfileResponse {
-  userId: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-  role: string;
-  businessId?: string | null;
 }
 
 export default function RegisterPage() {
@@ -102,14 +94,7 @@ export default function RegisterPage() {
 
       dispatch(
         setCredentials({
-          user: {
-            id: profile.userId,
-            name: profile.name,
-            phone: profile.phone,
-            email: profile.email,
-            role: profile.role,
-            businessId: profile.businessId,
-          },
+          user: mapProfileToUser(profile),
           token,
         }),
       );
@@ -126,7 +111,7 @@ export default function RegisterPage() {
         ? nextPath
         : isSafeInternalPath(storedRedirect)
           ? storedRedirect
-          : getPanelHomePathByRole(profile.role);
+          : resolveProfilePanelHome(profile);
 
       if (storedRedirect) {
         localStorage.removeItem('redirectAfterLogin');

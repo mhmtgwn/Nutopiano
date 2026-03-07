@@ -1,11 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
 
 import Spinner from '@/components/common/Spinner';
+import {
+  isUserSessionIncomplete,
+  mapProfileToUser,
+  mapUserToProfile,
+} from '@/lib/profile-session';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { logout, setAuthError, setCredentials, startAuth } from '@/store/userSlice';
@@ -90,24 +95,23 @@ export default function PanelGatewayPage() {
   const { user, status } = useAppSelector((state) => state.user);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const hasRequestedFreshProfileRef = useRef(false);
 
   useEffect(() => {
-    if (user) {
-      setProfile({
-        userId: user.id,
-        name: user.name,
-        phone: user.phone,
-        email: user.email,
-        role: user.role,
-        effectiveRole: user.effectiveRole,
-        permissions: user.permissions,
-        panelHome: user.panelHome,
-        allowedPanels: user.allowedPanels,
-        featureStatuses: user.featureStatuses,
-        businessId: user.businessId,
-      });
+    const activeUser = user && !isUserSessionIncomplete(user) ? user : null;
+
+    if (activeUser) {
+      setProfile(mapUserToProfile(activeUser));
       return;
     }
+
+    if (hasRequestedFreshProfileRef.current && user) {
+      setProfile(mapUserToProfile(user));
+      return;
+    }
+
+    hasRequestedFreshProfileRef.current = true;
+    let isCancelled = false;
 
     const fetchProfile = async () => {
       try {
@@ -115,39 +119,34 @@ export default function PanelGatewayPage() {
         dispatch(startAuth());
 
         const response = await api.get<ProfileResponse>('/auth/profile');
-        const nextProfile = response.data;
+        const nextUser = mapProfileToUser(response.data);
+
+        if (isCancelled) return;
 
         dispatch(
           setCredentials({
-            user: {
-              id: nextProfile.userId,
-              name: nextProfile.name,
-              phone: nextProfile.phone,
-              email: nextProfile.email,
-              role: nextProfile.role,
-              effectiveRole: nextProfile.effectiveRole,
-              permissions: nextProfile.permissions,
-              panelHome: nextProfile.panelHome,
-              allowedPanels: nextProfile.allowedPanels,
-              featureStatuses: nextProfile.featureStatuses,
-              businessId: nextProfile.businessId,
-            },
+            user: nextUser,
             token: null,
           }),
         );
 
-        setProfile(nextProfile);
+        setProfile(mapUserToProfile(nextUser));
       } catch (error: unknown) {
         const message = resolveApiErrorMessage(error, 'Yetkilendirme basarisiz.');
         dispatch(setAuthError(message));
         dispatch(logout());
         router.replace('/login?next=/panel');
       } finally {
-        setIsLoadingProfile(false);
+        if (!isCancelled) {
+          setIsLoadingProfile(false);
+        }
       }
     };
 
     void fetchProfile();
+    return () => {
+      isCancelled = true;
+    };
   }, [dispatch, router, user]);
 
   const isLoading = isLoadingProfile || status === 'authenticating';
