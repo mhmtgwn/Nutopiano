@@ -40,16 +40,81 @@ log() {
 ensure_frontend_env() {
   local env_file="$FRONTEND_DIR/.env.local"
   local desired_api_url="$FRONTEND_API_URL"
+  local desired_site_url="${FRONTEND_SITE_URL:-}"
+
+  python3 - "$env_file" "$desired_api_url" "$desired_site_url" <<'PY'
+from pathlib import Path
+import sys
+
+env_file = Path(sys.argv[1])
+desired_api_url = sys.argv[2]
+desired_site_url = sys.argv[3]
+
+lines = []
+if env_file.exists():
+    lines = env_file.read_text().splitlines()
+
+updated = []
+seen_api = False
+seen_site = False
+
+for line in lines:
+    if line.startswith("NEXT_PUBLIC_API_URL="):
+        updated.append(f"NEXT_PUBLIC_API_URL={desired_api_url}")
+        seen_api = True
+        continue
+    if desired_site_url and line.startswith("NEXT_PUBLIC_SITE_URL="):
+        updated.append(f"NEXT_PUBLIC_SITE_URL={desired_site_url}")
+        seen_site = True
+        continue
+    updated.append(line)
+
+if not seen_api:
+    updated.append(f"NEXT_PUBLIC_API_URL={desired_api_url}")
+
+if desired_site_url and not seen_site:
+    updated.append(f"NEXT_PUBLIC_SITE_URL={desired_site_url}")
+
+env_file.write_text("\n".join(updated) + "\n")
+PY
+
+  log "Frontend env: NEXT_PUBLIC_API_URL=$desired_api_url"
+  if [[ -n "$desired_site_url" ]]; then
+    log "Frontend env: NEXT_PUBLIC_SITE_URL=$desired_site_url"
+  fi
+}
+
+validate_frontend_env() {
+  local env_file="$FRONTEND_DIR/.env.local"
+  local expected_api_url="$FRONTEND_API_URL"
 
   if [[ ! -f "$env_file" ]]; then
-    printf "NEXT_PUBLIC_API_URL=%s\n" "$desired_api_url" >"$env_file"
-    return 0
+    echo "Missing frontend env file: $env_file"
+    return 1
   fi
 
-  if grep -qE '^NEXT_PUBLIC_API_URL=' "$env_file"; then
-    sed -i "s#^NEXT_PUBLIC_API_URL=.*#NEXT_PUBLIC_API_URL=${desired_api_url}#" "$env_file"
-  else
-    printf "\nNEXT_PUBLIC_API_URL=%s\n" "$desired_api_url" >>"$env_file"
+  local actual_api_url
+  actual_api_url="$(grep -E '^NEXT_PUBLIC_API_URL=' "$env_file" | tail -n 1 | cut -d'=' -f2- || true)"
+
+  if [[ "$actual_api_url" != "$expected_api_url" ]]; then
+    echo "Frontend env mismatch: expected NEXT_PUBLIC_API_URL=$expected_api_url but found $actual_api_url"
+    return 1
+  fi
+}
+
+validate_frontend_build() {
+  local build_dir="$FRONTEND_DIR/.next"
+
+  if [[ ! -d "$build_dir" ]]; then
+    echo "Missing frontend build output: $build_dir"
+    return 1
+  fi
+
+  if [[ "$DEPLOY_ENV" == "production" ]]; then
+    if grep -R "staging-api.nutopiano.com" -n "$build_dir" >/dev/null 2>&1; then
+      echo "Production build contains staging API host"
+      return 1
+    fi
   fi
 }
 
@@ -290,6 +355,7 @@ else
 fi
 
 ensure_frontend_env
+validate_frontend_env
 backup_previous_frontend_static
 rm -rf "$FRONTEND_DIR/.next"
 
@@ -298,6 +364,7 @@ if [[ "$FRONTEND_BUILD_MODE" == "webpack" ]]; then
 else
   NEXT_PRIVATE_BUILD_WORKER="$FRONTEND_BUILD_WORKER" NODE_OPTIONS="$FRONTEND_BUILD_NODE_OPTIONS" npm run build
 fi
+validate_frontend_build
 merge_previous_frontend_static
 
 log "Restart services"
