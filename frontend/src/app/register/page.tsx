@@ -117,6 +117,11 @@ export default function RegisterPage() {
         localStorage.removeItem('redirectAfterLogin');
       }
 
+      if (typeof window !== 'undefined') {
+        window.location.replace(redirectPath);
+        return;
+      }
+
       router.push(redirectPath);
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Kayıt olurken bir hata oluştu.');

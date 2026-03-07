@@ -97,6 +97,11 @@ export default function LoginPage() {
         localStorage.removeItem('redirectAfterLogin');
       }
 
+      if (typeof window !== 'undefined') {
+        window.location.replace(redirectPath);
+        return;
+      }
+
       router.push(redirectPath);
     } catch (error: unknown) {
       const message = resolveApiErrorMessage(error, 'Giriş yapılırken bir hata oluştu.');
