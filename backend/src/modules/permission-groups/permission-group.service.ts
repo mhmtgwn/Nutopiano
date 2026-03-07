@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
     Permission,
@@ -9,40 +10,92 @@ import { LEGACY_ROLE_ALIASES } from '../../common/constants/roles';
 
 @Injectable()
 export class PermissionGroupService {
+    private readonly logger = new Logger(PermissionGroupService.name);
+
     constructor(private readonly prisma: PrismaService) { }
+
+    private buildRolePermissions(rawRole: string): Permission[] {
+        const normalizedRole = LEGACY_ROLE_ALIASES[rawRole] ?? rawRole;
+
+        if (normalizedRole === 'SUPER_ADMIN') {
+            return Object.values(Permission);
+        }
+
+        return ROLE_DEFAULT_PERMISSIONS[normalizedRole] ?? [];
+    }
+
+    private isMissingPermissionTables(error: unknown) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+            return false;
+        }
+
+        if (error.code !== 'P2021' && error.code !== 'P2022') {
+            return false;
+        }
+
+        const details = JSON.stringify(error.meta ?? {});
+        return (
+            details.includes('PermissionGroup') ||
+            details.includes('UserPermissionGroup')
+        );
+    }
 
     /**
      * Kullanıcının aktif yetkilerini çöz.
      * Rol varsayılanları + atanmış yetki grupları birleştirilir.
      */
     async resolveForUser(userId: number): Promise<Permission[]> {
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-                role: true,
-                permissionGroups: {
-                    select: {
-                        permissionGroup: {
-                            select: { permissions: true, isActive: true },
+        let user:
+            | {
+                  role: string;
+                  permissionGroups: Array<{
+                      permissionGroup: {
+                          permissions: unknown;
+                          isActive: boolean;
+                      };
+                  }>;
+              }
+            | null;
+
+        try {
+            user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    role: true,
+                    permissionGroups: {
+                        select: {
+                            permissionGroup: {
+                                select: { permissions: true, isActive: true },
+                            },
                         },
                     },
                 },
-            },
-        });
+            });
+        } catch (error) {
+            if (!this.isMissingPermissionTables(error)) {
+                throw error;
+            }
+
+            this.logger.warn(
+                `Permission group tables are missing. Falling back to role defaults for user ${userId}.`,
+            );
+
+            const userWithoutGroups = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: { role: true },
+            });
+
+            if (!userWithoutGroups) return [];
+
+            return this.buildRolePermissions(
+                String(userWithoutGroups.role).trim().toUpperCase(),
+            );
+        }
 
         if (!user) return [];
 
         const rawRole = String(user.role).trim().toUpperCase();
-        const normalizedRole = LEGACY_ROLE_ALIASES[rawRole] ?? rawRole;
-
-        // SUPER_ADMIN için tüm yetkiler
-        if (normalizedRole === 'SUPER_ADMIN') {
-            return Object.values(Permission);
-        }
-
-        // Rol varsayılan yetkileri
-        const defaultPerms: Permission[] =
-            ROLE_DEFAULT_PERMISSIONS[normalizedRole] ?? [];
+        const defaultPerms = this.buildRolePermissions(rawRole);
 
         // Atanmış yetki grupları (sadece aktif olanlar)
         const groupPerms: Permission[] = user.permissionGroups

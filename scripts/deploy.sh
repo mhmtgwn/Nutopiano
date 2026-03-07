@@ -99,9 +99,29 @@ restart_pm2() {
   return 1
 }
 
+wait_for_http_200() {
+  local url="$1"
+  local max_attempts="${2:-30}"
+  local sleep_seconds="${3:-2}"
+  local status=""
+
+  for ((attempt=1; attempt<=max_attempts; attempt+=1)); do
+    status="$(curl -sS -o /dev/null -w "%{http_code}" "$url" || true)"
+    if [[ "$status" == "200" ]]; then
+      return 0
+    fi
+
+    sleep "$sleep_seconds"
+  done
+
+  echo "Timed out waiting for $url to return 200 (last status: ${status:-unknown})"
+  return 1
+}
+
 run_auth_smoke() {
   local required_flag="${AUTH_SMOKE_REQUIRED,,}"
   local base_url="${AUTH_SMOKE_BASE_URL%/}"
+  local health_url="${base_url}/health"
 
   if [[ -z "${AUTH_SMOKE_PHONE:-}" || -z "${AUTH_SMOKE_PASSWORD:-}" ]]; then
     if [[ "$required_flag" == "true" ]]; then
@@ -111,6 +131,11 @@ run_auth_smoke() {
 
     log "Auth smoke skipped (credentials not configured)"
     return 0
+  fi
+
+  log "Auth smoke: waiting for $health_url"
+  if ! wait_for_http_200 "$health_url" 30 2; then
+    return 1
   fi
 
   local cookie_jar login_headers login_body profile_body
