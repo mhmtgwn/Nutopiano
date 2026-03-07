@@ -23,6 +23,15 @@ This document defines the GitHub Actions secrets required by `.github/workflows/
 `STAGING_FRONTEND_API_URL`
 - `NEXT_PUBLIC_API_URL` value written during staging deploy.
 
+`STAGING_AUTH_SMOKE_BASE_URL`
+- Base URL used by post-deploy cookie login smoke test on staging.
+
+`STAGING_AUTH_SMOKE_PHONE`
+- Test phone number used for staging auth smoke.
+
+`STAGING_AUTH_SMOKE_PASSWORD`
+- Test password used for staging auth smoke.
+
 `PRODUCTION_SSH_HOST`
 - SSH host for production deployment.
 
@@ -38,6 +47,15 @@ This document defines the GitHub Actions secrets required by `.github/workflows/
 `PRODUCTION_FRONTEND_API_URL`
 - `NEXT_PUBLIC_API_URL` value written during production deploy.
 
+`PRODUCTION_AUTH_SMOKE_BASE_URL`
+- Base URL used by post-deploy cookie login smoke test on production.
+
+`PRODUCTION_AUTH_SMOKE_PHONE`
+- Test phone number used for production auth smoke.
+
+`PRODUCTION_AUTH_SMOKE_PASSWORD`
+- Test password used for production auth smoke.
+
 ## Add Secrets With GitHub CLI
 
 ```powershell
@@ -48,12 +66,18 @@ gh secret set STAGING_SSH_USER -R mhmtgwn/Nutopiano -b "YOUR_STAGING_USER"
 gh secret set STAGING_APP_DIR -R mhmtgwn/Nutopiano -b "/var/www/nutopiano_app_staging"
 gh secret set STAGING_DEPLOY_SCRIPT_PATH -R mhmtgwn/Nutopiano -b "/var/www/nutopiano_app_staging/scripts/deploy.sh"
 gh secret set STAGING_FRONTEND_API_URL -R mhmtgwn/Nutopiano -b "https://staging-api.nutopiano.com/api/v1"
+gh secret set STAGING_AUTH_SMOKE_BASE_URL -R mhmtgwn/Nutopiano -b "https://staging-api.nutopiano.com/api/v1"
+gh secret set STAGING_AUTH_SMOKE_PHONE -R mhmtgwn/Nutopiano -b "YOUR_STAGING_TEST_PHONE"
+gh secret set STAGING_AUTH_SMOKE_PASSWORD -R mhmtgwn/Nutopiano -b "YOUR_STAGING_TEST_PASSWORD"
 
 gh secret set PRODUCTION_SSH_HOST -R mhmtgwn/Nutopiano -b "YOUR_PRODUCTION_HOST"
 gh secret set PRODUCTION_SSH_USER -R mhmtgwn/Nutopiano -b "YOUR_PRODUCTION_USER"
 gh secret set PRODUCTION_APP_DIR -R mhmtgwn/Nutopiano -b "/var/www/nutopiano_app"
 gh secret set PRODUCTION_DEPLOY_SCRIPT_PATH -R mhmtgwn/Nutopiano -b "/var/www/nutopiano_app/scripts/deploy.sh"
 gh secret set PRODUCTION_FRONTEND_API_URL -R mhmtgwn/Nutopiano -b "https://api.nutopiano.com/api/v1"
+gh secret set PRODUCTION_AUTH_SMOKE_BASE_URL -R mhmtgwn/Nutopiano -b "https://api.nutopiano.com/api/v1"
+gh secret set PRODUCTION_AUTH_SMOKE_PHONE -R mhmtgwn/Nutopiano -b "YOUR_PRODUCTION_TEST_PHONE"
+gh secret set PRODUCTION_AUTH_SMOKE_PASSWORD -R mhmtgwn/Nutopiano -b "YOUR_PRODUCTION_TEST_PASSWORD"
 ```
 
 ## Verify
