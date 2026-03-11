@@ -3,10 +3,7 @@ import Script from "next/script";
 import { Playfair_Display, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import Header from "@/components/Header";
-import FooterBar from "@/components/layout/FooterBar";
-import MobileBottomNav from "@/components/layout/MobileBottomNav";
-import ChunkErrorRecovery from "@/components/common/ChunkErrorRecovery";
+import AppChrome from "@/components/layout/AppChrome";
 
 const earlyChunkRecoveryScript = `
 (() => {
@@ -114,15 +111,7 @@ export default function RootLayout({
           {earlyChunkRecoveryScript}
         </Script>
         <Providers>
-          <ChunkErrorRecovery />
-          <div className="app-shell flex min-h-screen flex-col text-foreground">
-            <Header />
-            <main className="app-main flex-1 pb-20 md:pb-0">
-              <div className="app-content-frame">{children}</div>
-            </main>
-            <FooterBar />
-            <MobileBottomNav />
-          </div>
+          <AppChrome>{children}</AppChrome>
         </Providers>
       </body>
     </html>
